@@ -1,0 +1,21 @@
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 697399c..68f36a6 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -705,6 +705,16 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+         rex::string::utf8_find_base_guest_path(executable_module_->path()), name);
+   }
+ 
++  // A multi-module project runs only its recompiled code: a module the title
++  // loads that has no recompiled library (a DLC replacement DLL, say) would
++  // fault on its first call, so its load fails here as if the file were absent.
++  // The executable itself loads before executable_module_ is set.
++  if (executable_module_ && !recompiled_modules_.empty() && !FindRecompiledModule(path)) {
++    REXSYS_ERROR("LoadUserModule: refusing '{}': not one of this build's recompiled modules",
++                 path);
++    return nullptr;
++  }
++
+   // loading_paths_ serializes concurrent loaders of the same path; we
+   // can't hold the global lock across LoadFromFile or DllMain ATTACH.
+   {

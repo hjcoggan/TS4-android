@@ -84,3 +84,89 @@ longjmp_address = 0x8346A510
 0x832361D8 = {}  # table 8302B87C, table 8302B8CC
 0x83350188 = {}  # code 8335029C
 0x8342FBC0 = {}  # table 83073888
+
+# Swing (Swing_DLL.xex, v0.0.1.3 with TU1): the game, its own host library, which Loader
+# loads through XexLoadImage before it unloads itself.
+[[modules]]
+file_path = "assets/Swing_DLL.xex"
+guest_path = "Swing_DLL.xex"
+out_directory_path = "generated/swing"
+includes = []
+# The CRT's setjmp and longjmp, the same code as Loader's.
+setjmp_address = 0x8856B7F0
+longjmp_address = 0x88569D30
+
+[modules.functions]
+# Analysis errors (branch target outside any function):
+# Tail stub ("b 0x885A6DB0", then padding) reached from this-adjusting thunks.
+0x885A9090 = {}  # from 0x885A7284, 0x885A7994
+# Starts right after a bctr; reached from 0x88269EE4.
+0x88661248 = {}
+# Shared "li r3,0; blr" tails: the float getter/setter fragment after each, entered through
+# a table, branches back into it. As stubs of their own, the branches become tail calls.
+0x883D8AF4 = {}  # from 0x883D8B04
+0x883F1EEC = {}  # from 0x883F1EFC
+0x883F2004 = {}  # from 0x883F2014
+# Vtable and callback entries found by scripts/find_table_targets.py swing, reviewed. Left out:
+# 0x882AC0D8, 0x882AC0E8 (VMX fragments that branch back into 0x882ABF00's function) and
+# 0x8856F5B4, 0x885B5F80 (SEH filters: they test or return an exception code).
+0x88151658 = {}  # table 880D1F10, table 880D1F24, table 880D1F38
+0x8815F918 = {}  # table 880D4BA8, table 880D4F28, table 880D4F90
+0x8816F4B8 = {}  # table 88C6B6AC
+0x8816F548 = {}  # table 88C6B4E8
+0x8816F7A8 = {}  # table 88C6B6A4
+0x88197218 = {}  # table 880DD59C
+0x88197228 = {}  # table 880DD5BC
+0x881A4D00 = {}  # table 880DF284
+0x881D35C8 = {}  # table 880E8050
+0x881D60B8 = {}  # table 880E8670, table 880E9EE0
+0x881FCC00 = {}  # code 881FCEDC
+0x88206430 = {}  # table 880E9C88
+0x882745A8 = {}  # table 880F549C, table 880F54F4, table 880F5574
+0x8827F420 = {}  # table 880F8294, table 880F8624
+0x88286E50 = {}  # table 880F7E74
+0x88286E68 = {}  # table 880F7AD4
+0x883CC260 = {}  # table 88039018
+0x883D25E8 = {}  # table 88039264
+0x883D8A80 = {}  # table 880393E0
+0x883F1E80 = {}  # table 88039DF0
+0x883F1F98 = {}  # table 88039E50
+0x88466598 = {}  # code 884667C4
+0x88466618 = {}  # code 88466784
+0x88466630 = {}  # code 8846677C
+0x88466648 = {}  # code 88466780
+0x88595EE8 = {}  # table 880917E8
+0x8859A078 = {}  # table 88091990, table 88091AA8, table 88091C40
+0x8859A080 = {}  # table 880919CC
+0x8859A090 = {}  # table 88091988, table 88091AA0, table 88091C38
+0x8859A098 = {}  # table 88091980, table 88091A98
+0x885A0190 = {}  # table 88091D14
+0x885A01A0 = {}  # table 88091D00, table 88091DC0
+0x885A01A8 = {}  # table 88091AE0, table 88091C78
+0x885A01B0 = {}  # table 88091CF8, table 88091DB8
+0x885A0458 = {}  # table 88091DD4
+0x885A0470 = {}  # table 880919A0, table 88091AB8, table 88091C50
+0x885A0480 = {}  # table 880919C0, table 88091AD8, table 88091C70
+0x885A5590 = {}  # table 88091EAC
+0x885A6118 = {}  # table 88091E44
+0x885A6DA0 = {}  # table 88091EF8
+0x885A9B18 = {}  # table 88092064
+0x885B8A00 = {}  # table 88095E74, table 88095F74
+0x88606668 = {}  # table 880F7914
+0x88606B00 = {}  # table 880DF41C, table 880F79F4, table 880F7C34
+0x8862EB30 = {}  # table 880DF2B0, table 880F7D28
+0x8863A010 = {}  # table 880F627C
+0x88779300 = {}  # table 880EFA80
+0x88780100 = {}  # code 887B4088
+0x887F0910 = {}  # table 880E4648, table 880E46E0, table 880E4778
+0x887F1870 = {}  # table 880E491C
+0x88865E00 = {}  # table 880E0730
+0x888965B8 = {}  # table 880CFF3C, table 880D00AC, table 880D021C
+0x888986D8 = {}  # table 880CFC54, table 880CFDC4
+0x888A2488 = {}  # code 888A3754, code 888A39F8, code 888A3B6C
+0x888A3460 = {}  # code 888A350C, code 888A35A8
+0x888AE6D0 = {}  # table 880DC5CC, table 880DC76C, table 880DC88C
+0x888C9208 = {}  # table 880DB2EC
+0x88913E78 = {}  # table 880D70A0
+0x88923648 = {}  # table 880D63A4, table 880D64E4, table 880D6604
+0x88998770 = {}  # table 880D22B8, table 880D2BE0

@@ -11,6 +11,12 @@ tree records the series it carries. A patch that fails resets the tree and stops
 New patches take the next number. A patch is never renumbered once committed, so a fix to an
 earlier patch is a new patch on top.
 
+## Our own
+
+| Patch | What |
+|---|---|
+| `0027-refuse-unrecompiled-modules` | In a multi-module project, `LoadUserModule` refuses a module with no recompiled library (ticket 07), so `XexLoadImage` fails cleanly instead of the game faulting on unrecompiled code. |
+
 ## Carried over from WWE All Stars (ADR-0004)
 
 `rexglue/0001` to `0026` are WWE All Stars' runtime patches at `36f5bfd`, in WWE's order, with
