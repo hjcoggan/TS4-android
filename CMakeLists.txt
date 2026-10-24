@@ -23,6 +23,15 @@ endif()
 rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
 if(WIN32)
     target_link_libraries(topspin4 PRIVATE dbghelp)
+    # The SDK stages its DLLs next to the exe only when the exe relinks, and a runtime
+    # change that keeps the exports (or any GPU plugin change) does not relink it, so the
+    # run would use stale DLLs. Copy them on every build.
+    add_custom_target(topspin4_stage_dlls ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:topspin4> $<TARGET_FILE:rexgpu-xenos> $<TARGET_FILE_DIR:topspin4>
+        COMMAND_EXPAND_LISTS
+        VERBATIM)
+    add_dependencies(topspin4_stage_dlls topspin4)
 endif()
 
 # The SDK's -ffp-model=strict does not reach these targets (it is scoped to the SDK's
