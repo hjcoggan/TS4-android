@@ -10,6 +10,7 @@ include(cmake/rexglue.cmake)
 
 set(TOPSPIN4_SOURCES
     src/main.cpp
+    src/fault_log.cpp
 )
 
 if(WIN32)
@@ -19,10 +20,13 @@ else()
 endif()
 
 rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
+if(WIN32)
+    target_link_libraries(topspin4 PRIVATE dbghelp)
+endif()
 
 # The SDK's -ffp-model=strict does not reach these targets (it is scoped to the SDK's
 # directory), so contraction is off explicitly: a PPC fmul followed by fadd never fuses.
-foreach(topspin4_target topspin4 topspin4_recomp)
+foreach(topspin4_target topspin4 topspin4_recomp topspin4_Loader_DLL topspin4_Swing_DLL)
     if(TARGET ${topspin4_target})
         target_compile_options(${topspin4_target} PRIVATE -ffp-contract=off)
     endif()

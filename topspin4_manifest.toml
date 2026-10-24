@@ -11,3 +11,76 @@ game_root = "assets"
 file_path = "assets/default.xex"
 out_directory_path = "generated/boot"
 includes = []
+
+# Loader (Loader_DLL.xex, v0.0.1.3 with TU1): its own host library, which Boot loads
+# through XexLoadImage.
+[[modules]]
+file_path = "assets/Loader_DLL.xex"
+guest_path = "Loader_DLL.xex"
+out_directory_path = "generated/loader"
+includes = []
+# The CRT's setjmp and longjmp (the libjpeg in XUI recovers from decode errors with them).
+# setjmp checks a hook pointer, then stores f14-f31, r13-r31 and v64-v127 at r3; longjmp
+# reloads the same layout from r3 and returns r4 (1 for 0).
+setjmp_address = 0x8346A940
+longjmp_address = 0x8346A510
+
+# Seed addresses for functions the v0.10.0 discovery pass misses; analysis finds their bounds.
+[modules.functions]
+# Tail stubs (one "b 0x83183418", then padding) reached only by a branch from a this-adjusting
+# thunk ("addi r3,r3,-32; b stub"); discovery leaves them outside any function.
+0x83184210 = {}  # from 0x831842E4
+0x83185C20 = {}  # from 0x83185DA4
+0x83187050 = {}  # from 0x83187124
+# Starts right after the noreturn exit-thread call ending sub_833F9750, so discovery folds it
+# into that function. Referenced only as a callback pointer: lis/addi at 0x833E8630, stored to
+# 0x83543A20.
+0x833F9780 = {}
+# Vtable and callback entries found by scripts/find_table_targets.py loader (table: stored next
+# to a known function; code: built by lis/addi in another function). Left out after review:
+# 0x8319E4A8 and 0x833F8F3C (SEH filters: they test an exception code) and 0x8346E3C0,
+# 0x8346E3D0 (fragments that branch back into 0x8346E1E8's function).
+0x830A5CE0 = {}  # code 83490B3C
+0x8314C320 = {}  # table 8300412C
+0x8314C340 = {}  # table 83004130
+0x8314ED00 = {}  # table 83004244
+0x83173290 = {}  # table 8300813C
+0x83176E60 = {}  # table 83008244, table 8300836C, table 83008504
+0x83176E78 = {}  # table 8300826C
+0x83176E88 = {}  # table 83008254, table 8300837C, table 83008514
+0x83176E90 = {}  # table 8300824C, table 83008374, table 8300850C
+0x83176E98 = {}  # table 83008390, table 83008528
+0x83176EB8 = {}  # table 83008260, table 83008388, table 83008520
+0x83176EC0 = {}  # table 83008220
+0x8317FEC0 = {}  # table 83008678
+0x8317FED8 = {}  # table 8300869C
+0x8317FEE8 = {}  # table 83008688
+0x8317FF00 = {}  # table 83008680
+0x8317FF38 = {}  # table 83008690
+0x83180300 = {}  # table 8300875C
+0x83180310 = {}  # table 83008738
+0x83180330 = {}  # table 83008718
+0x83180338 = {}  # table 83008740
+0x83180350 = {}  # table 83008710
+0x83180CF0 = {}  # table 8300887C
+0x83182440 = {}  # table 83008814
+0x83183400 = {}  # table 830088C8
+0x83183408 = {}  # table 830088D8
+0x831838F8 = {}  # table 830088CC
+0x83186790 = {}  # table 83008AC0
+0x83186A48 = {}  # table 83008A80
+0x83187EE8 = {}  # table 83008B24
+0x831A1AE0 = {}  # table 8300CBC4
+0x831A1AF0 = {}  # table 8300CBC0
+0x831A1B10 = {}  # table 8300CBB8
+0x83224A88 = {}  # table 8302B254
+0x8322C0F8 = {}  # table 8302B890
+0x8322C118 = {}  # table 8302B894
+0x8322E8C8 = {}  # table 8302B8EC
+0x8322E8E8 = {}  # table 8302B8F8
+0x8322EAD0 = {}  # table 8302B940
+0x8322EBF0 = {}  # table 8302B964
+0x83230688 = {}  # code 83232D48
+0x832361D8 = {}  # table 8302B87C, table 8302B8CC
+0x83350188 = {}  # code 8335029C
+0x8342FBC0 = {}  # table 83073888
