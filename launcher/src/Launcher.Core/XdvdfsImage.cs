@@ -94,6 +94,9 @@ public sealed class XdvdfsImage : IDisposable
         }
     }
 
+    /// <summary>The first <paramref name="count"/> bytes of a file, or all of a smaller one.</summary>
+    public byte[] ReadStart(DiscFile file, int count) => Read(file.Offset, (int)Math.Min(count, file.Size));
+
     private byte[] Read(long offset, int count)
     {
         if (offset < 0 || count < 0 || offset + count > _stream.Length)

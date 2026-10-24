@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace TopSpin4.Launcher.Core;
 
 /// <summary>
@@ -28,17 +30,53 @@ internal sealed class DiscSetup(FileManifest manifest, IDiskSpace space)
     }
 
     /// <summary>The disc's files, once the image is known to be the Reference build's disc.</summary>
+    /// <remarks>
+    /// The Modules' execution info comes first, so another game or edition is named as such;
+    /// then the file list and sizes against the manifest; then the Modules' hashes. Only the
+    /// game partition's files are compared, never the whole image: a dump with its security
+    /// sectors stripped, like the owner's, has the same files but another image hash.
+    /// </remarks>
     public IReadOnlyList<DiscFile> Check(XdvdfsImage image, CancellationToken cancel)
     {
+        IReadOnlyList<DiscFile> files;
         try
         {
-            return image.Files();
+            files = image.Files();
         }
         catch (InvalidDataException error)
         {
             throw NotAnXboxImage(error);
         }
+        var byPath = files.ToDictionary(file => file.Path, StringComparer.OrdinalIgnoreCase);
+        foreach (var module in ReferenceBuild.Modules)
+        {
+            if (!byPath.TryGetValue(module, out var file)) throw WrongDisc($"it has no {module}, so it is not a Top Spin 4 disc.");
+            if (XexHeader.Parse(image.ReadStart(file, XexHeader.MaxHeaderBytes))?.Execution is not { } info)
+                throw WrongDisc($"its {module} is not an Xbox 360 executable.");
+            if (info.TitleId != ReferenceBuild.TitleId)
+                throw WrongDisc($"it is a disc of another game (title ID {info.TitleId:X8}), not Top Spin 4.");
+            if (info.MediaId != ReferenceBuild.MediaId)
+                throw WrongDisc($"it is another edition of Top Spin 4 (media ID {info.MediaId:X8}).");
+            if (info.Version != ReferenceBuild.DiscVersion)
+                throw WrongDisc($"its {module} is {info.Version}, and the supported disc's Modules are {ReferenceBuild.DiscVersion}.");
+        }
+        if (files.Count != manifest.Files.Count
+            || files.Any(file => manifest.Find(file.Path) is not { } entry || entry.Size != file.Size))
+            throw WrongDisc("its files differ from the supported disc's.");
+        foreach (var module in ReferenceBuild.Modules)
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            image.CopyTo(byPath[module], hash.AppendData, cancel);
+            if (Convert.ToHexStringLower(hash.GetHashAndReset()) != manifest.Find(module)?.Sha256)
+                throw WrongDisc($"its {module} differs from the supported disc's, so the image is modified or damaged.");
+        }
+        return files;
     }
+
+    private static SetupException WrongDisc(string reason) =>
+        new(SetupError.WrongDisc,
+            $"This disc image is not the supported Top Spin 4 disc: {reason} " +
+            $"The port runs only the Xbox 360 disc with media ID {ReferenceBuild.MediaId:X8}.");
 
     public void Extract(XdvdfsImage image, IReadOnlyList<DiscFile> files, PreparedFolder folder, Reporter reporter,
         CancellationToken cancel)

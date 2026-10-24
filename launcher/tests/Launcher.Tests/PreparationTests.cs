@@ -162,6 +162,109 @@ public sealed class PreparationTests : IDisposable
     }
 
     [Fact]
+    public void A_file_that_is_not_an_xbox_image_is_refused()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Iso)!);
+        File.WriteAllBytes(Iso, TestDisc.Bytes(200_000, 9));
+
+        var error = Refused(Iso, WriteTu());
+
+        Assert.Equal(SetupError.NotAnXboxImage, error.Error);
+    }
+
+    [Fact]
+    public void No_disc_image_is_refused()
+    {
+        Assert.Equal(SetupError.ImageNotFound, Refused(null, WriteTu()).Error);
+        Assert.Equal(SetupError.ImageNotFound, Refused(Iso, WriteTu()).Error);
+    }
+
+    [Fact]
+    public void A_disc_of_another_game_is_refused_as_the_wrong_disc()
+    {
+        _disc.Files["default.xex"] = TestXex.Module(titleId: 0x54510866);
+
+        var error = Refused(WriteDisc(), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("another game", error.Message);
+        Assert.Contains("54510866", error.Message);
+    }
+
+    [Fact]
+    public void A_disc_of_another_edition_is_refused_as_the_wrong_disc()
+    {
+        foreach (var module in new[] { "default.xex", "Loader_DLL.xex", "Swing_DLL.xex" })
+            _disc.Files[module] = TestXex.Module(mediaId: 0x12345678);
+
+        var error = Refused(WriteDisc(), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("media ID 12345678", error.Message);
+        Assert.Contains("60819732", error.Message);
+    }
+
+    [Fact]
+    public void A_disc_whose_module_has_another_version_is_refused_as_the_wrong_disc()
+    {
+        _disc.Files["Swing_DLL.xex"] = TestXex.Module(version: 0x00000203, seed: 3);
+
+        var error = Refused(WriteDisc(), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("Swing_DLL.xex is v0.0.2.3", error.Message);
+        Assert.Contains("v0.0.0.3", error.Message);
+    }
+
+    [Fact]
+    public void A_disc_missing_a_module_is_refused_as_the_wrong_disc()
+    {
+        _disc.Files.Remove("Loader_DLL.xex");
+
+        var error = Refused(WriteDisc(), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("Loader_DLL.xex", error.Message);
+    }
+
+    [Fact]
+    public void A_disc_whose_file_list_differs_is_refused_as_the_wrong_disc()
+    {
+        var disc = new TestDisc();
+        disc.Files["Extra.arc"] = TestDisc.Bytes(10, 5);
+
+        var error = Refused(WriteDisc(disc), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("files differ", error.Message);
+    }
+
+    [Fact]
+    public void A_disc_whose_module_bytes_differ_is_refused_as_the_wrong_disc()
+    {
+        _disc.ManifestOverrides["Loader_DLL.xex"] = TestXex.Module(seed: 99);
+
+        var error = Refused(WriteDisc(), WriteTu());
+
+        Assert.Equal(SetupError.WrongDisc, error.Error);
+        Assert.Contains("Loader_DLL.xex", error.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData((byte)0xA5)]
+    public void A_stripped_or_region_free_image_with_the_right_game_partition_is_accepted(byte? outside)
+    {
+        // Zeros outside the game partition are a security-sector-stripped dump like the owner's;
+        // filled, they stand for a full dump. Neither is hashed: only the partition's files are.
+        var disc = new TestDisc { PartitionOffset = 0x2080000, OutsideFill = outside };
+
+        Prepare(WriteDisc(disc), WriteTu());
+
+        AssertPrepared();
+    }
+
+    [Fact]
     public void The_inputs_are_unchanged_byte_for_byte()
     {
         var disc = WriteDisc();
