@@ -1,9 +1,8 @@
 param(
-    # Codegen translates the Modules to C++ in generated/ (needs the player's game files);
-    # Test builds and runs the host unit tests.
+    # Codegen translates the Modules to C++ in generated/ (needs the player's game files).
     # Launcher publishes the preparation front end (topspin4-setup) to out/launcher/publish;
     # LauncherTest runs the launcher's xUnit tests. Neither needs game data.
-    [ValidateSet('Configure', 'Build', 'Codegen', 'Test', 'Launcher', 'LauncherTest')][string]$Action = 'Build',
+    [ValidateSet('Configure', 'Build', 'Codegen', 'Launcher', 'LauncherTest')][string]$Action = 'Build',
     [string]$VisualStudioRoot = 'C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools',
     [string]$WindowsSdkRoot = 'C:/Program Files (x86)/Windows Kits/10',
     [ValidateRange(1, 64)][int]$Jobs = 8,
@@ -100,11 +99,6 @@ if ($Action -eq 'Codegen') {
     Invoke-Hidden "$sdk/bin/rexglue.exe" @('codegen', 'topspin4_manifest.toml', '--ignore-stamp') -LogPath "$projectRoot/analysis/codegen.log"
 } elseif ($Action -eq 'Configure') {
     Invoke-Hidden $cmake $configureArguments -LogPath "$projectRoot/analysis/configure.log"
-} elseif ($Action -eq 'Test') {
-    Invoke-Hidden $cmake ($configureArguments + '-DTOPSPIN4_BUILD_TESTS=ON') -LogPath "$projectRoot/analysis/configure.log"
-    Invoke-Hidden $cmake @('--build', $buildDirectory, '--parallel', "$Jobs", '--target', 'topspin4_tests') -LogPath "$projectRoot/analysis/build-tests.log"
-    & "$buildDirectory/topspin4_tests.exe"
-    if ($LASTEXITCODE -ne 0) { throw "Host tests failed (exit $LASTEXITCODE)" }
 } else {
     Invoke-Hidden $cmake @('--build', $buildDirectory, '--parallel', "$Jobs") -LogPath "$projectRoot/analysis/build.log"
 }

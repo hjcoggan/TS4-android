@@ -1,6 +1,6 @@
 # Bounded startup probe (copied from WWE All Stars): run the game for N seconds, keep logs and
 # screenshots, and report crashes, unregistered call targets, missing jump-table entries, stalls
-# and the Modules the guest loaded.
+# and the Title Update patches the Modules loaded with.
 param(
     [ValidateRange(1, 600)][int]$Seconds = 30,
     [ValidateSet('info', 'debug', 'trace')][string]$LogLevel = 'info',
@@ -103,7 +103,7 @@ try {
     $unregistered = Get-LogMatches $log 'unregistered function at guest address (0x[0-9A-Fa-f]+)'
     $jumpTables = Get-LogMatches $log '\[FATAL\].*((?:Jump target|Unresolved (?:call|branch)) .*)$'
     $fatal = Get-LogMatches $log '\[FATAL\]\s*(.*)$'
-    $modules = Get-LogMatches $log 'Loading XEX patch from (\S+)'
+    $titleUpdatePatches = Get-LogMatches $log 'Loading XEX patch from (\S+)'
     $outcome = if ($timedOut) {
         if ($null -ne $quietSeconds -and $quietSeconds -ge $StallSeconds) { 'stalled' } else { 'alive_at_deadline' }
     } elseif ($process.ExitCode -eq 0 -and !$fatal) { 'exited' } else { 'crashed' }
@@ -112,7 +112,7 @@ try {
         exit_code = $(if ($timedOut) { $null } else { $process.ExitCode }); outcome = $outcome
         log_quiet_seconds = $quietSeconds
         unregistered_call_targets = $unregistered; missing_jump_table_entries = $jumpTables
-        fatal = $fatal; title_update_patches = $modules; screenshots = $shot; logs = $run
+        fatal = $fatal; title_update_patches = $titleUpdatePatches; screenshots = $shot; logs = $run
     }
     $result | ConvertTo-Json | Set-Content "$run/result.json"
     $result | ConvertTo-Json

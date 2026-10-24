@@ -16,6 +16,7 @@ earlier patch is a new patch on top.
 | Patch | What |
 |---|---|
 | `0027-refuse-unrecompiled-modules` | In a multi-module project, `LoadUserModule` refuses a module with no recompiled library (ticket 07), so `XexLoadImage` fails cleanly instead of the game faulting on unrecompiled code. |
+| `0028-modules-from-own-folder` | 0027 matches by file name, so a module of the same name from another device (a DLC package's) would be wired to this build's code; modules now load only from the executable's own folder, compared as resolved by the VFS. |
 
 ## Carried over from WWE All Stars (ADR-0004)
 

@@ -1,5 +1,7 @@
 // Copied from topspin4-decomp (MIT, Copyright (c) 2026 Top Spin 4 decompilation contributors),
-// tools/ghidra/ApplySymbolMap.java at 553f783, unchanged apart from this header.
+// tools/ghidra/ApplySymbolMap.java at 553f783. Changed: the evidence column may hold commas (it
+// comes last, and csv.writer quotes it), and a name whose address Ghidra did not make a function
+// creates one there instead of stopping the run.
 // Apply reviewed function names from the repository's metadata-only symbol map.
 // @category TopSpin4
 
@@ -30,12 +32,14 @@ public class ApplySymbolMap extends GhidraScript {
         }
 
         int applied = 0;
+        int created = 0;
+        int missing = 0;
         for (int index = 1; index < lines.size(); index++) {
             String line = lines.get(index);
             if (line.isBlank()) {
                 continue;
             }
-            String[] fields = line.split(",", -1);
+            String[] fields = line.split(",", 5);
             if (fields.length != 5) {
                 throw new IllegalArgumentException("invalid symbol-map row " + (index + 1));
             }
@@ -44,15 +48,23 @@ public class ApplySymbolMap extends GhidraScript {
             }
 
             Address address = currentProgram.getAddressFactory().getAddress(fields[1]);
-            Function function = address == null ? null : getFunctionAt(address);
+            if (address == null) {
+                throw new IllegalArgumentException("invalid address in symbol-map row " + (index + 1));
+            }
+            Function function = getFunctionAt(address);
             if (function == null) {
-                throw new IllegalStateException(
-                    "no function at " + fields[1] + " for " + fields[2]
-                );
+                function = createFunction(address, null);
+                created++;
+            }
+            if (function == null) {
+                printerr("no function could be made at " + fields[1] + " for " + fields[2]);
+                missing++;
+                continue;
             }
             function.setName(fields[2], SourceType.USER_DEFINED);
             applied++;
         }
-        println("Applied " + applied + " reviewed function names from " + mapPath);
+        println("Applied " + applied + " function names from " + mapPath + " (" + created +
+            " functions created, " + missing + " addresses without one)");
     }
 }

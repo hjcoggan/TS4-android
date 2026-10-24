@@ -27,6 +27,9 @@ foreach ($module in $modules) {
         $arguments += @('-postScript', 'ApplySymbolMap.java', "$projectRoot/symbols/tu1-symbols.csv")
     }
     & $headless @arguments *> "$projectRoot/analysis/ghidra-$($module.File).log"
-    if ($LASTEXITCODE -ne 0) { throw "Ghidra failed on $($module.File); see analysis/ghidra-$($module.File).log" }
+    # A failing post-script leaves the exit code at 0, so its report line is checked too.
+    if ($LASTEXITCODE -ne 0 -or (Select-String -Quiet -Path "$projectRoot/analysis/ghidra-$($module.File).log" -Pattern 'SCRIPT ERROR')) {
+        throw "Ghidra failed on $($module.File); see analysis/ghidra-$($module.File).log"
+    }
     Write-Output "Imported $($module.File)"
 }

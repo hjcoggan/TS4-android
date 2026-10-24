@@ -1,0 +1,24 @@
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 68f36a6..7ac6489 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -714,6 +714,19 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+                  path);
+     return nullptr;
+   }
++  // The recompiled modules are matched by file name (the device is dropped), so a module of
++  // the same name from another device, such as a DLC package's replacement, would otherwise
++  // be wired to this build's code. Only the executable's own folder supplies modules; the
++  // paths are compared as resolved, since game:\ and the device path name the same folder.
++  if (executable_module_ && !recompiled_modules_.empty()) {
++    auto* own = file_system()->ResolvePath(executable_module_->path());
++    auto* entry = file_system()->ResolvePath(path);
++    if (own && entry && entry->parent() != own->parent()) {
++      REXSYS_ERROR("LoadUserModule: refusing '{}': modules load only from the folder of '{}'",
++                   path, executable_module_->path());
++      return nullptr;
++    }
++  }
+ 
+   // loading_paths_ serializes concurrent loaders of the same path; we
+   // can't hold the global lock across LoadFromFile or DllMain ATTACH.
