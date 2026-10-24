@@ -1,0 +1,3 @@
+# Hybrid recompilation on a pinned ReXGlue v0.10.0
+
+All three Modules are recompiled to C++ with ReXGlue, pinned at v0.10.0 and patched locally. Hand-written C++ hooks replace the title server, the frame and tick clock, settings, and whatever the Native renderer needs to intercept. We expect to carry our own ReXGlue patches for the multi-module path (`XexLoadImage`, `XexGetProcedureAddress`, `XexUnloadImageAndExitThread`), because no earlier port has exercised it. The public topspin4-decomp project is used only as a source of names and symbols. It is not a build path, because a matching decompilation is years away from linking.

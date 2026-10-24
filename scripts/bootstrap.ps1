@@ -1,0 +1,112 @@
+param([string]$SevenZipPath)
+$ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/Invoke-Hidden.ps1"
+$projectRoot = Split-Path $PSScriptRoot -Parent
+Set-Location $projectRoot
+New-Item -ItemType Directory -Force .tools | Out-Null
+$git = (Get-Command git).Source
+
+# Toolchains shared with the sister recomps. A junction to an existing copy saves
+# ~2 GB; without one, the pinned artifact below is downloaded instead.
+$shared = @(
+    @{ Name = 'rexglue-0.10.0'; From = 'D:/Projects/SVR2011-RECOMP/.tools/rexglue-0.10.0' },
+    @{ Name = 'llvm-21.1.8'; From = 'D:/Projects/SVR2011-RECOMP/.tools/llvm-21.1.8' },
+    @{ Name = 'tracy-0.13.1'; From = 'D:/Projects/SVR2011-RECOMP/.tools/tracy-0.13.1' },
+    @{ Name = 'fidelityfx-sdk'; From = 'D:/Projects/SVR2011-RECOMP/.tools/fidelityfx-sdk' },
+    @{ Name = 'presentmon'; From = 'D:/Projects/WWE_ALLSTARS-RECOMP/.tools/presentmon' }
+)
+foreach ($link in $shared) {
+    $path = Join-Path '.tools' $link.Name
+    if (!(Test-Path -LiteralPath $path) -and (Test-Path -LiteralPath $link.From)) {
+        New-Item -ItemType Junction -Path $path -Target $link.From | Out-Null
+        Write-Output "Linked $($link.Name) -> $($link.From)"
+    }
+}
+
+$artifacts = @(
+    @{
+        File = 'rexglue-sdk-0.10.0-win-amd64.zip'
+        Url = 'https://github.com/rexglue/rexglue-sdk/releases/download/v0.10.0/rexglue-sdk-0.10.0-win-amd64.zip'
+        Sha256 = 'ad4485da853fbe932e9f5dbb643f9b5fe85dc73775ebbad4df6879fe6df0c11b'
+        Destination = '.tools/rexglue-0.10.0'
+        Executable = '.tools/rexglue-0.10.0/win-amd64/bin/rexglue.exe'
+    },
+    @{
+        File = 'LLVM-21.1.8-win64.exe'
+        Url = 'https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe'
+        Sha256 = '7a5386c26497db1691f320121e5b113364dd0274b98e55f15f4dbc00c0450113'
+        Destination = '.tools/llvm-21.1.8'
+        Executable = '.tools/llvm-21.1.8/bin/clang++.exe'
+    },
+    @{
+        # Reference emulator and oracle (docs/research/feasibility.md). Edge cuts several
+        # releases a day; bump the tag and hash together. portable.txt keeps its config here.
+        File = 'xenia-edge-4d07204.zip'
+        Url = 'https://github.com/has207/xenia-edge/releases/download/4d07204/xenia_edge_windows.zip'
+        Sha256 = '0df8d0742b12a64ed60de1d26d7f15edfd847ade4979af98be38a87ff5d9591e'
+        Destination = '.tools/xenia-edge'
+        Executable = '.tools/xenia-edge/xenia_edge.exe'
+    },
+    @{
+        File = 'extract-xiso-202609111233.zip'
+        Url = 'https://github.com/XboxDev/extract-xiso/releases/download/build-202609111233/extract-xiso-Win64_Release.zip'
+        Sha256 = 'fc891dfa72f08e3838a2f8b7ec34a8e4d61678da1cc8fee879677f00bf114ce3'
+        Destination = '.tools/extract-xiso'
+        Executable = '.tools/extract-xiso/artifacts/extract-xiso.exe'
+    },
+    @{
+        # The 'latest' tag is rolling: a new upload changes the hash and fails the check.
+        File = 'xextool-20261002.zip'
+        Url = 'https://github.com/Team-Resurgent/XexTool/releases/download/latest/XexTool-windows-x64.zip'
+        Sha256 = 'e0c8cb74e98e3b87f147786688d9ab13dd755d1fcf5badc621bc66a4e89501e5'
+        Destination = '.tools/xextool'
+        Executable = '.tools/xextool/XexTool-windows-x64/XexTool.exe'
+    }
+)
+foreach ($artifact in $artifacts) {
+    if (Test-Path -LiteralPath $artifact.Executable) {
+        Write-Output "Present $($artifact.Executable)"
+        continue
+    }
+    $archive = Join-Path '.tools' $artifact.File
+    if (!(Test-Path -LiteralPath $archive)) {
+        Invoke-WebRequest $artifact.Url -OutFile $archive
+    }
+    if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $artifact.Sha256) {
+        throw "Checksum mismatch: $archive. No files were extracted."
+    }
+    if ($archive.EndsWith('.zip')) {
+        Expand-Archive $archive $artifact.Destination
+    } else {
+        if (!$SevenZipPath) {
+            $SevenZipPath = @((Get-Command 7z -ErrorAction SilentlyContinue).Source,
+                "$env:ProgramFiles/7-Zip/7z.exe", 'D:/Tools/7-Zip/7z.exe') |
+                Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+        }
+        if (!$SevenZipPath -or !(Test-Path -LiteralPath $SevenZipPath)) {
+            throw '7-Zip not found. Install it from https://www.7-zip.org or pass -SevenZipPath with the path to 7z.exe.'
+        }
+        Invoke-Hidden $SevenZipPath @('x', $archive, "-o$($artifact.Destination)", '-y')
+    }
+    Write-Output "Verified $($artifact.File)"
+}
+New-Item -ItemType File -Force .tools/xenia-edge/portable.txt | Out-Null
+
+# Sources, unpatched. rexglue-source and xenosrecomp sit at the commits
+# WWE_ALLSTARS-RECOMP builds on, so its patches/ port across cleanly.
+$sources = @(
+    @{ Name = 'rexglue-source'; Url = 'https://github.com/rexglue/rexglue-sdk.git'; Commit = 'f5337cd' },
+    @{ Name = 'xenosrecomp'; Url = 'https://github.com/zolaware/reblue-XenosRecomp.git'; Commit = '339af41' },
+    # Function names and module map only; see feasibility.md section 4.
+    @{ Name = 'topspin4-decomp'; Url = 'https://github.com/g-guthrie/topspin4-decomp.git'; Commit = '553f783' }
+)
+foreach ($source in $sources) {
+    $path = ".tools/$($source.Name)"
+    if (!(Test-Path -LiteralPath "$path/.git")) {
+        $null = Invoke-Hidden $git @('clone', $source.Url, $path)
+        $null = Invoke-Hidden $git @('-C', $path, 'checkout', $source.Commit)
+        $null = Invoke-Hidden $git @('-C', $path, 'submodule', 'update', '--init', '--recursive')
+    }
+    Write-Output "Cloned $($source.Name) @ $($source.Commit)"
+}
+Write-Output 'Local toolchain is ready. No system installation or PATH changes were made.'
