@@ -52,12 +52,12 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
         var needDisc = _gameData.Status() != SetupStatus.Done;
         var needUpdate = _updateData.Status() != SetupStatus.Done;
 
-        reporter.Start(SetupStep.CheckingDisc, 0);
+        if (needDisc) reporter.Start(SetupStep.CheckingDisc, 0);
         using var image = needDisc ? DiscSetup.Open(discImage) : null;
         var discSetup = new DiscSetup(disc, space);
         var files = image is null ? null : discSetup.Check(image, cancel);
 
-        reporter.Start(SetupStep.CheckingTitleUpdate, 0);
+        if (needUpdate) reporter.Start(SetupStep.CheckingTitleUpdate, 0);
         using var package = needUpdate ? TitleUpdateSetup.Open(titleUpdatePackage) : null;
         var updateSetup = new TitleUpdateSetup(titleUpdate, space);
         if (package is not null) updateSetup.Check(package, cancel);

@@ -36,7 +36,7 @@ internal sealed class PreparedFolder(string directory, FileManifest manifest)
     /// Starts or resumes writing: a folder that is not done becomes the partial folder, whose
     /// files that verify are kept and everything else deleted. Returns the manifest entries still to write.
     /// </summary>
-    public List<ManifestEntry> Resume(Action<string> onFile, CancellationToken cancel)
+    public List<ManifestEntry> Resume(Reporter reporter, CancellationToken cancel)
     {
         if (System.IO.Directory.Exists(Directory))
         {
@@ -47,11 +47,12 @@ internal sealed class PreparedFolder(string directory, FileManifest manifest)
         var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var existing = System.IO.Directory.Exists(Partial)
             ? System.IO.Directory.EnumerateFiles(Partial, "*", SearchOption.AllDirectories).ToList() : [];
+        if (existing.Count > 0) reporter.Start(SetupStep.CheckingExistingFiles, 0);
         foreach (var path in existing)
         {
             cancel.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(Partial, path).Replace(Path.DirectorySeparatorChar, '/');
-            onFile(relative);
+            reporter.Report(relative);
             if (manifest.Find(relative) is { } entry && new FileInfo(path).Length == entry.Size
                 && FileHashes.Sha256(path, cancel) == entry.Sha256)
                 kept.Add(entry.Path);

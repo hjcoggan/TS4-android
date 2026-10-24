@@ -13,7 +13,7 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
     public static StfsPackage Open(string? packagePath)
     {
         if (string.IsNullOrEmpty(packagePath))
-            throw new SetupException(SetupError.NoTitleUpdate, "The port needs Title Update 1. " + WhatTitleUpdate1Is);
+            throw new SetupException(SetupError.NoTitleUpdate, "No title update was chosen. " + WhatTitleUpdate1Is);
         if (!File.Exists(packagePath))
             throw new SetupException(SetupError.NoTitleUpdate, $"The title update was not found: {packagePath}. " + WhatTitleUpdate1Is);
         try
@@ -82,7 +82,7 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
 
     public void Unpack(StfsPackage package, PreparedFolder folder, Reporter reporter, CancellationToken cancel)
     {
-        var pending = folder.Resume(file => reporter.Report(file), cancel);
+        var pending = folder.Resume(reporter, cancel);
         folder.CheckSpace(space, pending, Preparation.SpareBytes, "Title Update 1");
         reporter.Start(SetupStep.UnpackingTitleUpdate, manifest.TotalBytes, manifest.TotalBytes - pending.Sum(entry => entry.Size));
         foreach (var entry in pending)

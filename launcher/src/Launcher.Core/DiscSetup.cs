@@ -81,7 +81,7 @@ internal sealed class DiscSetup(FileManifest manifest, IDiskSpace space)
     public void Extract(XdvdfsImage image, IReadOnlyList<DiscFile> files, PreparedFolder folder, Reporter reporter,
         CancellationToken cancel)
     {
-        var pending = folder.Resume(file => reporter.Report(file), cancel);
+        var pending = folder.Resume(reporter, cancel);
         folder.CheckSpace(space, pending, Preparation.SpareBytes, "the game data");
         reporter.Start(SetupStep.Extracting, manifest.TotalBytes, manifest.TotalBytes - pending.Sum(entry => entry.Size));
         var byPath = files.ToDictionary(file => file.Path, StringComparer.OrdinalIgnoreCase);

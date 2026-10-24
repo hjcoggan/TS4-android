@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A console front end for preparation until the launcher UI (ticket 30). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TopSpin4.Launcher.Cli</RootNamespace>
+    <AssemblyName>topspin4-setup</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Launcher.Core/Launcher.Core.csproj" />
+  </ItemGroup>
+</Project>
