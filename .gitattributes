@@ -1,2 +1,4 @@
-.githooks/* text eol=lf
+# One line ending everywhere (LF), whatever core.autocrlf says, so edits match the files.
+* text=auto eol=lf
+# Patches apply byte for byte; their hunks may carry upstream CRLF lines.
 *.patch -text
