@@ -29,11 +29,14 @@ frame's generated file and line. Read the generated code there and the PowerPC b
   `ld r14,160(...)`. Set `setjmp_address` and `longjmp_address` in that Module's manifest entry.
   Loader and Swing already have theirs.
 
-**Smoke: stalled (alive, log quiet).** Take screenshots (`-ScreenshotEvery 5`), rerun with
-`-LogLevel debug`, and count the repeated kernel calls after the last new log line. A static
-screen waiting for input also reads as stalled.
+**Smoke: stalled (alive, log quiet).** Rerun with `-ScreenshotEvery 5 -StacksAt 20,25`: the
+screenshots and `last_screenshot_black` in `result.json` show what is on screen, and
+`stacks-<s>-guest.txt` lists each thread's guest functions; a thread whose stack is the same at
+both times is the one waiting. Then `-LogLevel debug` and count the repeated kernel calls after
+the last new log line. A static screen waiting for input also reads as stalled.
 
-**Screen black, but frames present and the game loads files.** Rendering, not logic. Classic must
+**Screen black (`last_screenshot_black`), but frames present and the game loads files.**
+Rendering, not logic. Classic must
 run on the FSI render-target path (`TopSpin4App` defaults it); the host render-target path draws
 Swing's frames black. A run passing `--render_target_path_vulkan` overrides the default.
 
@@ -57,6 +60,14 @@ runtime and GPU plugin DLLs next to the exe on every build; check their timestam
   `docs/research/module-inspection.md`).
 - Prior art to copy (ADR-0004): WWE All Stars at `D:\Projects\WWE_ALLSTARS-RECOMP`
   (`scripts/`, `src/`, `launcher/`, `patches/`, `docs/research/`).
+- The Oracle's log of a run that reaches the menu and the attract demo:
+  `.tools/xenia-edge/xenia.log` (Edge's file opens and guest thread starts and exits, by frame).
+  Diff the port's sequence against it to find where a run diverges. Rerun Edge
+  (`.tools/xenia-edge/xenia_edge.exe`, set `log_level = 3` in its config) for more detail.
+- The flags WWE's launcher passes, which a direct start of this port must also set:
+  `PlumbingToSet` in `D:\Projects\WWE_ALLSTARS-RECOMP\src\startup_paths.cpp`.
+- Ghidra MCP: open `ghidra/TopSpin4TU1` with program names `default.xex`, `Loader_DLL.xex`,
+  `Swing_DLL.xex`.
 - Debugger: `scripts\lldb.cmd` (the pinned lldb with its Python, from bootstrap). Run it from
   `cmd` or PowerShell, not bash, so `--x=D:/...` arguments survive. For a stall, attach to the
   running game and print every thread's stack in about a second; frames show the guest
