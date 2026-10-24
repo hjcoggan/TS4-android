@@ -1,0 +1,7 @@
+# Game data never goes in the repo: it lives in ../dump
+*.iso
+*.xex
+*.god
+*.stfs
+/build*/
+.DS_Store
