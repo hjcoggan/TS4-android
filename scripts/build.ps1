@@ -1,7 +1,9 @@
 param(
     # Codegen translates the Modules to C++ in generated/ (needs the player's game files);
     # Test builds and runs the host unit tests.
-    [ValidateSet('Configure', 'Build', 'Codegen', 'Test')][string]$Action = 'Build',
+    # Launcher publishes the preparation front end (topspin4-setup) to out/launcher/publish;
+    # LauncherTest runs the launcher's xUnit tests. Neither needs game data.
+    [ValidateSet('Configure', 'Build', 'Codegen', 'Test', 'Launcher', 'LauncherTest')][string]$Action = 'Build',
     [string]$VisualStudioRoot = 'C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools',
     [string]$WindowsSdkRoot = 'C:/Program Files (x86)/Windows Kits/10',
     [ValidateRange(1, 64)][int]$Jobs = 8,
@@ -14,6 +16,28 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot
 New-Item -ItemType Directory -Force analysis | Out-Null
+if ($Action -in 'Launcher', 'LauncherTest') {
+    . "$PSScriptRoot/Use-PinnedDotnet.ps1"
+    $dotnet = Use-PinnedDotnet $projectRoot
+    if ($Action -eq 'Launcher') {
+        Invoke-Hidden $dotnet @('publish', 'src/Launcher.Cli/Launcher.Cli.csproj', '-c', 'Release', '-r', 'win-x64',
+            '--self-contained', '-p:PublishSingleFile=true', '-p:DebugType=none',
+            '-o', "$projectRoot/out/launcher/publish", "-maxcpucount:$Jobs") `
+            -WorkingDirectory "$projectRoot/launcher" -LogPath "$projectRoot/analysis/build-launcher.log"
+        Write-Output "Launcher: $projectRoot/out/launcher/publish/topspin4-setup.exe"
+    } else {
+        try {
+            Invoke-Hidden $dotnet @('test', 'tests/Launcher.Tests/Launcher.Tests.csproj', '-c', 'Release', "-maxcpucount:$Jobs") `
+                -WorkingDirectory "$projectRoot/launcher" -LogPath "$projectRoot/analysis/test-launcher.log"
+        } finally {
+            # The summary, and on failure the failing tests and build errors.
+            Get-Content "$projectRoot/analysis/test-launcher.log" |
+                Select-String -Pattern '^(Passed|Failed)!|^\s+Failed |error [A-Z]+\d+' | ForEach-Object { $_.Line }
+        }
+    }
+    Write-Output "$Action completed. Logs: $projectRoot/analysis/"
+    return
+}
 
 $sdk = "$projectRoot/.tools/rexglue-0.10.0/win-amd64"
 $source = "$projectRoot/.tools/rexglue-source"

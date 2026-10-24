@@ -17,7 +17,8 @@ $shared = @(
     @{ Name = 'llvm-21.1.8'; From = 'D:/Projects/SVR2011-RECOMP/.tools/llvm-21.1.8' },
     @{ Name = 'tracy-0.13.1'; From = 'D:/Projects/SVR2011-RECOMP/.tools/tracy-0.13.1' },
     @{ Name = 'fidelityfx-sdk'; From = 'D:/Projects/SVR2011-RECOMP/.tools/fidelityfx-sdk' },
-    @{ Name = 'presentmon'; From = 'D:/Projects/WWE_ALLSTARS-RECOMP/.tools/presentmon' }
+    @{ Name = 'presentmon'; From = 'D:/Projects/WWE_ALLSTARS-RECOMP/.tools/presentmon' },
+    @{ Name = 'dotnet-sdk'; From = 'D:/Projects/WWE_ALLSTARS-RECOMP/.tools/dotnet-sdk' }
 )
 foreach ($link in $shared) {
     $path = Join-Path '.tools' $link.Name
@@ -41,6 +42,15 @@ $artifacts = @(
         Sha256 = '7a5386c26497db1691f320121e5b113364dd0274b98e55f15f4dbc00c0450113'
         Destination = '.tools/llvm-21.1.8'
         Executable = '.tools/llvm-21.1.8/bin/clang++.exe'
+    },
+    @{
+        # The launcher's SDK, pinned by launcher/global.json. Microsoft publishes SHA-512 only
+        # (https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json).
+        File = 'dotnet-sdk-10.0.401-win-x64.zip'
+        Url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-win-x64.zip'
+        Sha512 = '24b670ad3d923bfcf47df6c3b034152398b42f6dbc388e10d783aee1cfb5e5817d399fc0ae2a12cfa822a55e61d34830ccb15c50ef6efee437ab874bb7c79430'
+        Destination = '.tools/dotnet-sdk'
+        Executable = '.tools/dotnet-sdk/dotnet.exe'
     },
     @{
         # Reference emulator and oracle (docs/research/feasibility.md). Edge cuts several
@@ -76,7 +86,9 @@ foreach ($artifact in $artifacts) {
     if (!(Test-Path -LiteralPath $archive)) {
         Invoke-WebRequest $artifact.Url -OutFile $archive
     }
-    if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $artifact.Sha256) {
+    $algorithm = if ($artifact.Sha512) { 'SHA512' } else { 'SHA256' }
+    $expected = if ($artifact.Sha512) { $artifact.Sha512 } else { $artifact.Sha256 }
+    if ((Get-FileHash $archive -Algorithm $algorithm).Hash -ne $expected) {
         throw "Checksum mismatch: $archive. No files were extracted."
     }
     if ($archive.EndsWith('.zip')) {
