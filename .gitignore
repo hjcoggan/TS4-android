@@ -23,3 +23,7 @@ __pycache__/
 /userdata/
 # rexglue init writes the disc's title image here; never commit or embed game art.
 /metadata/
+# The local Ghidra project of the TU1 Modules (scripts/ghidra-project.ps1)
+/ghidra/
+# Agent worktrees
+/.claude/
