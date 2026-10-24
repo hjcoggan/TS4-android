@@ -1,0 +1,60 @@
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_io.cpp b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+index 09f6048..9685d86 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_io.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+@@ -22,6 +22,8 @@
+ #include <rex/system/info/file.h>
+ #include <rex/system/kernel_state.h>
+ #include <rex/system/util/string_utils.h>
++
++REXCVAR_DECLARE(bool, io_trace);
+ #include <rex/system/xevent.h>
+ #include <rex/system/xfile.h>
+ #include <rex/system/xiocompletion.h>
+@@ -181,6 +183,9 @@ u32 NtCreateFile_entry(mapped_u32 handle_out, u32 desired_access,
+     REXKRNL_IMPORT_FAIL("NtCreateFile", "path='{}' -> {:#x}", target_path, result);
+   } else {
+     REXKRNL_IMPORT_RESULT("NtCreateFile", "{:#x} handle={:#x}", result, handle);
++    if (REXCVAR_GET(io_trace)) {
++      REXKRNL_INFO("io_trace: open '{}' handle={:#x}", target_path, handle);
++    }
+   }
+   return result;
+ }
+diff --git a/src/system/xthread.cpp b/src/system/xthread.cpp
+index 77bce25..bf4ee81 100644
+--- a/src/system/xthread.cpp
++++ b/src/system/xthread.cpp
+@@ -37,6 +37,10 @@
+ #include <rex/thread.h>
+ #include <rex/vec128.h>
+ 
++REXCVAR_DEFINE_BOOL(io_trace, false, "Kernel",
++                    "Log every successful file open and every guest thread start and exit, "
++                    "to line a run up against the Oracle's (Xenia's) log");
++
+ REXCVAR_DEFINE_BOOL(ignore_thread_priorities, true, "Kernel",
+                     "Ignores game-specified thread priorities");
+ 
+@@ -496,6 +500,10 @@ X_STATUS XThread::Exit(int exit_code) {
+   // while this method is still running.
+   auto self = retain_object(this);
+ 
++  if (REXCVAR_GET(io_trace)) {
++    REXSYS_INFO("io_trace: thread exit '{}' code={}", thread_name_, exit_code);
++  }
++
+   // Mark as terminated before running down APCs.
+   auto kthread = guest_object<X_KTHREAD>();
+   kthread->terminated = 1;
+@@ -574,6 +582,10 @@ void XThread::Execute() {
+ 
+   // Let the kernel know we are starting.
+   kernel_state_->OnThreadExecute(this);
++  if (REXCVAR_GET(io_trace)) {
++    REXSYS_INFO("io_trace: thread start '{}' entry={:08X}", thread_name_,
++                creation_params_.start_address);
++  }
+ 
+   // Dispatch any APCs that were queued before the thread was created first.
+   DeliverAPCs();

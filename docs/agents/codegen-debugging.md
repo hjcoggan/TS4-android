@@ -62,7 +62,8 @@ runtime and GPU plugin DLLs next to the exe on every build; check their timestam
   (`scripts/`, `src/`, `launcher/`, `patches/`, `docs/research/`).
 - The Oracle's log of a run that reaches the menu and the attract demo:
   `.tools/xenia-edge/xenia.log` (Edge's file opens and guest thread starts and exits, by frame).
-  Diff the port's sequence against it to find where a run diverges. Rerun Edge
+  Diff the port's sequence against it to find where a run diverges: pass
+  `-ExtraArguments '--io_trace=true'` to the smoke run for the port's opens and thread starts and exits. Rerun Edge
   (`.tools/xenia-edge/xenia_edge.exe`, set `log_level = 3` in its config) for more detail.
 - The flags WWE's launcher passes, which a direct start of this port must also set:
   `PlumbingToSet` in `D:\Projects\WWE_ALLSTARS-RECOMP\src\startup_paths.cpp`.
