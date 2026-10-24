@@ -265,6 +265,87 @@ public sealed class PreparationTests : IDisposable
     }
 
     [Fact]
+    public void Missing_tu1_is_refused_before_anything_is_written()
+    {
+        var disc = WriteDisc();
+        var missing = Path.Combine(_root, "input", "nothing-here");
+        var notAPackage = Path.Combine(_root, "input", "notes.txt");
+        File.WriteAllText(notAPackage, "not a package");
+
+        foreach (var tu in new[] { null, missing, notAPackage })
+        {
+            var error = Refused(disc, tu);
+            Assert.Equal(SetupError.NoTitleUpdate, error.Error);
+            Assert.Contains("Title Update 1", error.Message);
+            Assert.DoesNotContain("http", error.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData(0x54510866u, TestXex.MediaId, 0x000B0000u, "another game")]
+    [InlineData(TestXex.TitleId, 0x12345678u, 0x000B0000u, "media ID 12345678")]
+    [InlineData(TestXex.TitleId, TestXex.MediaId, 0x00000002u, "not a title update")]
+    public void A_package_for_another_game_or_edition_or_of_other_content_is_the_wrong_title_update(
+        uint titleId, uint mediaId, uint contentType, string expected)
+    {
+        var error = Refused(WriteDisc(), WriteTu(TestTitleUpdate.Package(titleId, mediaId, contentType)));
+
+        Assert.Equal(SetupError.WrongTitleUpdate, error.Error);
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void A_later_title_update_is_refused_with_the_version_it_brings()
+    {
+        var tu2 = TestTitleUpdate.With("Swing_DLL.xexp", TestXex.Patch(target: 0x00000203, source: 0x00000103, seed: 13));
+
+        var error = Refused(WriteDisc(), WriteTu(TestTitleUpdate.Package(files: tu2)));
+
+        Assert.Equal(SetupError.WrongTitleUpdate, error.Error);
+        Assert.Contains("Swing_DLL.xexp", error.Message);
+        Assert.Contains("v0.0.2.3", error.Message);
+    }
+
+    [Fact]
+    public void A_title_update_missing_a_module_patch_is_refused()
+    {
+        var files = TestTitleUpdate.Tu1Files.Where(file => file.Path != "Loader_DLL.xexp").ToArray();
+
+        var error = Refused(WriteDisc(), WriteTu(TestTitleUpdate.Package(files: files)));
+
+        Assert.Equal(SetupError.WrongTitleUpdate, error.Error);
+        Assert.Contains("Loader_DLL.xexp", error.Message);
+    }
+
+    [Theory]
+    [InlineData("TitleUpdate.arc")]
+    [InlineData("Extra.bin")]
+    [InlineData("default.xexp")]
+    public void A_title_update_whose_files_differ_from_tu1_is_refused(string changed)
+    {
+        var data = changed.EndsWith(".xexp", StringComparison.Ordinal) ? TestXex.Patch(seed: 77) : TestStfs.Content(300, 77);
+
+        var error = Refused(WriteDisc(), WriteTu(TestTitleUpdate.Package(files: TestTitleUpdate.With(changed, data))));
+
+        Assert.Equal(SetupError.WrongTitleUpdate, error.Error);
+        Assert.Contains("files differ", error.Message);
+    }
+
+    [Fact]
+    public void A_damaged_title_update_is_refused_as_damaged()
+    {
+        var tu = WriteTu();
+        var bytes = File.ReadAllBytes(tu);
+        bytes[TestStfs.DataBlockOffset(4) + 100] ^= 0x55;
+        File.WriteAllBytes(tu, bytes);
+
+        var error = Refused(WriteDisc(), tu);
+
+        Assert.Equal(SetupError.DamagedFile, error.Error);
+        Assert.Contains("damaged", error.Message);
+    }
+
+    [Fact]
     public void The_inputs_are_unchanged_byte_for_byte()
     {
         var disc = WriteDisc();
