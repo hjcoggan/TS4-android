@@ -11,6 +11,9 @@ param(
     [string[]]$CMakeArgs = @()
 )
 $ErrorActionPreference = 'Stop'
+# CMake asks git for version details inside .tools/rexglue-source; with optional locks a
+# stopped build can leave that tree's index.lock behind (scripts/apply-patches.ps1).
+$env:GIT_OPTIONAL_LOCKS = '0'
 . "$PSScriptRoot/Invoke-Hidden.ps1"
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot

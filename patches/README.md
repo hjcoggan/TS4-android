@@ -8,8 +8,10 @@ tree records the series it carries. A patch that fails resets the tree and stops
 |---|---|---|
 | `rexglue/` | `.tools/rexglue-source` | `f5337cd` (v0.10.0) |
 
-New patches take the next number. A patch is never renumbered once committed, so a fix to an
-earlier patch is a new patch on top.
+To add one, edit `.tools/rexglue-source` and run `pwsh scripts/new-patch.ps1 <name>`: it writes
+the next-numbered patch from your edits and reapplies the series to prove it. A patch is never
+renumbered once committed, so a fix to an earlier patch is a new patch on top.
+`pwsh scripts/apply-patches.ps1 -Reset` discards the tree's edits and reapplies the series.
 
 ## Our own
 
