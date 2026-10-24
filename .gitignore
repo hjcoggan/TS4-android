@@ -11,3 +11,5 @@
 # Build output
 /build/
 /out/
+__pycache__/
+*.pyc

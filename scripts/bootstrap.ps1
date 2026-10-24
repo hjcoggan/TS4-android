@@ -6,6 +6,10 @@ Set-Location $projectRoot
 New-Item -ItemType Directory -Force .tools | Out-Null
 $git = (Get-Command git).Source
 
+# The pre-commit guard against game data and generated code (ADR-0006, .githooks/pre-commit).
+$null = Invoke-Hidden $git @('config', 'core.hooksPath', '.githooks')
+Write-Output 'Installed the pre-commit guard'
+
 # Toolchains shared with the sister recomps. A junction to an existing copy saves
 # ~2 GB; without one, the pinned artifact below is downloaded instead.
 $shared = @(

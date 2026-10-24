@@ -1,0 +1,3 @@
+#!/bin/sh
+# Rejects game data, executables and generated code (ADR-0006). Installed by scripts/bootstrap.ps1.
+exec python "$(dirname "$0")/../scripts/repo_guard.py"
