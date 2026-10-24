@@ -75,6 +75,16 @@ $artifacts = @(
         Sha256 = 'e0c8cb74e98e3b87f147786688d9ab13dd755d1fcf5badc621bc66a4e89501e5'
         Destination = '.tools/xextool'
         Executable = '.tools/xextool/XexTool-windows-x64/XexTool.exe'
+    },
+    @{
+        # The Python the pinned LLVM's lldb is built against (it imports python310.dll), for
+        # scripts/lldb.cmd. 3.10.11 is the last 3.10 release with Windows binaries; the hash is
+        # of the copy whose DLLs carry the Python Software Foundation's Authenticode signature.
+        File = 'python-3.10.11-embed-amd64.zip'
+        Url = 'https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip'
+        Sha256 = '608619F8619075629C9C69F361352A0DA6ED7E62F83A0E19C63E0EA32EB7629D'
+        Destination = '.tools/python-3.10.11-embed'
+        Executable = '.tools/python-3.10.11-embed/python310.dll'
     }
 )
 foreach ($artifact in $artifacts) {

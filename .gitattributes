@@ -2,3 +2,5 @@
 * text=auto eol=lf
 # Patches apply byte for byte; their hunks may carry upstream CRLF lines.
 *.patch -text
+# cmd.exe scripts keep CRLF.
+*.cmd text eol=crlf

@@ -50,4 +50,9 @@ screen waiting for input also reads as stalled.
   `docs/research/module-inspection.md`).
 - Prior art to copy (ADR-0004): WWE All Stars at `D:\Projects\WWE_ALLSTARS-RECOMP`
   (`scripts/`, `src/`, `launcher/`, `patches/`, `docs/research/`).
-- No debugger works here yet: the pinned `lldb` needs a Python DLL, and `cdb` is not installed.
+- Debugger: `scripts\lldb.cmd` (the pinned lldb with its Python, from bootstrap). Run it from
+  `cmd` or PowerShell, not bash, so `--x=D:/...` arguments survive. For a stall, attach to the
+  running game and print every thread's stack in about a second; frames show the guest
+  function and generated line (`__imp__sub_830AA4D8 at topspin4_recomp.54.cpp:275`):
+  `scripts\lldb.cmd -b -p <pid> -k "thread backtrace all -c 8" -k detach`
+  In batch mode the attach stop counts as a crash, so commands after it go in `-k`, not `-o`.
