@@ -1,0 +1,57 @@
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+index 1254710..de53e58 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -28,6 +28,7 @@
+ #include <rex/hook.h>
+ #include <rex/types.h>
+ #include <rex/runtime.h>
++#include <rex/system/guest_swaps.h>
+ #include <rex/system/export_resolver.h>
+ #include <rex/system/kernel_state.h>
+ #include <rex/system/xtypes.h>
+@@ -85,6 +86,14 @@ void WarnNoGpuEmulation(const char* export_name, std::atomic<bool>& warned) {
+ }
+ }  // namespace
+ 
++namespace rex::system {
++namespace {
++std::atomic<uint64_t> guest_swaps{0};
++}  // namespace
++
++uint64_t GuestSwapCount() { return guest_swaps.load(std::memory_order_relaxed); }
++}  // namespace rex::system
++
+ namespace rex::kernel::xboxkrnl {
+ using namespace rex::system;
+ 
+@@ -445,6 +454,7 @@ void VdSwap_entry(mapped_void buffer_ptr,      // ptr into primary ringbuffer
+                   mapped_u32 frontbuffer_ptr,  // ptr to frontbuffer address
+                   mapped_u32 texture_format_ptr, mapped_u32 color_space_ptr, mapped_u32 width,
+                   mapped_u32 height) {
++  rex::system::guest_swaps.fetch_add(1, std::memory_order_relaxed);
+   // All of these parameters are REQUIRED.
+   assert(buffer_ptr);
+   assert(fetch_ptr);
+diff --git a/include/rex/system/guest_swaps.h b/include/rex/system/guest_swaps.h
+new file mode 100644
+index 0000000..00521e0
+--- /dev/null
++++ b/include/rex/system/guest_swaps.h
+@@ -0,0 +1,16 @@
++/**
++ * @file        system/guest_swaps.h
++ * @brief       Count of the frames the guest has presented
++ */
++
++#pragma once
++
++#include <cstdint>
++
++namespace rex::system {
++
++// VdSwap calls so far: one per frame the guest presents, whichever module's Direct3D made
++// it. Hosts time scripted input and frame captures by it.
++uint64_t GuestSwapCount();
++
++}  // namespace rex::system

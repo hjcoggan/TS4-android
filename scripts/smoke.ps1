@@ -10,6 +10,10 @@ param(
     [ValidateRange(1, 600)][int]$StallSeconds = 10,
     [ValidateSet('RelWithDebInfo', 'Release', 'Debug')][string]$Configuration = 'RelWithDebInfo',
     [string[]]$ExtraArguments = @(),
+    # A scripted pad (src/script_input.h) replaces every real controller, so a run is never
+    # steered by a pad someone happens to touch. The default skips the intro videos and stops
+    # on the title screen; -InputScript '' plays with the real pads. Copied into the run folder.
+    [string]$InputScript = "$PSScriptRoot/input/boot-to-title.txt",
     [switch]$Headless
 )
 $ErrorActionPreference = 'Stop'
@@ -30,6 +34,11 @@ $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1',
     "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
     "--log_file=$run/runtime.log", "--log_level=$LogLevel", '--log_flush_interval=1')
 if ($Headless) { $arguments += '--headless' }
+if ($InputScript) {
+    if (!(Test-Path -LiteralPath $InputScript)) { throw "No input script at $InputScript" }
+    Copy-Item -LiteralPath $InputScript "$run/input.txt"
+    $arguments += "--ts4_input_script=$run/input.txt"
+}
 foreach ($argument in $ExtraArguments) {
     if ($argument -notmatch '^--[a-z0-9_]+=') { throw "Invalid runtime argument: $argument" }
     $arguments += $argument

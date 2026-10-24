@@ -1,0 +1,16 @@
+# Boot to the title screen ("Press START button") without sitting through the intro videos.
+# The intro skips on START keystrokes; six presses about a second apart skip every video,
+# and the title loads around frame 350. Nothing is pressed after that, so the run stays on
+# the title screen. Usage: pwsh scripts/smoke.ps1 -InputScript scripts/input/boot-to-title.txt
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START

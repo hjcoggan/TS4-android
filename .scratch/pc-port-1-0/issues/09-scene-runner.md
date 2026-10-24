@@ -11,3 +11,7 @@
 - [ ] Running the scene twice gives the same captures
 - [ ] Runs never overlap
 - [ ] The main-menu capture matches the Oracle reference
+
+## Comments
+
+- 2026-10-24 (Claude): Pulled forward from this ticket at the owner's request, so automated runs skip the long intro: WWE's scripted pad (`src/script_input.{h,cpp}`, `--ts4_input_script`), timed by the guest's `VdSwap` count (patch 0029) instead of a per-game Present hook, since Top Spin 4 presents from two D3D copies. Added keystroke output: the intro videos and XUI screens read `XamInputGetKeystroke`, not the pad state, so WWE's pad alone could not skip them. `scripts/smoke.ps1` now uses `scripts/input/boot-to-title.txt` by default: the title screen in ~6 s (frame ~350) instead of 13-60 s, and a real pad can no longer steer a run. Still to do here: frame dumps, exit after the last capture, the session report, and the boot-to-main-menu scene.
