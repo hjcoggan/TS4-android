@@ -130,11 +130,27 @@ def main(argv=None) -> int:
             if registered is not None and registered[0] == mapping.new:
                 script_confirmed.append(row)
 
+    # The TU1 link folded some functions with identical code into one, so several names can land
+    # on one address: one row keeps the first name (a high-confidence one if any) and names the
+    # rest in its evidence, since a hook there changes every one of them.
+    by_address = collections.defaultdict(list)
+    for row in rows:
+        by_address[row[1]].append(row)
+    folded, out_rows = [], []
+    for address, group in sorted(by_address.items()):
+        group.sort(key=lambda row: (row[3] != "high", row[2]))
+        row = list(group[0])
+        if len(group) > 1:
+            others = [other[2] for other in group[1:]]
+            row[4] += "; folded in TU1 with " + " ".join(others)
+            folded.append((address, [group[0][2]] + others))
+        out_rows.append(row)
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, lineterminator="\n")
         writer.writerow(HEADER)
-        writer.writerows(sorted(rows, key=lambda row: row[1]))
+        writer.writerows(out_rows)
 
     summary = [f"{module}: {matched} of {total} .pdata functions matched ({matched / total:.1%}), "
                f"{changed} by position with changed code" for module, (matched, total, changed) in rates.items()]
@@ -142,6 +158,8 @@ def main(argv=None) -> int:
                    + ", ".join(f"{n} {m}" for m, n in methods.most_common()))
     summary.append(f"script commands: {len(script_rows)} mapped, {len(script_confirmed)} paired with "
                    "their command string by a registration function in both images")
+    summary.append(f"folded: {sum(len(n) for _, n in folded)} names share {len(folded)} TU1 addresses: "
+                   + "; ".join(f"{a.upper()} " + ", ".join(n) for a, n in folded))
     print("\n".join(summary))
     for base_address, name, method, note in unmatched:
         print(f"  unmatched {name} (base {base_address:08X}): {method} {note}")

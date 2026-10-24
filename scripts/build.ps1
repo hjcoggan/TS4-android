@@ -2,7 +2,9 @@ param(
     # Codegen translates the Modules to C++ in generated/ (needs the player's game files).
     # Launcher publishes the preparation front end (topspin4-setup) to out/launcher/publish;
     # LauncherTest runs the launcher's xUnit tests. Neither needs game data.
-    [ValidateSet('Configure', 'Build', 'Codegen', 'Launcher', 'LauncherTest')][string]$Action = 'Build',
+    # Check runs every test that needs no game data or C++ build (pytest, then LauncherTest);
+    # run it before committing.
+    [ValidateSet('Configure', 'Build', 'Codegen', 'Launcher', 'LauncherTest', 'Check')][string]$Action = 'Build',
     [string]$VisualStudioRoot = 'C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools',
     [string]$WindowsSdkRoot = 'C:/Program Files (x86)/Windows Kits/10',
     [ValidateRange(1, 64)][int]$Jobs = 8,
@@ -18,6 +20,12 @@ $env:GIT_OPTIONAL_LOCKS = '0'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot
 New-Item -ItemType Directory -Force analysis | Out-Null
+if ($Action -eq 'Check') {
+    & python -m pytest "$projectRoot/tests" -q
+    if ($LASTEXITCODE -ne 0) { throw "pytest failed (exit $LASTEXITCODE)" }
+    & $PSCommandPath -Action LauncherTest -Jobs $Jobs
+    return
+}
 if ($Action -in 'Launcher', 'LauncherTest') {
     . "$PSScriptRoot/Use-PinnedDotnet.ps1"
     $dotnet = Use-PinnedDotnet $projectRoot

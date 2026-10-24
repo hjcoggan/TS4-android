@@ -100,9 +100,7 @@ Swing_DLL.xex,88197870,ts4_runtime_record_get_word_94,medium,tu1 local from base
 Swing_DLL.xex,881add50,ts4_clear_intrusive_list,medium,tu1 function from base 8817f670; symbols.txt
 Swing_DLL.xex,881b3ce0,ts4_object_finalize,medium,tu1 function from base 881b4590; symbols.txt
 Swing_DLL.xex,881c19f8,ScriptStringEquals,medium,tu1 function from base 881c2218; string_length_and_content_comparison
-Swing_DLL.xex,881d35b8,Script_TitleServerFeatureUnavailable,high,"tu1 registration from base 88778698; registered as ""TitleServer_QueryNews""; direct_DownloadPlayerInfo_and_QueryNews_registrations"
-Swing_DLL.xex,881d35b8,Script_OnlinePS3_IsPlayerCreatedEnabled,high,"tu1 registration from base 887786a8; registered as ""OnlinePS3_IsPlayerCreatedEnabled""; direct_OnlinePS3_IsPlayerCreatedEnabled_registration"
-Swing_DLL.xex,881d35b8,Script_CompetitionGameReset,high,"tu1 registration from base 88779960; registered as ""CG_Reset""; direct_CG_Reset_registration"
+Swing_DLL.xex,881d35b8,Script_CompetitionGameReset,high,"tu1 registration from base 88779960; registered as ""CG_Reset""; direct_CG_Reset_registration; folded in TU1 with Script_OnlinePS3_IsPlayerCreatedEnabled Script_TitleServerFeatureUnavailable"
 Swing_DLL.xex,88263870,ts4_destroy_owned_object,medium,tu1 function from base 88174b18; symbols.txt
 Swing_DLL.xex,88563498,ts4_copy_bytes,medium,tu1 local from base 88563498; symbols.txt
 Swing_DLL.xex,8856ac40,__savegprlr,medium,tu1 function from base 8856ac40; symbols.txt

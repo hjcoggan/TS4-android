@@ -37,7 +37,7 @@ registration function.
 | Loader `.pdata` functions | 8,918 of 8,918 (100%) | No decomp names exist for Loader. |
 | Swing `.pdata` functions | 33,712 of 33,887 (99.5%) | 185 paired by position with changed code. |
 | Swing names | 553 of 586 (94.4%) | 198 by function, 315 by local code, 14 by table, 11 by registration, 14 `function*` (same shape, a constant or struct offset differs: check before hooking), 1 data-ref. |
-| Script commands | 55 mapped | 49 paired with their command string by a registration function in both images. |
+| Script commands | 55 mapped | 49 paired with their command string by a registration function in both images; 3 share one folded handler. |
 
 `high` confidence in the CSV means a whole-function or registration match on a name the
 decomp reviewed; everything else is `medium`.
@@ -53,9 +53,18 @@ decomp reviewed; everything else is `medium`.
 | `Script_TitleServer_GetPatch` | `88795B28` |
 | `Script_TitleServer_DownloadPlayerInfo` | `88793218` |
 | `Script_TitleServer_QueryRoundInfo` | `88795A18` |
-| `Script_TitleServerFeatureUnavailable` | `881D35B8` (a stub the TU1 link shares) |
+| `Script_TitleServerFeatureUnavailable` | `881D35B8`, folded with two other commands (below) |
 | `Script_OnlineTrueStub`, `Script_OnlineFalseStubA`, `Script_OnlineFalseStubB` | `88778FE0`, `88778FF0`, `88778FF8` |
 | `CTitleServer_RequestPatch`, `CTitleServer_QueueRequest` | `889B4E40`, `889B6FE0` |
+
+### Folded handlers
+
+The TU1 link merged functions with identical code. `881D35B8` is the handler of three script
+commands: `Script_TitleServerFeatureUnavailable` (registered as `TitleServer_QueryNews` and
+`DownloadPlayerInfo`), `Script_OnlinePS3_IsPlayerCreatedEnabled` and
+`Script_CompetitionGameReset`. A hook on that address changes all three. To change one
+command, hook its registration or the script dispatcher instead. The CSV keeps one row per
+address and names the others in its evidence.
 
 ### Not mapped (33)
 
