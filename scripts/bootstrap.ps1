@@ -113,4 +113,21 @@ foreach ($source in $sources) {
     }
     Write-Output "Cloned $($source.Name) @ $($source.Commit)"
 }
+# Git for Windows may check out symlinks as text. Materialize only these known libmspack links,
+# keeping real symlinks and refusing to replace edited files.
+$mspack = '.tools/rexglue-source/thirdparty/libmspack'
+foreach ($name in @('cab.h', 'cabd.c', 'lzx.h', 'lzxd.c', 'macros.h',
+    'mspack.h', 'mszip.h', 'mszipd.c', 'qtm.h', 'qtmd.c', 'readbits.h', 'readhuff.h', 'system.c', 'system.h')) {
+    $destination = "$mspack/cabextract/mspack/$name"
+    $target = "$mspack/libmspack/mspack/$name"
+    if ((Get-Item -LiteralPath $destination).LinkType) { continue }
+    if ((Get-Content -LiteralPath $destination -Raw).Trim() -eq "../../libmspack/mspack/$name") {
+        Copy-Item -LiteralPath $target -Destination $destination
+    } elseif ((Get-FileHash $destination).Hash -ne (Get-FileHash $target).Hash) {
+        throw "Refusing to overwrite modified libmspack file: $destination"
+    }
+}
+
+# Our changes to the upstream sources, in order (patches/README.md).
+& "$PSScriptRoot/apply-patches.ps1"
 Write-Output 'Local toolchain is ready. No system installation or PATH changes were made.'

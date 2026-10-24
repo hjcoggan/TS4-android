@@ -13,3 +13,13 @@
 /out/
 __pycache__/
 *.pyc
+
+# Prepared inputs for codegen (the TU1 Modules) and runtime folders
+/assets/
+/analysis/*
+!/analysis/iso-hashes.txt
+/logs/
+/cache/
+/userdata/
+# rexglue init writes the disc's title image here; never commit or embed game art.
+/metadata/

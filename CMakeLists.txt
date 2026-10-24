@@ -1,0 +1,41 @@
+# Top Spin 4 Recomp. SDK boilerplate lives in cmake/rexglue.cmake.
+
+cmake_minimum_required(VERSION 3.25)
+project(topspin4 VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(cmake/rexglue.cmake)
+
+set(TOPSPIN4_SOURCES
+    src/main.cpp
+)
+
+if(WIN32)
+    add_executable(topspin4 WIN32 ${TOPSPIN4_SOURCES})
+else()
+    add_executable(topspin4 ${TOPSPIN4_SOURCES})
+endif()
+
+rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
+
+# The SDK's -ffp-model=strict does not reach these targets (it is scoped to the SDK's
+# directory), so contraction is off explicitly: a PPC fmul followed by fadd never fuses.
+foreach(topspin4_target topspin4 topspin4_recomp)
+    if(TARGET ${topspin4_target})
+        target_compile_options(${topspin4_target} PRIVATE -ffp-contract=off)
+    endif()
+endforeach()
+
+if(NOT REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
+    # No codegen output yet: the host starts, says so and exits (ticket 03).
+    target_compile_definitions(topspin4 PRIVATE TOPSPIN4_NO_GUEST_CODE)
+endif()
+
+# The v0.10.0 source-tree runtime does not propagate ImGui's include directory
+# to the host, although its public UI headers include imgui.h.
+if(REXSDK_DIR)
+    target_include_directories(topspin4 PRIVATE
+        $<TARGET_PROPERTY:imgui::imgui,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
