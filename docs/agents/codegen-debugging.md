@@ -33,6 +33,13 @@ frame's generated file and line. Read the generated code there and the PowerPC b
 `-LogLevel debug`, and count the repeated kernel calls after the last new log line. A static
 screen waiting for input also reads as stalled.
 
+**Screen black, but frames present and the game loads files.** Rendering, not logic. Classic must
+run on the FSI render-target path (`TopSpin4App` defaults it); the host render-target path draws
+Swing's frames black. A run passing `--render_target_path_vulkan` overrides the default.
+
+**A runtime change seems to have no effect.** `topspin4_stage_dlls` (CMakeLists.txt) copies the
+runtime and GPU plugin DLLs next to the exe on every build; check their timestamps there.
+
 **Input does nothing.** XUI screens and the intro videos read keystrokes
 (`XamInputGetKeystroke`), not the pad state. The scripted pad sends both
 (`src/script_input.h`).

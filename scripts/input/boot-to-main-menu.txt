@@ -1,0 +1,20 @@
+# Boot to the main menu (Game Modes, Xbox LIVE, ...). Skips the intro as boot-to-title.txt
+# does, presses START on Loader's title screen (Swing loads and shows the practice ground
+# around frame 900), then START again for the main menu, up within about 2 s of that press.
+# Usage: pwsh scripts/smoke.ps1 -Seconds 40 -InputScript scripts/input/boot-to-main-menu.txt
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
