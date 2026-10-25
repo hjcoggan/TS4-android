@@ -92,3 +92,27 @@ def test_rejected_commit_lists_every_offender(repo):
     result = git(repo, "commit", "-q", "-m", "Both")
     assert result.returncode != 0
     assert "a.xex" in result.stderr and "b.arc" in result.stderr
+
+
+@pytest.mark.parametrize("line", [
+    '  REXLOG_INFO("{}", path.string());',
+    '  FILE* file = std::fopen(name.c_str(), "wb");',
+    '  FILE* file = fopen(name, "wb");',
+])
+def test_host_code_with_a_narrow_path_is_rejected(repo, line):
+    # path::string() and narrow fopen go through the ANSI code page: a per-user path with a
+    # user name outside it throws or fails to open.
+    result = commit(repo, "src/frame_dumps.cpp", f"void F() {{\n{line}\n}}\n")
+    assert result.returncode != 0
+    assert "src/frame_dumps.cpp:2" in result.stderr
+
+
+def test_a_narrow_path_marked_ok_commits(repo):
+    result = commit(repo, "src/frame_dumps.cpp",
+                    'FILE* Open() { return std::fopen(path.c_str(), "w"); }  // narrow path ok\n')
+    assert result.returncode == 0, result.stderr
+
+
+def test_wide_paths_and_code_outside_src_commit(repo):
+    assert commit(repo, "src/a.cpp", "auto f = _wfopen(path.c_str(), L\"w\");\nauto s = Utf8(path);\n").returncode == 0
+    assert commit(repo, "scripts/tool.py", "print(path.string())\n").returncode == 0

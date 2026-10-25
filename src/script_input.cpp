@@ -150,7 +150,8 @@ std::chrono::milliseconds ScriptInputDriver::SteadyClock() {
 }
 
 X_STATUS ScriptInputDriver::Setup() {
-  REXLOG_INFO("script input: reading commands from {}", file_.string());
+  const std::u8string file = file_.u8string();
+  REXLOG_INFO("script input: reading commands from {}", std::string(file.begin(), file.end()));
   return X_STATUS_SUCCESS;
 }
 

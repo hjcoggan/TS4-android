@@ -63,7 +63,7 @@ FILE* OpenFile(const std::filesystem::path& path, const char* mode) {
   const std::wstring wide_mode(mode, mode + std::strlen(mode));
   return _wfopen(path.c_str(), wide_mode.c_str());
 #else
-  return std::fopen(path.c_str(), mode);
+  return std::fopen(path.c_str(), mode);  // narrow path ok
 #endif
 }
 
