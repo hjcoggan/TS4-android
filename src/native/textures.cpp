@@ -369,8 +369,10 @@ uint32_t SamplerIndex(const xenos::xe_gpu_texture_fetch_t& fetch, uint32_t min_l
   sampler_info.minLod = float(min_level);
   sampler_info.maxLod = uint32_t(fetch.mip_filter) == 2 ? float(min_level) : float(max_level);
   if (sampler_info.maxLod > sampler_info.minLod) {
+    // The fetch constant's bias (Swing sharpens foliage with -1 and -2) plus the global one;
     // Vulkan guarantees |bias| <= 2 on every device.
-    sampler_info.mipLodBias = std::clamp(g.lod_bias, -2.0f, 2.0f);
+    sampler_info.mipLodBias =
+        std::clamp(float(fetch.lod_bias) / 32.0f + g.lod_bias, -2.0f, 2.0f);
   }
   if (anisotropy > 1.0f) {
     // As in the emulated path, anisotropic filtering is fully linear.

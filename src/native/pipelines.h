@@ -43,15 +43,13 @@ struct PipelineKey {
   uint32_t color_mask;
   uint32_t depth_control;
   uint32_t cull;
-  // The target's sample count (1, 2 or 4) | kMultisampleAlphaToCoverage.
+  // The target's sample count (1, 2 or 4).
   uint32_t multisample;
   uint32_t strides[kMaxStreams];
   uint32_t dummy_locations;
   uint32_t attribute_count;
   VertexAttribute attributes[kMaxAttributes];
 };
-
-inline constexpr uint32_t kMultisampleAlphaToCoverage = 1u << 8;
 
 // Xenos draws without a pixel shader are depth-only (depth pre-pass, shadow
 // maps): no fragment stage, no colour writes.

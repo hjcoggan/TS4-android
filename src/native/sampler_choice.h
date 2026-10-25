@@ -42,7 +42,9 @@ inline SamplerChoice ChooseSampler(const rex::graphics::xenos::xe_gpu_texture_fe
                           uint32_t(fetch.clamp_z) << 6 | uint32_t(fetch.mag_filter) << 9 |
                           uint32_t(fetch.min_filter) << 11 | uint32_t(fetch.mip_filter) << 13 |
                           uint32_t(fetch.border_color) << 15 | min_level << 17 | max_level << 21;
-  choice.key = uint64_t(fields) | uint64_t(choice.anisotropy) << 32;
+  // The fetch's own LOD bias (dword 4, 5 fractional bits), which the sampler applies.
+  choice.key = uint64_t(fields) | uint64_t(choice.anisotropy) << 32 |
+               uint64_t(uint32_t(fetch.lod_bias) & 0x3FF) << 40;
   return choice;
 }
 

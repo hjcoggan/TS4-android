@@ -49,7 +49,7 @@ struct SharedConstants {
   float alpha_threshold;               // 556
   float ndc_scale[2];                  // 560, g_NdcScale
   uint32_t alpha_func;                 // 568, RB_COLORCONTROL bits 0-2 (patch 0005)
-  uint32_t padding;
+  uint32_t alpha_to_mask;              // 572, dither offsets | sample count << 8 (patch 0006)
 };
 static_assert(sizeof(SharedConstants) == 576);
 

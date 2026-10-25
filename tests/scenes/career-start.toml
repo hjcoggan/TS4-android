@@ -1,0 +1,126 @@
+# Boot -> main menu -> GAME MODES -> CAREER (first DOWN) -> no player yet, so the Player
+# Creator: a male player with the default look, SAVE / QUIT (six DOWNs), save and quit,
+# the first save slot, load him, start his career, through the Career tutorials to the
+# Career main screen and the season calendar. Every screen takes A.
+# Captures the Player Creator, the save slots, the career's welcome, the Career main
+# screen and the calendar.
+# Run: python scripts/scene_runner.py tests/scenes/career-start.toml --native 1 --dual 1
+
+name = "career-start"
+from = "boot"
+
+input = """
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
+at 1500
+press A
+at 1600
+press DOWN
+at 1800
+press A
+at 1950
+press A
+at 2100
+press A
+at 2250
+press A
+at 2400
+press A
+at 2550
+press A
+at 2700
+press A
+at 2900
+press DOWN
+at 2940
+press DOWN
+at 2980
+press DOWN
+at 3020
+press DOWN
+at 3060
+press DOWN
+at 3100
+press DOWN
+at 3200
+press A
+at 3350
+press A
+at 3500
+press A
+at 3650
+press A
+at 3800
+press A
+at 3950
+press A
+at 4100
+press A
+at 4250
+press A
+at 4400
+press A
+at 4550
+press A
+at 4700
+press A
+at 4850
+press A
+at 5000
+press A
+at 5150
+press A
+at 5300
+press A
+at 5450
+press A
+at 5600
+press A
+at 5750
+press A
+at 5900
+press A
+at 6050
+press A
+at 6200
+press A
+at 6350
+press A
+at 6500
+press A
+at 6650
+press A
+at 6800
+press A
+at 6950
+press A
+at 7100
+press A
+"""
+
+[[capture]]  # Player Creator, the player in 3D
+frame = 2880
+[[capture]]  # save slots
+frame = 3600
+[[capture]]  # player to load
+frame = 4500
+[[capture]]  # welcome to the career
+frame = 5250
+[[capture]]  # Career main screen
+frame = 6900
+[[capture]]  # season calendar with its tutorial
+frame = 7200

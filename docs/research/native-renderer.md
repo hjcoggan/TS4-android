@@ -159,8 +159,8 @@ anisotropy, and both shaders' SPIR-V. What it found, frame by frame:
 
 - **2x MSAA.** Swing draws the match pass at 2x (`RB_SURFACE_INFO` 14010500), as a tiled
   surface one tile (384 rows) tall. Native draws every call once, so an MSAA target is sized to
-  the draws' viewport, resolves average its samples into a single-sample twin, and alpha to mask
-  (`RB_COLORCONTROL` bit 4) is Vulkan alpha-to-coverage.
+  the draws' viewport, resolves average its samples into a single-sample twin. Alpha to mask (`RB_COLORCONTROL`
+  bit 4) was Vulkan alpha-to-coverage at first; it is now the emulated path's (below, "Other modes").
 - **Mip chains rendered level by level.** The radar-gun display is a 256x64 render target whose
   mips the game renders and resolves one by one; Classic samples mips 2-4 at that size. Native's
   resolve targets held level 0 only (LOD clamped to 0), so the digits came out full bright.
@@ -174,6 +174,22 @@ anisotropy, and both shaders' SPIR-V. What it found, frame by frame:
 Result (`python scripts/scene_runner.py tests/scenes/exhibition-match.toml --native 1 --dual 1`):
 every dual frame passes, worst tiles 0, 0, 0 and 18, mean FLIP 0.0022 at player select and 0.010
 in the match (0.038 before the filtering fix). No fallback, no draw skips.
+
+## Other modes (2026-10-25)
+
+Scenes for the other 1.0 modes: `tests/scenes/career-start.toml` (Player Creator to the Career
+main screen), `academy-lesson.toml` (the first Academy lesson) and `king-of-the-court.toml`
+(two KotC matches). Their shaders were dumped on Classic runs and added to the pack (493).
+What the Academy's trees took, found the same way (same-frame capture, `analysis/rdoc-academy-2350`):
+
+- **Alpha to mask.** Xenia emulates it in the shader, with per-sample thresholds (2x: 0.5 and
+  1.0, less a 2x2 dither offset from `RB_COLORCONTROL` bits 24-31). Vulkan's alpha-to-coverage
+  is the driver's own pattern and thinned the leaves. `patches/xenosrecomp/0006-alpha-to-mask`
+  writes `SV_Coverage` the emulated path's way (`g_AlphaToMask`, shared constants +572).
+- **The fetch constant's LOD bias** (dword 4, 5 fractional bits). Swing sharpens foliage with
+  -1 and -2; Native's samplers applied only the global bias, so the alpha-tested leaves sampled
+  blurred mips and lost most of their alpha. The leaf textures, samplers and constants
+  otherwise matched Classic's.
 
 ## Open
 

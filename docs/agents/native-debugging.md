@@ -52,6 +52,10 @@ from Classic. The renderer, its hooks and every finding so far are in
   greater-or-equal (`0005-alpha-test-function`). A pass that differs while every input matches
   may be reading state from a register the shader ignores; compare `RB_COLORCONTROL` and the
   Classic shader's `xe_uniform_system_constants`.
+- **Per-texture state in the fetch constant.** Dword 4 holds an LOD bias Classic applies (Swing
+  sharpens foliage with -1 and -2). When a draw's textures, samplers and constants match but its
+  output alpha or detail does not, decode the fetch constants in the Native trace (`slot N
+  fetch` lines) against `xe_gpu_texture_fetch_t`.
 - **Classic's defaults are part of the picture.** Classic filters at 4x anisotropy
   (`anisotropic_override` 3). `query … 'draw EID'` prints each sampler's filter and anisotropy.
 - **Same-frame captures.** `pwsh scripts/rdoc.ps1 capture … -ExtraArguments

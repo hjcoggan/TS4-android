@@ -1588,6 +1588,8 @@ bool UploadConstants(const uint8_t* d3d, uint32_t swapped_texcoords, uint32_t fe
   shared->swapped_texcoords = swapped_texcoords;
   shared->alpha_threshold = ReadRegFloat(d3d, RB_ALPHA_REF);
   shared->alpha_func = ReadReg(d3d, RB_COLORCONTROL) & 7;
+  shared->alpha_to_mask = (ReadReg(d3d, RB_COLORCONTROL) >> 24) |
+                          (g.active_color ? uint32_t(g.active_color->samples) : 1u) << 8;
   // Clip transform: pre-transformed positions to clip space, half-pixel shift.
   const ClipTransform clip = DrawClipTransform(d3d);
   shared->half_pixel_offset[0] = clip.offset[0];
@@ -2427,6 +2429,10 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
   if ((color_control & 8) && (color_control & 7) != 7) {
     spec |= 2;  // SPEC_CONSTANT_ALPHA_TEST
   }
+  if (color_control & 0x10) {
+    // Alpha to mask, computed in the shader as the emulated path does (g_AlphaToMask).
+    spec |= 32;  // SPEC_CONSTANT_ALPHA_TO_MASK
+  }
   spec |= GammaOutputSpec(g.colour, g.active_gamma);
   key.spec_constants = spec & (vertex_shader->spec_constants_mask |
                                pixel_shader->spec_constants_mask);
@@ -2434,13 +2440,7 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
   key.color_format =
       g.active_gamma ? GammaFormat(g.active_color->format) : g.active_color->format;
   key.depth_format = g.active_depth ? g.active_depth->format : VK_FORMAT_UNDEFINED;
-  // RB_COLORCONTROL bit 4: alpha to mask, which Vulkan's alpha-to-coverage matches on MSAA
-  // targets (the hair cards).
-  key.multisample = uint32_t(g.active_color->samples) |
-                    ((g.active_color->samples != VK_SAMPLE_COUNT_1_BIT &&
-                      (ReadReg(d3d, RB_COLORCONTROL) & 0x10))
-                         ? kMultisampleAlphaToCoverage
-                         : 0u);
+  key.multisample = uint32_t(g.active_color->samples);
   key.blend_control = ReadReg(d3d, RB_BLENDCONTROL0);
   key.color_mask = ReadReg(d3d, RB_COLOR_MASK);
   key.depth_control = g.active_depth ? depth_control : 0;

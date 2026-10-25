@@ -1,0 +1,118 @@
+# Boot -> main menu -> GAME MODES -> KING OF THE COURT (second DOWN) -> four players, Federer
+# the user, three CPUs, Rod Laver Arena, every screen taking A; the A presses go on into play.
+# Captures player select, the KotC rules card, the standings, the first match, the standings
+# after it and the second match (the next challenger).
+# Run: python scripts/scene_runner.py tests/scenes/king-of-the-court.toml --native 1 --dual 1
+
+name = "king-of-the-court"
+from = "boot"
+
+input = """
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
+at 1500
+press A
+at 1600
+press DOWN
+at 1660
+press DOWN
+at 1800
+press A
+at 1950
+press A
+at 2100
+press A
+at 2250
+press A
+at 2400
+press A
+at 2550
+press A
+at 2700
+press A
+at 2850
+press A
+at 3000
+press A
+at 3150
+press A
+at 3300
+press A
+at 3450
+press A
+at 3600
+press A
+at 3750
+press A
+at 3900
+press A
+at 4050
+press A
+at 4200
+press A
+at 4350
+press A
+at 4500
+press A
+at 4650
+press A
+at 4800
+press A
+at 4950
+press A
+at 5100
+press A
+at 5250
+press A
+at 5400
+press A
+at 5550
+press A
+at 5700
+press A
+at 5850
+press A
+at 6000
+press A
+at 6150
+press A
+at 6300
+press A
+at 6450
+press A
+at 6600
+press A
+at 6750
+press A
+at 6900
+press A
+"""
+
+[[capture]]  # player select, four players
+frame = 2200
+[[capture]]  # venue selection
+frame = 2950
+[[capture]]  # King of the Court rules card
+frame = 3700
+[[capture]]  # standings and the first match-up
+frame = 3850
+[[capture]]  # the first match
+frame = 4300
+[[capture]]  # standings after the first match
+frame = 6400
+[[capture]]  # the second match
+frame = 7000

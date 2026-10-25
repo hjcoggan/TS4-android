@@ -1,0 +1,111 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 4217d3a..7382e01 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -13,6 +13,8 @@
+     // Normals in Xenos k_2_10_10_10, signed and normalized (D3DDECLTYPE 0x2A2187, DEC3N):
+     // X, Y and Z in 10 bits each from the low bits, W in the top 2 (Top Spin 4).
+     #define SPEC_CONSTANT_DEC3N_NORMAL (1 << 4)
++    // Xenos alpha to mask: the sample mask from alpha (g_AlphaToMask).
++    #define SPEC_CONSTANT_ALPHA_TO_MASK (1 << 5)
+ #endif
+ 
+ #ifdef UNLEASHED_RECOMP
+@@ -66,6 +68,9 @@ struct PushConstants
+ #define g_NdcScale                 vk::RawBufferLoad<float2>(g_PushConstants.SharedConstants + 560)
+ // The alpha test's Xenos compare function (RB_COLORCONTROL bits 0-2): 1 less, 2 equal, 4 greater.
+ #define g_AlphaFunc                vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 568)
++// Alpha to mask: RB_COLORCONTROL bits 24-31 (a 2-bit dither offset per pixel of a 2x2 quad)
++// in bits 0-7, the target's sample count (1, 2 or 4) in bits 8-15.
++#define g_AlphaToMask              vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 572)
+ #elif defined(REBLUE_RECOMP)
+ // 256-bit boolean register file (BD bool addresses reach ~158), then per-usage 16-bit-pair swap masks.
+ #define g_Booleans(i)              vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 256 + (i)*4)
+@@ -173,6 +178,36 @@ float3 pwlGammaOutput(float3 linearValue)
+     return select(encoded <= 0.04045, encoded / 12.92, pow((encoded + 0.055) / 1.055, 2.4));
+ }
+ 
++// SPEC_CONSTANT_ALPHA_TO_MASK: Xenos alpha to mask as the emulated path computes it. Each guest
++// sample is covered when alpha reaches its threshold minus the pixel's dither offset (2 bits
++// per pixel of a 2x2 quad); guest samples map to Vulkan's standard sample positions.
++uint alphaToMask(float alpha, uint2 pixel)
++{
++    uint control = g_AlphaToMask;
++    float offset = float((control >> (((pixel.x & 1) | ((pixel.y & 1) << 1)) << 1)) & 3);
++    uint samples = (control >> 8) & 0xFF;
++    uint mask = 0;
++    if (samples == 4)
++    {
++        // Guest top left, bottom left, top right, bottom right: Vulkan 0, 2, 1, 3.
++        mask |= alpha >= 0.75 - offset / 16.0 ? 1u : 0u;
++        mask |= alpha >= 0.25 - offset / 16.0 ? 4u : 0u;
++        mask |= alpha >= 0.5 - offset / 16.0 ? 2u : 0u;
++        mask |= alpha >= 1.0 - offset / 16.0 ? 8u : 0u;
++    }
++    else if (samples == 2)
++    {
++        // Guest top and bottom: Vulkan 1 and 0.
++        mask |= alpha >= 0.5 - offset / 8.0 ? 2u : 0u;
++        mask |= alpha >= 1.0 - offset / 8.0 ? 1u : 0u;
++    }
++    else
++    {
++        mask |= alpha >= 1.0 - offset / 4.0 ? 1u : 0u;
++    }
++    return mask;
++}
++
+ // The host sets this bit in a texture descriptor index for a Xenos gamma
+ // fetch that the shader decodes (PWL, after filtering, as Xenia).
+ #define XR_PWL_FETCH_FLAG 0x80000000u
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index db318c9..2536f87 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -1757,6 +1757,12 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+         auto pixelShader = reinterpret_cast<const PixelShader*>(shader);
+         if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR0)
+             out += ",\n\tout float4 oC0 : SV_Target0";
++#ifdef SVR2011_RECOMP
++        // Xenos alpha to mask, as the emulated path does it (SPEC_CONSTANT_ALPHA_TO_MASK).
++        hasCoverageOutput = (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR0) != 0;
++        if (hasCoverageOutput)
++            out += ",\n\tout uint oMask : SV_Coverage";
++#endif
+         if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR1)
+             out += ",\n\tout float4 oC1 : SV_Target1";
+         if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR2)
+@@ -2586,6 +2592,20 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     out += "}";
+ 
+                 #ifdef SVR2011_RECOMP
++                    // Alpha to mask (RB_COLORCONTROL bit 4) after the alpha test, with the
++                    // emulated path's per-sample thresholds and 2x2 dither offsets
++                    // (spirv_translator_rb.cpp), not the host's alpha to coverage.
++                    if (hasCoverageOutput)
++                    {
++                        specConstantsMask |= SPEC_CONSTANT_ALPHA_TO_MASK;
++                        indent();
++                        out += "oMask = 0xFFFFFFFF;\n";
++                        indent();
++                        out += "[branch] if (g_SpecConstants() & SPEC_CONSTANT_ALPHA_TO_MASK)";
++                        indent();
++                        out += "\toMask = alphaToMask(oC0.w, uint2(iPos.xy));\n";
++                    }
++
+                     // After the alpha test, which reads alpha only (gamma is RGB).
+                     // oC0 only: the game's pixel shaders write no other target.
+                     specConstantsMask |= SPEC_CONSTANT_PWL_GAMMA_OUTPUT;
+diff --git a/XenosRecomp/shader_recompiler.h b/XenosRecomp/shader_recompiler.h
+index 791def7..072cf17 100644
+--- a/XenosRecomp/shader_recompiler.h
++++ b/XenosRecomp/shader_recompiler.h
+@@ -25,6 +25,8 @@ struct ShaderRecompiler : StringBuffer
+ {
+     uint32_t indentation = 0;
+     bool isPixelShader = false;
++    // The pixel shader declares SV_Coverage (alpha to mask, SVR2011_RECOMP).
++    bool hasCoverageOutput = false;
+     const uint8_t* constantTableData = nullptr;
+     std::unordered_map<uint32_t, VertexElement> vertexElements;
+     std::unordered_map<uint32_t, std::string> interpolators;
