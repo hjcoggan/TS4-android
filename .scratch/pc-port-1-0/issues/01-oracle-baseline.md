@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [ ] A full Exhibition match against the CPU completes on Edge with TU1 installed, and the Edge build and settings are recorded
-- [ ] Native internal resolution and aspect ratio are measured
+- [x] Native internal resolution and aspect ratio are measured
 - [ ] Frame rate during play, between points and in menus is recorded, answering whether the 360 build drops to 30 fps between points
 - [ ] Boot-to-title, title-to-menu and match load times are measured
 - [ ] Visible glitches (cross-fade flicker, vertex explosions, camera problems) are listed with timestamps
@@ -17,3 +17,4 @@
 ## Comments
 
 - 2026-10-25 (Claude): The Oracle can now be run unattended. TU1 is installed in Edge (title bar `v0.0.1.3`; earlier Edge runs, including `.tools/xenia-edge/xenia.log`, were the base build `v0.0.0.3`). `scripts/edge.ps1` plays an input script on a ViGEm virtual pad, saves window screenshots at given seconds, and with `-Renderer vulkan -RenderDocAt <s>` takes a RenderDoc capture. `scripts/input/edge-boot-to-practice.txt` reaches the practice ground by about 23 s. No box is ticked: the full match, fps and load times still need doing.
+- 2026-10-25 (Claude), ticket audit: ticked the resolution box. Edge on TU1, Vulkan, RenderDoc capture of the practice ground (`scripts/edge.ps1 -Renderer vulkan -RenderDocAt 40`, `analysis/edge-tooltest`): Swing renders at 1280x720 (16:9), viewport 1280x720 in two predicated tiles (scissor 1280x384 at row 0, then 1280x336 at row 384), into a 1280x1024 EDRAM-shaped 2x MSAA target; the port's front buffer is 1280x720 too. Partial for the rest: reference captures of the title screen and main menu are saved locally (`analysis/edge-menu/`; no mid-match frame yet), and rough timings under scripted START presses are boot to title 8-9 s and title to practice ground about 15 s. The full match, frame rate, glitch list, match load time and the write-up are not done.
