@@ -352,7 +352,12 @@ void FillRasterAndDepth(Desc& d, const PipelineKey& key, bool dynamic) {
   d.viewport.scissorCount = 1;
   d.raster.polygonMode = VK_POLYGON_MODE_FILL;
   d.raster.lineWidth = 1.0f;
-  d.multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  // A zeroed key (the shader libraries) is single-sample.
+  const uint32_t samples = key.multisample & 0xFF;
+  d.multisample.rasterizationSamples = samples ? VkSampleCountFlagBits(samples)
+                                               : VK_SAMPLE_COUNT_1_BIT;
+  d.multisample.alphaToCoverageEnable =
+      (key.multisample & kMultisampleAlphaToCoverage) ? VK_TRUE : VK_FALSE;
   if (dynamic) {
     return;
   }

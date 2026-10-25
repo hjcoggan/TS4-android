@@ -56,6 +56,8 @@ struct ResolveTarget {
   uint32_t height = 0;
   VkImageLayout* layout = nullptr;
   uint32_t scale = 1;  // host size / guest size
+  // The fetch's mip levels: Swing renders some chains level by level and resolves each.
+  uint32_t levels = 1;
 };
 // scale: the source render target's host scale; the image is the guest size
 // times it.

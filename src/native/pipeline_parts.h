@@ -36,6 +36,9 @@ struct OutputPart {
   VkFormat depth_format;
   uint32_t blend_control;
   uint32_t color_mask;
+  // The sample count and alpha-to-coverage (PipelineKey::multisample). The fragment-shader
+  // libraries stay single-sample: without sample shading the output library's count rules.
+  uint32_t multisample;
 };
 
 struct Parts {

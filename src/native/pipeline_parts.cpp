@@ -41,7 +41,8 @@ Parts Split(const PipelineKey& key, uint32_t vertex_mask, uint32_t pixel_mask) {
   if (!IsDepthOnly(key)) {
     parts.pixel = {key.pixel_shader, key.spec_constants & pixel_mask};
   }
-  parts.output = {key.color_format, key.depth_format, key.blend_control, key.color_mask};
+  parts.output = {key.color_format, key.depth_format, key.blend_control, key.color_mask,
+                  key.multisample};
   return parts;
 }
 

@@ -138,9 +138,10 @@ REXCVAR_DEFINE_INT32(ts4_native_color_mode, 0, "TopSpin4",
                      "Native's colour curve for Xenos gamma: 0 = Original (the Xbox 360's "
                      "piecewise-linear curve, as Xenia), 1 = Natural (sRGB; an Enhancement)")
     .range(0, 1);
-REXCVAR_DEFINE_INT32(ts4_native_anisotropy, -1, "TopSpin4",
+REXCVAR_DEFINE_INT32(ts4_native_anisotropy, -2, "TopSpin4",
                      "Native renderer: anisotropic filtering for linear, mipmapped textures, as "
-                     "anisotropic_override (-1 = the game's setting, 0 = off, 1..5 = 1x..16x)")
+                     "anisotropic_override (-2 = the Classic renderer's anisotropic_override, "
+                     "-1 = the game's setting, 0 = off, 1..5 = 1x..16x)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_shader_pack, "", "TopSpin4",
                       "Native renderer: the shader pack to load (empty: topspin4.shaderpack in "
@@ -342,9 +343,22 @@ struct RenderTarget {
   uint32_t scale = 1;  // host size / guest size (guest::TargetScale)
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
   bool is_depth = false;
+  // The guest's multisampling (RB_SURFACE_INFO msaa_samples): Swing draws its match at 2x.
+  VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+  // An MSAA target's single-sample twin, which resolves copy from (SingleSample).
+  std::unique_ptr<RenderTarget> single;
 };
 
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+
+// RB_SURFACE_INFO bits 16-17: 1x, 2x or 4x.
+constexpr VkSampleCountFlagBits GuestSamples(uint32_t surface_info) {
+  switch ((surface_info >> 16) & 3) {
+    case 1: return VK_SAMPLE_COUNT_2_BIT;
+    case 2: return VK_SAMPLE_COUNT_4_BIT;
+    default: return VK_SAMPLE_COUNT_1_BIT;
+  }
+}
 
 // --- Renderer state ---------------------------------------------------------
 
@@ -1081,7 +1095,8 @@ void SubmitDrawAndWait(const uint8_t* d3d, const VertexLayout& layout,
 
 // width and height are the guest size.
 RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_width,
-                              uint32_t guest_height, bool is_depth) {
+                              uint32_t guest_height, bool is_depth,
+                              VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT) {
   const uint32_t scale = g.scale;
   const uint32_t width = guest_width * scale;
   const uint32_t height = guest_height * scale;
@@ -1105,6 +1120,16 @@ RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_widt
       retired.views.push_back(slot->gamma_view);
     }
     Retire(std::move(retired));
+    if (const auto& single = slot->single) {
+      Retired twin;
+      twin.image = single->image;
+      twin.memory = single->memory;
+      twin.views.push_back(single->view);
+      if (single->gamma_view) {
+        twin.views.push_back(single->gamma_view);
+      }
+      Retire(std::move(twin));
+    }
     slot.reset();
   }
   if (slot) {
@@ -1117,7 +1142,7 @@ RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_widt
   image_info.extent = {width, height, 1};
   image_info.mipLevels = 1;
   image_info.arrayLayers = 1;
-  image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+  image_info.samples = samples;
   image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
   image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                      VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -1161,37 +1186,136 @@ RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_widt
   target->guest_height = guest_height;
   target->scale = scale;
   target->is_depth = is_depth;
+  target->samples = samples;
   g_labels.Name(g_vk.vk_device, VK_OBJECT_TYPE_IMAGE, uint64_t(target->image),
                 fmt::format("{} target {}x{} {}", is_depth ? "depth" : "colour", width, height,
                             FormatName(format)));
   slot = std::move(target);
   g.render_target_order.push_back(slot.get());
   ++g.hitch.render_targets;
-  REXLOG_INFO("native renderer: {} render target {}x{} format {} (key {:X})",
-              is_depth ? "depth" : "colour", width, height, uint32_t(format), key);
+  REXLOG_INFO("native renderer: {} render target {}x{} format {} {}x (key {:X})",
+              is_depth ? "depth" : "colour", width, height, uint32_t(format), uint32_t(samples),
+              key);
   return slot.get();
+}
+
+// The sample count in a render target key's bits 58-59 (ColorTargetKey and the depth key
+// leave them free).
+constexpr uint64_t SamplesKeyBits(uint32_t surface_info) {
+  return uint64_t((surface_info >> 16) & 3) << 58;
+}
+
+uint64_t DepthTargetKey(const uint8_t* d3d) {
+  const uint32_t surface_info = ReadReg(d3d, RB_SURFACE_INFO);
+  return uint64_t(ReadReg(d3d, RB_DEPTH_INFO) & 0x10FFF) | uint64_t(surface_info & 0x3FFF) << 32 |
+         SamplesKeyBits(surface_info) | 1ull << 63;
 }
 
 RenderTarget* CurrentColorTarget(const uint8_t* d3d, bool create) {
   const uint32_t surface_info = ReadReg(d3d, RB_SURFACE_INFO);
   const uint32_t color_info = ReadReg(d3d, RB_COLOR_INFO);
   const uint32_t pitch = surface_info & 0x3FFF;
-  const uint64_t key = ColorTargetKey(surface_info, color_info);
-  const uint32_t width = pitch ? pitch : g.surface_width[0];
-  const uint32_t height = g.surface_height[0];
+  const uint64_t key = ColorTargetKey(surface_info, color_info) | SamplesKeyBits(surface_info);
+  uint32_t width = pitch ? pitch : g.surface_width[0];
+  uint32_t height = g.surface_height[0];
+  // A multisampled pass is tiled (predicated tiling): its EDRAM surface is one tile tall, but
+  // Native draws the whole pass at once, so the target covers the draws' viewport.
+  if (GuestSamples(surface_info) != VK_SAMPLE_COUNT_1_BIT) {
+    const float bottom = std::abs(ReadRegFloat(d3d, PA_CL_VPORT_YSCALE)) +
+                         ReadRegFloat(d3d, PA_CL_VPORT_YOFFSET);
+    const float right = std::abs(ReadRegFloat(d3d, PA_CL_VPORT_XSCALE)) +
+                        ReadRegFloat(d3d, PA_CL_VPORT_XOFFSET);
+    if (bottom > float(height) && bottom <= 8192.0f) height = uint32_t(std::ceil(bottom));
+    if (right > float(width) && right <= 8192.0f) width = uint32_t(std::ceil(right));
+  }
   if (!create) {
     const auto it = g.render_targets.find(key);
     return it != g.render_targets.end() ? it->second.get() : nullptr;
   }
-  return GetRenderTarget(key, ColorTargetFormat((color_info >> 16) & 0xF), width, height, false);
+  return GetRenderTarget(key, ColorTargetFormat((color_info >> 16) & 0xF), width, height, false,
+                         GuestSamples(surface_info));
 }
 
 RenderTarget* CurrentDepthTarget(const uint8_t* d3d, uint32_t width, uint32_t height) {
-  const uint32_t surface_info = ReadReg(d3d, RB_SURFACE_INFO);
-  const uint32_t depth_info = ReadReg(d3d, RB_DEPTH_INFO);
-  const uint64_t key =
-      uint64_t(depth_info & 0x10FFF) | uint64_t(surface_info & 0x3FFF) << 32 | 1ull << 63;
-  return GetRenderTarget(key, kDepthFormat, width, height, true);
+  return GetRenderTarget(DepthTargetKey(d3d), kDepthFormat, width, height, true,
+                         GuestSamples(ReadReg(d3d, RB_SURFACE_INFO)));
+}
+
+// A target to copy from: the target itself at 1x; for an MSAA target, its single-sample twin
+// with the samples resolved into it now (colour averaged, depth and stencil from sample 0,
+// as the Xenos resolve does). Ends any rendering in progress.
+RenderTarget& SingleSample(RenderTarget& target) {
+  if (target.samples == VK_SAMPLE_COUNT_1_BIT) {
+    return target;
+  }
+  EndRendering();
+  if (!target.single) {
+    auto twin = std::make_unique<RenderTarget>();
+    VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = target.format;
+    image_info.extent = {target.width, target.height, 1};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                       (target.is_depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                                        : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    if (!vk_util::CreateDedicatedAllocationImage(g.device, image_info,
+                                                 vk_util::MemoryPurpose::kDeviceLocal,
+                                                 twin->image, twin->memory)) {
+      REXLOG_ERROR("native renderer: could not create a {}x{} resolve twin", target.width,
+                   target.height);
+      return target;
+    }
+    VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_info.image = twin->image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = target.format;
+    view_info.subresourceRange = vk_util::InitializeSubresourceRange(
+        target.is_depth ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+                        : VK_IMAGE_ASPECT_COLOR_BIT);
+    g_vk.dfn->vkCreateImageView(g_vk.vk_device, &view_info, nullptr, &twin->view);
+    twin->format = target.format;
+    twin->width = target.width;
+    twin->height = target.height;
+    twin->guest_width = target.guest_width;
+    twin->guest_height = target.guest_height;
+    twin->scale = target.scale;
+    twin->is_depth = target.is_depth;
+    target.single = std::move(twin);
+  }
+  RenderTarget& twin = *target.single;
+  const VkImageLayout attachment = target.is_depth
+                                       ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                                       : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  TransitionTarget(target, attachment);
+  // The twin's old contents are replaced whole.
+  twin.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  TransitionTarget(twin, attachment);
+  VkRenderingAttachmentInfo info = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  info.imageView = target.view;
+  info.imageLayout = attachment;
+  info.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  info.resolveMode =
+      target.is_depth ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_AVERAGE_BIT;
+  info.resolveImageView = twin.view;
+  info.resolveImageLayout = attachment;
+  VkRenderingInfo rendering = {VK_STRUCTURE_TYPE_RENDERING_INFO};
+  rendering.renderArea = {{0, 0}, {target.width, target.height}};
+  rendering.layerCount = 1;
+  if (target.is_depth) {
+    rendering.pDepthAttachment = &info;
+    rendering.pStencilAttachment = &info;
+  } else {
+    rendering.colorAttachmentCount = 1;
+    rendering.pColorAttachments = &info;
+  }
+  g_vk.dfn->vkCmdBeginRendering(g.slot->main_cb, &rendering);
+  g_vk.dfn->vkCmdEndRendering(g.slot->main_cb);
+  return twin;
 }
 
 // Begins dynamic rendering into the guest's current render targets unless it
@@ -1461,6 +1585,7 @@ bool UploadConstants(const uint8_t* d3d, uint32_t swapped_texcoords, uint32_t fe
   SwapCopy32(shared->booleans, d3d + kDeviceBooleans, 8);
   shared->swapped_texcoords = swapped_texcoords;
   shared->alpha_threshold = ReadRegFloat(d3d, RB_ALPHA_REF);
+  shared->alpha_func = ReadReg(d3d, RB_COLORCONTROL) & 7;
   // Clip transform: pre-transformed positions to clip space, half-pixel shift.
   const ClipTransform clip = DrawClipTransform(d3d);
   shared->half_pixel_offset[0] = clip.offset[0];
@@ -1880,9 +2005,7 @@ namespace {
 // Copies the current depth target's depth into the destination as R32 float,
 // through a staging buffer since Vulkan cannot blit depth to colour.
 void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
-  const uint64_t key = uint64_t(ReadReg(d3d, RB_DEPTH_INFO) & 0x10FFF) |
-                       uint64_t(ReadReg(d3d, RB_SURFACE_INFO) & 0x3FFF) << 32 | 1ull << 63;
-  const auto it = g.render_targets.find(key);
+  const auto it = g.render_targets.find(DepthTargetKey(d3d));
   RenderTarget* found = it != g.render_targets.end() ? it->second.get() : g.last_depth;
   if (it == g.render_targets.end()) {
     // Otherwise the texture would read as transparent black (format 22).
@@ -1890,13 +2013,15 @@ void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
     if (logged++ < 8) {
       REXLOG_WARN("native renderer: depth resolve names no known depth target (key {:X}); "
                   "using the last one rendered with ({})",
-                  key, found ? fmt::format("{}x{}", found->width, found->height) : "none");
+                  DepthTargetKey(d3d),
+                  found ? fmt::format("{}x{}", found->width, found->height) : "none");
     }
   }
   if (!found) {
     return;
   }
-  RenderTarget& depth = *found;
+  // An MSAA depth target is copied from sample 0 of its single-sample twin.
+  RenderTarget& depth = SingleSample(*found);
   const textures::ResolveTarget target = textures::GetResolveTarget(fetch, false, depth.scale);
   if (!target.image || target.format != VK_FORMAT_R32_SFLOAT) {
     return;
@@ -2004,30 +2129,46 @@ void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t de
   if (destination && depth_resolve) {
     ResolveDepth(d3d, textures::LoadFetchConstant(base + destination + kTextureFetchConstant));
   }
-  // Resolve targets hold level 0 only; a resolve into a lower mip (Swing's mip chains) must not
-  // overwrite it.
-  if (destination && source && copy_command != 3 && level == 0) {
+  // A resolve into level N (Swing's mip chains, rendered level by level) fills that mip.
+  if (destination && source && copy_command != 3) {
     const textures::FetchConstant fetch =
         textures::LoadFetchConstant(base + destination + kTextureFetchConstant);
     const textures::ResolveTarget target =
         textures::GetResolveTarget(fetch,
                                    ((dest_info >> 24) & 1) || textures::ResolvesRedBlueSwapped(fetch),
                                    source->scale);
-    if (target.image) {
-      TransitionTarget(*source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    if (target.image && level < target.levels) {
+      // An MSAA source is resolved to its single-sample twin first; blits take one sample.
+      RenderTarget& copy = SingleSample(*source);
+      TransitionTarget(copy, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+      const bool fresh = *target.layout == VK_IMAGE_LAYOUT_UNDEFINED;
       ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, *target.layout,
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-      const int32_t width = int32_t(std::min(source->width, target.width));
-      const int32_t height = int32_t(std::min(source->height, target.height));
+      if (fresh && target.levels > 1) {
+        // Levels the game never resolves into read as transparent black, not stale memory.
+        const VkClearColorValue black = {};
+        const VkImageSubresourceRange range = vk_util::InitializeSubresourceRange();
+        g_vk.dfn->vkCmdClearColorImage(cb, target.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       &black, 1, &range);
+        ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+      }
+      const int32_t width =
+          int32_t(std::min(copy.width, std::max(target.width >> level, 1u)));
+      const int32_t height =
+          int32_t(std::min(copy.height, std::max(target.height >> level, 1u)));
       VkImageBlit blit = {};
       blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
       blit.srcOffsets[1] = {width, height, 1};
-      blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
       blit.dstOffsets[1] = {width, height, 1};
-      g_vk.vkCmdBlitImage(cb, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
+      g_vk.vkCmdBlitImage(cb, copy.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
       VkImageLayout layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-      QueueReadback(fetch, target, layout);
+      // Guest memory gets level 0 back; the mips stay on the GPU.
+      if (level == 0) {
+        QueueReadback(fetch, target, layout);
+      }
       ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, layout,
                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
       *target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -2051,9 +2192,7 @@ void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t de
     }
   }
   if ((copy_control >> 9) & 1) {
-    const auto it = g.render_targets.find(
-        uint64_t(ReadReg(d3d, RB_DEPTH_INFO) & 0x10FFF) |
-        uint64_t(ReadReg(d3d, RB_SURFACE_INFO) & 0x3FFF) << 32 | 1ull << 63);
+    const auto it = g.render_targets.find(DepthTargetKey(d3d));
     if (it != g.render_targets.end()) {
       RenderTarget& depth = *it->second;
       TransitionTarget(depth, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -2283,6 +2422,13 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
   key.color_format =
       g.active_gamma ? GammaFormat(g.active_color->format) : g.active_color->format;
   key.depth_format = g.active_depth ? g.active_depth->format : VK_FORMAT_UNDEFINED;
+  // RB_COLORCONTROL bit 4: alpha to mask, which Vulkan's alpha-to-coverage matches on MSAA
+  // targets (the hair cards).
+  key.multisample = uint32_t(g.active_color->samples) |
+                    ((g.active_color->samples != VK_SAMPLE_COUNT_1_BIT &&
+                      (ReadReg(d3d, RB_COLORCONTROL) & 0x10))
+                         ? kMultisampleAlphaToCoverage
+                         : 0u);
   key.blend_control = ReadReg(d3d, RB_BLENDCONTROL0);
   key.color_mask = ReadReg(d3d, RB_COLOR_MASK);
   key.depth_control = g.active_depth ? depth_control : 0;
@@ -2301,8 +2447,9 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
       attributes += fmt::format(" loc{}=fmt{}@s{}+{}", a.location, uint32_t(a.format), a.stream,
                                 a.offset);
     }
-    TRACE("  layout{} strides {} swap_mask {:08X} dummy {:08X}", attributes, strides[0],
-          layout.swapped_texcoords, layout.dummy_locations);
+    TRACE("  layout{} strides {} swap_mask {:08X} dummy {:08X} decl {:08X}", attributes,
+          strides[0], layout.swapped_texcoords, layout.dummy_locations,
+          LoadBE32(d3d + kDeviceVertexDeclaration));
   }
   key.attribute_count = layout.attribute_count;
   std::memcpy(key.attributes, layout.attributes, sizeof(key.attributes));
@@ -3092,7 +3239,7 @@ void OnPresent(const uint8_t* base, uint32_t device, uint32_t front_buffer) {
   }
   const int32_t debug_target = REXCVAR_GET(ts4_native_debug_target);
   if (debug_target > 0 && size_t(debug_target) <= g.render_target_order.size()) {
-    RenderTarget& target = *g.render_target_order[debug_target - 1];
+    RenderTarget& target = SingleSample(*g.render_target_order[debug_target - 1]);
     if (!target.is_depth) {
       TransitionTarget(target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
       source = {target.image, target.format, target.width, target.height, &target.layout};

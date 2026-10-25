@@ -106,7 +106,8 @@ error over the Classic runs, with the same tile rule. What it took past the titl
 - **Rectangle lists** (primitive 8, Swing's mip-chain pass `0x88756788`) are drawn as triangle
   lists, the fourth corner made as v1 + v2 - v0 (`src/native/rect_list.h`). That pass also
   resolves into mip levels above 0. Resolve targets hold level 0 only, so such a resolve no
-  longer overwrites level 0. Full mip resolve targets are not built yet.
+  longer overwrites level 0. Resolve targets now hold the fetch's mip levels and a resolve fills
+  its level (see "Same-frame differences" below).
 - **1D textures** are bound as width x 1 2D textures, and the shaders fetch them that way
   (`patches/xenosrecomp/0002-topspin4-inputs`).
 - **Swing's DrawVertices** arguments (above).
@@ -146,6 +147,33 @@ shadows and lines. The remaining hot tiles (worst 50-107) sit on moving characte
 and the radar-gun readout. The match is not deterministic from run to run: one Classic run
 was still in the walk-out cutscene at frame 3600, and Classic run against Classic run failed
 every match frame. Native active, no fallback, no draw skips (`analysis/scenes/exhibition-match`).
+
+## Same-frame differences (2026-10-25)
+
+Dual runs (`--dual 1`) and RenderDoc captures taken with `--ts4_native_dual_compare` hold both
+renderers' work for one frame, Native's draws first (blocks `uniformsN`), then Classic's
+(`xe_*`). Classic draws its 2x MSAA match in two 1280x384 tiles into one 1280x1024 target, the
+second tile shifted up by 384 rows. `scripts/rdoc/query.py` gained `mesh EID [N]` (post-VS
+positions, all of them to CSV for N > 8), depth and raster state, sampler filters and
+anisotropy, and both shaders' SPIR-V. What it found, frame by frame:
+
+- **2x MSAA.** Swing draws the match pass at 2x (`RB_SURFACE_INFO` 14010500), as a tiled
+  surface one tile (384 rows) tall. Native draws every call once, so an MSAA target is sized to
+  the draws' viewport, resolves average its samples into a single-sample twin, and alpha to mask
+  (`RB_COLORCONTROL` bit 4) is Vulkan alpha-to-coverage.
+- **Mip chains rendered level by level.** The radar-gun display is a 256x64 render target whose
+  mips the game renders and resolves one by one; Classic samples mips 2-4 at that size. Native's
+  resolve targets held level 0 only (LOD clamped to 0), so the digits came out full bright.
+- **Alpha-test function.** The second hair pass keeps fragments below the threshold
+  (`patches/xenosrecomp/0005-alpha-test-function`). Post-VS positions of the hair and headband
+  matched Classic's to 0.0003 NDC and 3e-5 depth, so the difference was not geometry.
+- **Anisotropic filtering.** Classic filters linear, mipmapped textures at 4x
+  (`anisotropic_override` defaults to 3); Native used the fetch's own setting (off). The court and
+  small banner text were softer. `ts4_native_anisotropy` now defaults to -2, Classic's setting.
+
+Result (`python scripts/scene_runner.py tests/scenes/exhibition-match.toml --native 1 --dual 1`):
+every dual frame passes, worst tiles 0, 0, 0 and 18, mean FLIP 0.0022 at player select and 0.010
+in the match (0.038 before the filtering fix). No fallback, no draw skips.
 
 ## Open
 

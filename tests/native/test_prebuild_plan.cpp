@@ -156,11 +156,10 @@ std::string KeyLine(char vertex_digit) {
   return line + "\n";
 }
 
+const std::string kKeySize = "key-size " + std::to_string(sizeof(PipelineKey)) + "\n";
 const std::string kListHeader =
     "# comment\n"
-    "wwe-pipeline-keys 1\n"
-    "key-size 344\n"
-    "converter 19bc9795a8b5e348\n";
+    "wwe-pipeline-keys 1\n" + kKeySize + "converter 19bc9795a8b5e348\n";
 
 }  // namespace
 
@@ -175,14 +174,14 @@ TEST_CASE("the shipped key list is read as plain keys with its converter") {
 
 TEST_CASE("a key list of another version, key size or with a bad line is refused") {
   CHECK_FALSE(ReadKeyList("").ok);
-  CHECK_FALSE(ReadKeyList("wwe-pipeline-keys 2\nkey-size 344\nconverter 1\n").ok);
+  CHECK_FALSE(ReadKeyList("wwe-pipeline-keys 2\n" + kKeySize + "converter 1\n").ok);
   CHECK_FALSE(ReadKeyList("wwe-pipeline-keys 1\nkey-size 300\nconverter 1\n").ok);
   CHECK_FALSE(ReadKeyList(kListHeader + "abc\n").ok);
   CHECK_FALSE(ReadKeyList(kListHeader + std::string(2 * sizeof(PipelineKey), 'x') + "\n").ok);
 }
 
 TEST_CASE("a key list whose converter id is empty or longer than 64 bits is refused") {
-  const std::string body = "wwe-pipeline-keys 1\nkey-size 344\n";
+  const std::string body = "wwe-pipeline-keys 1\n" + kKeySize;
   CHECK_FALSE(ReadKeyList(body + "converter \n" + KeyLine('1')).ok);
   CHECK_FALSE(ReadKeyList(body + "converter 119bc9795a8b5e348\n" + KeyLine('1')).ok);
   CHECK(ReadKeyList(body + "converter 19bc9795a8b5e348\n" + KeyLine('1')).ok);

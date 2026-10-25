@@ -48,8 +48,10 @@ struct SharedConstants {
   float half_pixel_offset[2];          // 548
   float alpha_threshold;               // 556
   float ndc_scale[2];                  // 560, g_NdcScale
+  uint32_t alpha_func;                 // 568, RB_COLORCONTROL bits 0-2 (patch 0005)
+  uint32_t padding;
 };
-static_assert(sizeof(SharedConstants) == 568);
+static_assert(sizeof(SharedConstants) == 576);
 
 struct Upload {
   uint8_t* data = nullptr;

@@ -9,7 +9,7 @@ Commands:
   draws [--indices N,N]       every draw: event, index count, pixel shader, its textures
   draw EID                    one draw: viewport, scissor, targets, textures with view format,
                               swizzle and mips, samplers, and every constant block of both
-                              stages; the pixel shader's SPIR-V goes to ps-EID.txt
+                              stages; the shaders' SPIR-V goes to vs-EID.txt and ps-EID.txt
   texture ID [--all-mips]     texel samples per mip and face, and PNGs of them
   rt EID                      the colour targets as they are after the draw, as PNGs
   pixel ID X Y [MIP] [SLICE]  one texel's value
@@ -95,6 +95,16 @@ def cmd_draw(ctrl, textures, args):
         f"scissor {sc.x},{sc.y} {sc.width}x{sc.height}")
     outs = [int(getattr(o, "descriptor", o).resource) for o in pipe.GetOutputTargets()]
     say(f"targets {outs or 'none (FSI writes EDRAM from the shader)'}")
+    vk = ctrl.GetVulkanPipelineState()
+    raster, ds = vk.rasterizer, vk.depthStencil
+    say(f"depth test {'on' if ds.depthTestEnable else 'off'} {ds.depthFunction} write "
+        f"{'on' if ds.depthWriteEnable else 'off'}, cull {raster.cullMode} front "
+        f"{'ccw' if raster.frontCCW else 'cw'}, depth bias "
+        f"{'on' if raster.depthBiasEnable else 'off'}: constant {raster.depthBias} "
+        f"slope {raster.slopeScaledDepthBias} clamp {raster.depthBiasClamp}")
+    vps = vk.viewportScissor.viewportScissors
+    if vps:
+        say(f"depth range {vps[0].vp.minDepth}..{vps[0].vp.maxDepth}")
     for u in pipe.GetReadOnlyResources(rd.ShaderStage.Pixel, False):
         d = u.descriptor
         t = textures.get(d.resource)
@@ -108,7 +118,8 @@ def cmd_draw(ctrl, textures, args):
     for i, s in enumerate(pipe.GetSamplers(rd.ShaderStage.Pixel, False)):
         sd = s.sampler
         say(f"  sampler {i}: address {sd.addressU},{sd.addressV},{sd.addressW} "
-            f"lod {sd.minLOD}..{sd.maxLOD} bias {sd.mipBias}")
+            f"lod {sd.minLOD}..{sd.maxLOD} bias {sd.mipBias} filter {sd.filter.minify}/"
+            f"{sd.filter.magnify}/{sd.filter.mip} aniso {sd.maxAnisotropy}")
     for stage in (rd.ShaderStage.Vertex, rd.ShaderStage.Pixel):
         refl = pipe.GetShaderReflection(stage)
         if refl is None:
@@ -122,12 +133,12 @@ def cmd_draw(ctrl, textures, args):
             say(f"  block {cb.name} ({d.byteSize} bytes)")
             for v in variables:
                 dump_var(v, "    ")
-        if stage == rd.ShaderStage.Pixel:
-            target = ctrl.GetDisassemblyTargets(True)[0]
-            text = ctrl.DisassembleShader(pipe.GetGraphicsPipelineObject(), refl, target)
-            path = os.path.join(OUT, f"ps-{eid}.txt")
-            open(path, "w", encoding="utf-8").write(text)
-            say(f"  pixel shader SPIR-V: {path}")
+        target = ctrl.GetDisassemblyTargets(True)[0]
+        text = ctrl.DisassembleShader(pipe.GetGraphicsPipelineObject(), refl, target)
+        name = "ps" if stage == rd.ShaderStage.Pixel else "vs"
+        path = os.path.join(OUT, f"{name}-{eid}.txt")
+        open(path, "w", encoding="utf-8").write(text)
+        say(f"  {'pixel' if name == 'ps' else 'vertex'} shader SPIR-V: {path}")
 
 
 def save_texture(ctrl, rid, mip, slice_, path):
@@ -253,8 +264,33 @@ def cmd_buffer(ctrl, textures, args):
         f"bytes nonzero; first {words}")
 
 
+def cmd_mesh(ctrl, textures, args):
+    """mesh EID [N]: the first N (8) vertices' clip position after the vertex shader, and its
+    screen x, y and depth (viewport 0."""
+    import struct
+    eid, count = int(args[0]), int(args[1]) if len(args) > 1 else 8
+    ctrl.SetFrameEvent(eid, True)
+    vp = ctrl.GetPipelineState().GetViewport(0)
+    mesh = ctrl.GetPostVSData(0, 0, rd.MeshDataStage.VSOut)
+    stride = mesh.vertexByteStride
+    data = bytes(ctrl.GetBufferData(mesh.vertexResourceId, mesh.vertexByteOffset,
+                                    stride * count))
+    say(f"== mesh {eid}: {mesh.numIndices} indices, output stride {stride}")
+    if count > 8:  # every vertex to mesh-EID.csv: clip x y z w
+        with open(os.path.join(OUT, f"mesh-{eid}.csv"), "w") as f:
+            for i in range(len(data) // stride if stride else 0):
+                f.write("%f,%f,%f,%f\n" % struct.unpack_from("<4f", data, i * stride))
+        count = 8
+    for i in range(min(count, len(data) // stride if stride else 0)):
+        x, y, z, w = struct.unpack_from("<4f", data, i * stride)
+        sx = vp.x + (x / w * 0.5 + 0.5) * vp.width if w else 0.0
+        sy = vp.y + (y / w * 0.5 + 0.5) * vp.height if w else 0.0
+        say(f"  v{i}: clip {x:.5f} {y:.5f} {z:.6f} {w:.5f}  screen {sx:.2f} {sy:.2f} "
+            f"depth {z / w if w else 0:.7f}")
+
+
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
-            "history": cmd_history,
+            "history": cmd_history, "mesh": cmd_mesh,
             "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
 
 def succeeded(result):

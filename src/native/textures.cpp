@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -667,13 +668,22 @@ FetchConstant LoadFetchConstant(const uint8_t* big_endian) {
   return fetch;
 }
 
+// ts4_native_anisotropy, where -2 (the default) takes the Classic renderer's
+// anisotropic_override, so both renderers filter alike.
+namespace {
+int32_t TextureFiltering() {
+  const int32_t filtering = REXCVAR_GET(ts4_native_anisotropy);
+  return filtering == -2 ? rex::cvar::Query<int32_t>("anisotropic_override") : filtering;
+}
+}  // namespace
+
 bool Initialize(uint32_t scale, ColourMode colour, float lod_bias) {
   g.scale = scale;
   g.colour = colour;
   g.lod_bias = rex::cvar::HasNonDefaultValue("ts4_native_lod_bias")
                    ? float(REXCVAR_GET(ts4_native_lod_bias))
                    : lod_bias;
-  g.texture_filtering = REXCVAR_GET(ts4_native_anisotropy);
+  g.texture_filtering = TextureFiltering();
   // A prepare starts no texture work, so play's count serves both.
   const uint32_t workers =
       thread_budget::ForPlay(std::thread::hardware_concurrency()).textures;
@@ -735,7 +745,16 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
   if (!cube) {
     const auto resolved = g.resolve_targets.find(base_address);
     if (resolved != g.resolve_targets.end()) {
-      binding.sampler_index = SamplerIndex(fetch, 0, 0);
+      // The fetch's own levels, within those the image holds: a mip-chain pass samples the
+      // level it builds the next from.
+      uint32_t width_minus_1, height_minus_1, depth_minus_1, base_page, mip_page, min_level,
+          max_level;
+      texture_util::GetSubresourcesFromFetchConstant(fetch, &width_minus_1, &height_minus_1,
+                                                     &depth_minus_1, &base_page, &mip_page,
+                                                     &min_level, &max_level);
+      const uint32_t top = resolved->second->levels - 1;
+      binding.sampler_index =
+          SamplerIndex(fetch, std::min(min_level, top), std::min(max_level, top));
       binding.texture_index =
           FetchViewIndex(*resolved->second, swizzle, kHeapTexture2D, VK_IMAGE_VIEW_TYPE_2D, raw);
       return binding;
@@ -859,8 +878,17 @@ ResolveTarget GetResolveTarget(const FetchConstant& raw, bool red_blue_swapped,
   } else if (info.format == VK_FORMAT_UNDEFINED || info.block_size != 1) {
     info.format = VK_FORMAT_R8G8B8A8_UNORM;
   }
+  uint32_t width_minus_1, height_minus_1, depth_minus_1, base_page, mip_page, min_level,
+      max_level;
+  texture_util::GetSubresourcesFromFetchConstant(fetch, &width_minus_1, &height_minus_1,
+                                                 &depth_minus_1, &base_page, &mip_page,
+                                                 &min_level, &max_level);
+  // Levels a host image of this size can hold.
+  const uint32_t levels =
+      std::min(max_level + 1, uint32_t(std::bit_width(std::max(width, height))));
   std::unique_ptr<Texture>& slot = g.resolve_targets[base_address];
-  if (slot && (slot->width != width || slot->height != height || slot->format != info.format)) {
+  if (slot && (slot->width != width || slot->height != height || slot->format != info.format ||
+               slot->levels != levels)) {
     RetireTexture(*slot);
     slot.reset();
   }
@@ -869,7 +897,8 @@ ResolveTarget GetResolveTarget(const FetchConstant& raw, bool red_blue_swapped,
     slot->is_resolve_target = true;
     if (!CreateImage(*slot, VK_IMAGE_TYPE_2D, info.format, width, height, 1, 1, 0,
                      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                         VK_IMAGE_USAGE_TRANSFER_SRC_BIT)) {
+                         VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                     levels)) {
       slot.reset();
       return {};
     }
@@ -884,7 +913,8 @@ ResolveTarget GetResolveTarget(const FetchConstant& raw, bool red_blue_swapped,
     Retire(std::move(retired));
     slot->views.clear();
   }
-  return {slot->image, slot->format, slot->width, slot->height, &slot->layout, scale};
+  return {slot->image, slot->format, slot->width, slot->height, &slot->layout, scale,
+          slot->levels};
 }
 
 uint32_t GuestBytesPerPixel(const FetchConstant& raw) {
@@ -1011,7 +1041,7 @@ void Shutdown() {
 }
 
 void BeginFrame(uint64_t frame) {
-  const int32_t texture_filtering = REXCVAR_GET(ts4_native_anisotropy);
+  const int32_t texture_filtering = TextureFiltering();
   if (texture_filtering != g.texture_filtering) {
     // Old samplers stay for frames in flight; each level used adds its own to
     // the sampler heap (kHeapCapacity), so the count shows the headroom left.

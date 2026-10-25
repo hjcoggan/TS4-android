@@ -48,6 +48,16 @@ from Classic. The renderer, its hooks and every finding so far are in
 - **Shaders missing from the pack:** `no_shader` skips. Dump on a Classic run
   (`--ts4_shader_dump_dir=<abs path>`), then `pwsh scripts/convert-shaders.ps1`.
 
+- **Fixed-function state the converted shaders hard-code.** The alpha test was always
+  greater-or-equal (`0005-alpha-test-function`). A pass that differs while every input matches
+  may be reading state from a register the shader ignores; compare `RB_COLORCONTROL` and the
+  Classic shader's `xe_uniform_system_constants`.
+- **Classic's defaults are part of the picture.** Classic filters at 4x anisotropy
+  (`anisotropic_override` 3). `query … 'draw EID'` prints each sampler's filter and anisotropy.
+- **Same-frame captures.** `pwsh scripts/rdoc.ps1 capture … -ExtraArguments
+  '--ts4_renderer=native','--ts4_native_dual_compare=true'` puts both renderers' draws in one
+  capture, Native's first. `'mesh EID 4000'` dumps post-VS positions for matching vertex sets.
+
 ## After a fix
 
 A XenosRecomp change is a patch (`pwsh scripts/new-patch.ps1 <name> -Tool xenosrecomp`): it
