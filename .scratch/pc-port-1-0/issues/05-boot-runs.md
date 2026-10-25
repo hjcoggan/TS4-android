@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (Skeleton and pinned toolchain bootstrap)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A manifest for Boot exists with the TU1 image as input
 - [x] Boot generates and compiles without errors

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A pre-commit check rejects files matching game-derived patterns (.xex, .xexp, .arc, .bik, .iso, STFS packages, decrypted PE images, generated sources)
 - [x] The check also rejects large binary files in general

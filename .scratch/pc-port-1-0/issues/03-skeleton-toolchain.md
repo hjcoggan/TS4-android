@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Bootstrap fetches ReXGlue v0.10.0, LLVM, XenosRecomp and the other pinned tools, checking hashes
 - [x] Numbered patches in the repo are applied to the upstream sources in order, and a failing patch stops bootstrap with a clear message

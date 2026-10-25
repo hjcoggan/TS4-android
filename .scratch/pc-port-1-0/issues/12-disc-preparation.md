@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (Skeleton and pinned toolchain bootstrap)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A disc image and TU1 package are accepted as input
 - [x] Media ID, module versions and TU1 package identity are checked, and a wrong disc, missing TU1 or wrong TU each give a clear, distinct error

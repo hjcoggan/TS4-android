@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A Ghidra project of the three TU1 Modules exists locally, with the register save/restore helper repair applied
 - [x] topspin4-decomp symbols are matched from base to TU1 by function similarity (not by address, because Swing was relinked)
