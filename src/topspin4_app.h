@@ -15,6 +15,7 @@
 #include "crash_report.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
+#include "remapped_input.h"
 #include "script_input.h"
 #include "settings/config_file.h"
 #include "settings/renderer_choice.h"
@@ -97,6 +98,9 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    // The player's controller bindings (ticket 24); a scripted run then replaces the whole
+    // input system, so no binding can steer it.
+    topspin4::InstallRemappedInput(config);
     topspin4::InstallScriptInput(config, &rex::system::GuestSwapCount);
   }
 

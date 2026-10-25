@@ -147,3 +147,32 @@ TEST_CASE("Classic draws when Native is asked for but not available") {
   CHECK(ChooseRenderer("native", true).renderer == Renderer::kNative);
   CHECK(ChooseRenderer("native", true).note.empty());
 }
+
+TEST_CASE("Controller and keyboard bindings are player settings that default to the pad as it is") {
+  REQUIRE(FindSetting("ts4_pad_a"));
+  CHECK(FindSetting("ts4_pad_a")->default_value == "a");
+  CHECK(FindSetting("ts4_pad_a")->Allows("rt"));
+  CHECK_FALSE(FindSetting("ts4_pad_a")->Allows("z"));
+  // Keyboard and mouse stay off by default; the SDK's own key bindings apply when on.
+  REQUIRE(FindSetting("mnk_mode"));
+  CHECK(FindSetting("mnk_mode")->default_value == "false");
+  REQUIRE(FindSetting("keybind_a"));
+  CHECK(FindSetting("keybind_a")->default_value == "Semicolon,Space");
+  CHECK(FindSetting("keybind_a")->Allows("Shift+J"));
+  CHECK_FALSE(FindSetting("keybind_a")->Allows("bad\"quote"));
+}
+
+TEST_CASE("A saved key binding is set again at the next start") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  REQUIRE(SaveSetting(path, "keybind_a", TomlLiteral(*FindSetting("keybind_a"), "J,Space")));
+  REQUIRE(SaveSetting(path, "ts4_pad_a", TomlLiteral(*FindSetting("ts4_pad_a"), "b")));
+  CHECK(Loaded(path).values ==
+        std::map<std::string, std::string>{{"keybind_a", "J,Space"}, {"ts4_pad_a", "b"}});
+}
+
+TEST_CASE("Key bindings may name any key, and may be cleared") {
+  CHECK(FindSetting("keybind_dpad_right")->Allows("Shift+Right"));
+  CHECK(FindSetting("keybind_a")->Allows(""));
+  CHECK_FALSE(FindSetting("keybind_a")->Allows("a\\b"));
+}

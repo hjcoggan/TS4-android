@@ -13,6 +13,7 @@ set(TOPSPIN4_SOURCES
     src/crash_report.cpp
     src/fault_log.cpp
     src/frame_dumps.cpp
+    src/remapped_input.cpp
     src/script_input.cpp
     src/settings/settings_cvars.cpp
     src/settings/settings_file.cpp
@@ -65,6 +66,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_user_paths.cpp
         tests/host/test_settings.cpp
         tests/host/test_crash_report.cpp
+        tests/host/test_pad_bindings.cpp
         src/settings/settings_file.cpp
         ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
     target_include_directories(topspin4_host_tests PRIVATE src
@@ -84,7 +86,8 @@ if(REXSDK_DIR)
     target_include_directories(topspin4 PRIVATE
         $<TARGET_PROPERTY:imgui::imgui,INTERFACE_INCLUDE_DIRECTORIES>)
     # The crash report reads the GPU name through the SDK's Vulkan headers, which include
-    # RenderDoc's; the settings file is read with toml++. As in WWE All Stars.
+    # RenderDoc's; the settings file is read with toml++ (as in WWE All Stars); the remapped
+    # controller driver wraps the SDK's SDL one, whose header includes SDL3's.
     target_include_directories(topspin4 PRIVATE ${REXSDK_DIR}/thirdparty/renderdoc
-        ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
+        ${REXSDK_DIR}/thirdparty/tomlplusplus/include ${REXSDK_DIR}/thirdparty/sdl3/include)
 endif()

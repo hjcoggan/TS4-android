@@ -1,5 +1,6 @@
 #include "settings/settings_file.h"
 
+#include <optional>
 #include <system_error>
 
 #include <toml++/toml.hpp>
@@ -36,19 +37,19 @@ LoadReport LoadSettingsFile(const std::filesystem::path& path, const ApplySettin
     if (!node) {
       continue;
     }
-    std::string value;
-    if (auto text = node->value<std::string>(); text && setting.kind == Setting::Kind::kChoice) {
+    std::optional<std::string> value;
+    if (auto text = node->value<std::string>(); text && setting.kind != Setting::Kind::kBool) {
       value = *text;
     } else if (auto flag = node->as_boolean(); flag && setting.kind == Setting::Kind::kBool) {
       value = flag->get() ? "true" : "false";
     }
-    if (value.empty() || !setting.Allows(value)) {
+    if (!value || !setting.Allows(*value)) {
       report.warnings.push_back("settings file: " + std::string(setting.key) +
                                 " has a value it does not allow; keeping the default");
       continue;
     }
-    if (!apply(setting.key, value)) {
-      report.warnings.push_back("settings file: " + std::string(setting.key) + " = " + value +
+    if (!apply(setting.key, *value)) {
+      report.warnings.push_back("settings file: " + std::string(setting.key) + " = " + *value +
                                 " was refused; keeping the default");
     }
   }
