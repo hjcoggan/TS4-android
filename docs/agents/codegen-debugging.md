@@ -40,6 +40,17 @@ Rendering, not logic. Classic must
 run on the FSI render-target path (`TopSpin4App` defaults it); the host render-target path draws
 Swing's frames black. A run passing `--render_target_path_vulkan` overrides the default.
 
+**An object renders black or wrong, the rest of the frame is fine.** Compare with the Oracle
+by frame: dump the port's frame (`--ts4_dump_frames`), and capture both sides with RenderDoc
+(installed; `qrenderdoc --python script.py` runs a script against a capture, launched from
+PowerShell, not bash). Run Edge on Vulkan for its capture (`gpu = "vulkan"` in its config, put
+back afterwards); the owner drives it with a controller, since Edge ignores posted keys. Match the
+object's draws in both captures by index count, then diff bindings, views, samplers, constants and
+the translated SPIR-V. RenderDoc cannot step the port's shaders (FSI) or Edge's (barycentrics), so
+to see a value inside a shader, temporarily make the translator write a register to colour 0 for
+one shader hash (`analysis/shaders/` from `--dump_shaders` gives the Xenos disassembly to walk).
+The black player came from the fetch exponent adjust read from the wrong dword (patch 0032).
+
 **A runtime change seems to have no effect.** `topspin4_stage_dlls` (CMakeLists.txt) copies the
 runtime and GPU plugin DLLs next to the exe on every build; check their timestamps there.
 

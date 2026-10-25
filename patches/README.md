@@ -22,6 +22,7 @@ renumbered once committed, so a fix to an earlier patch is a new patch on top.
 | `0029-guest-swap-count` | Counts `VdSwap` calls (`rex::system::GuestSwapCount`): the guest's frame count across both Modules' Direct3D copies, which the scripted pad times its steps by. |
 | `0030-io-trace` | `--io_trace` logs every successful file open and every guest thread start and exit, so a run lines up against the Oracle's log (`.tools/xenia-edge/xenia.log`). Off by default. |
 | `0031-frame-shown-observer` | Calls a host observer on the GPU thread after each swap's image is the presenter's newest guest output, numbered on the `GuestSwapCount` clock, so scene runs dump exactly the frame the scripted pad's `at <frame>` names (`src/frame_dumps.h`). |
+| `0032-spirv-fetch-exp-adjust-word` | The SPIR-V translator read a texture fetch's exponent adjust from fetch-constant dword 4 (where bits 12:21 are the LOD bias) instead of dword 3, so every fetch was scaled by 2^(LOD-bias bits): the practice-ground player rendered black and the court lines vanished. The DXBC translator already read dword 3. |
 
 ## Carried over from WWE All Stars (ADR-0004)
 
