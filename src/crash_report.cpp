@@ -34,6 +34,9 @@ REXCVAR_DEFINE_BOOL(ts4_debug_force_crash, false, "TopSpin4",
                     "Debugging: crash once the game is set up, to check the crash report");
 REXCVAR_DEFINE_BOOL(ts4_debug_force_abort, false, "TopSpin4",
                     "Debugging: call abort once the game is set up, to check its crash report");
+REXCVAR_DEFINE_INT32(ts4_debug_force_crash_at_frame, -1, "TopSpin4",
+                     "Debugging: crash once this guest frame is shown, with the guest's threads "
+                     "running, to check the crash report shows their guest functions");
 
 namespace topspin4::crash {
 namespace {
@@ -99,8 +102,8 @@ std::string Stamp(const std::tm& local) {
   return text;
 }
 
-// The guest views (4 GB each) hold game data, so the dump leaves them out. The
-// callback's sizes are 32-bit, so they go out in 1 GB pieces.
+// The guest views hold game data, so the dump leaves their mapped memory out
+// (GuestPieces).
 struct RemoveGuest {
   std::vector<std::pair<uint64_t, uint32_t>> pieces;
   size_t next = 0;
@@ -119,6 +122,26 @@ BOOL CALLBACK DumpCallback(PVOID param, const PMINIDUMP_CALLBACK_INPUT input,
   return TRUE;
 }
 
+// The crashed process's regions inside the guest views' windows.
+std::vector<MemoryRegion> GuestWindowRegions(HANDLE process, const uint64_t (&views)[2]) {
+  std::vector<MemoryRegion> regions;
+  for (const uint64_t view : views) {
+    if (!view) continue;
+    for (uint64_t at = view; at < view + kGuestViewSize;) {
+      MEMORY_BASIC_INFORMATION info{};
+      if (!VirtualQueryEx(process, reinterpret_cast<void*>(uintptr_t(at)), &info, sizeof(info))) {
+        break;
+      }
+      const uint64_t base = uint64_t(uintptr_t(info.BaseAddress));
+      if (info.State != MEM_FREE) {
+        regions.push_back({base, uint64_t(info.RegionSize), info.Type == MEM_MAPPED});
+      }
+      at = base + info.RegionSize;
+    }
+  }
+  return regions;
+}
+
 // Runs in the helper: dumps the crashed process named in `request`.
 bool WriteDump(const DumpRequest& request) {
   HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE,
@@ -135,12 +158,7 @@ bool WriteDump(const DumpRequest& request) {
       request.thread_id,
       reinterpret_cast<EXCEPTION_POINTERS*>(uintptr_t(request.exception_pointers)), TRUE};
   RemoveGuest remove;
-  for (const uint64_t view : request.guest_views) {
-    if (!view) continue;
-    for (uint64_t at = 0; at < (1ull << 32); at += (1ull << 30)) {
-      remove.pieces.push_back({view + at, 1u << 30});
-    }
-  }
+  remove.pieces = GuestPieces(GuestWindowRegions(process, request.guest_views), request.guest_views);
   MINIDUMP_CALLBACK_INFORMATION callback{DumpCallback, &remove};
   // Stacks, modules and the memory the stacks point at; never full memory.
   const auto type = MINIDUMP_TYPE(MiniDumpWithIndirectlyReferencedMemory |
@@ -391,6 +409,15 @@ void CrashIfAsked() {
   if (REXCVAR_GET(ts4_debug_force_abort)) {
     REXLOG_ERROR("crash: --ts4_debug_force_abort");
     std::abort();
+  }
+}
+
+int64_t CrashFrameAsked() { return REXCVAR_GET(ts4_debug_force_crash_at_frame); }
+
+void CrashIfAskedAtFrame(uint64_t frame) {
+  if (int64_t(frame) == CrashFrameAsked()) {
+    REXLOG_ERROR("crash: --ts4_debug_force_crash_at_frame={}", frame);
+    *static_cast<volatile int*>(nullptr) = 0;
   }
 }
 

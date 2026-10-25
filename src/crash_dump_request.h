@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <charconv>
 #include <cstdint>
 #include <filesystem>
@@ -53,6 +54,38 @@ inline std::optional<DumpRequest> ParseDumpRequest(const std::vector<std::string
   }
   request.dump_path = std::filesystem::path(std::u8string(args[7].begin(), args[7].end()));
   return request;
+}
+
+inline constexpr uint64_t kGuestViewSize = 1ull << 32;
+
+// One region of the crashed process's address space (VirtualQueryEx). Guest memory is mapped
+// from the SDK's file mapping; host stacks and heaps are private, and Windows may place them
+// in the unreserved gaps of a guest view's 4 GB window.
+struct MemoryRegion {
+  uint64_t base = 0;
+  uint64_t size = 0;
+  bool mapped = false;
+};
+
+// The ranges to remove from the dump: every mapped region inside a guest view's window, in
+// pieces of at most 1 GB (the dump callback's sizes are 32-bit). Private memory in the window
+// stays, or the dump loses the stacks of threads placed there.
+inline std::vector<std::pair<uint64_t, uint32_t>> GuestPieces(
+    const std::vector<MemoryRegion>& regions, const uint64_t (&views)[2]) {
+  constexpr uint64_t kPiece = 1ull << 30;
+  std::vector<std::pair<uint64_t, uint32_t>> pieces;
+  for (const uint64_t view : views) {
+    if (!view) continue;
+    for (const MemoryRegion& region : regions) {
+      if (!region.mapped) continue;
+      const uint64_t begin = std::max(region.base, view);
+      const uint64_t end = std::min(region.base + region.size, view + kGuestViewSize);
+      for (uint64_t at = begin; at < end; at += kPiece) {
+        pieces.push_back({at, uint32_t(std::min(kPiece, end - at))});
+      }
+    }
+  }
+  return pieces;
 }
 
 }  // namespace topspin4::crash

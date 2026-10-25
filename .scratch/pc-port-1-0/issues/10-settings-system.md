@@ -7,9 +7,9 @@
 **Status:** ready-for-agent
 
 - [ ] The WWE settings system is copied and adapted
-- [ ] Settings live in the per-user directory
+- [x] Settings live in the per-user directory
 - [x] Every setting defaults to original behaviour
-- [ ] A renderer setting selects Classic or Native (Native may still be unavailable at this point)
+- [x] A renderer setting selects Classic or Native (Native may still be unavailable at this point)
 - [x] Unit tests cover defaults, persistence, and recovery from a corrupt settings file
 
 ## Comments
@@ -19,3 +19,4 @@
   - The settings file now also yields to a `REX_<NAME>` environment variable, not only to the command line.
   - At start the game logs an error when a setting's cvar default differs from the registry's, so the two lists can't drift silently.
   - Paths are no longer passed through `path::string()`, which throws for a user name outside the ANSI code page.
+- 2026-10-25 (Claude), player-style runs; ticked the per-user and renderer boxes. The game was started without `--user_data_root` (as a player's launch is), with `%APPDATA%\TopSpin4Recomp\topspin4.settings.toml` holding `ts4_renderer = "native"` and a START/RS swap (ticket 24); `analysis/remap-20261025-123709`. The log reads `Settings: C:\Users\Martin\AppData\Roaming\TopSpin4Recomp\topspin4.settings.toml`, then `ts4_renderer is native, but this build has no Native renderer yet; drawing with Classic`, and the frames drew. The game also made its profile folders there (`54540859\profile\User\63E83FFD..FF`). The settings file was removed after the runs. Still open: the copied WWE settings page and launcher screen (UI).

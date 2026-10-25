@@ -7,9 +7,9 @@
 **Status:** ready-for-agent
 
 - [x] XInput controllers work out of the box
-- [ ] Every action can be rebound on a controller
+- [x] Every action can be rebound on a controller
 - [ ] Keyboard and mouse play works with default and custom bindings
-- [ ] Bindings persist per user
+- [x] Bindings persist per user
 - [x] Unit tests cover binding resolution and conflicts
 
 ## Comments
@@ -22,3 +22,10 @@
   - Ticked the unit-test box on `build.ps1 -Action Test` (tests/host/test_pad_bindings.cpp: identity, swaps, button and trigger cross-binding, rebind swap, conflicts, settings, keystrokes; test_settings.cpp: the binding settings save and load back). The game builds.
   - Open: no in-game or launcher screen edits the bindings yet (the settings file does); rebinding and keyboard play are unobserved in a run; and whether `mnk_mode` on beside a connected controller shows up as a second pad needs checking before it could default to on.
 - 2026-10-25 (Claude), after review: a physical input that drives no action (after a hand-edited double binding) now sends no keystroke, instead of its own.
+- 2026-10-25 (Claude), runs with a ViGEm pad; ticked the rebinding and per-user boxes.
+  - Setup: headless, no `--user_data_root`, `%APPDATA%\TopSpin4Recomp\topspin4.settings.toml` with `ts4_pad_start = "rs"` and `ts4_pad_rs = "start"`; `scripts/edge_pad.py` pressing RS every 100 frames to frame 2401 (wall clock). The log reads `Controller: start is driven by rs` and `Controller: rs is driven by start`.
+  - With the swap (`analysis/remap-20261025-123709`): the intro skips, the title passes, and frame 2800 is the Practice Ground's "Welcome to Top Spin 4" menu.
+  - Control, same presses and no settings file (`analysis/remap-control-20261025-123826`): RS does nothing; frame 2800 is still an intro clip.
+  - So a binding in the per-user file drives the game, through both `GetState` and the keystroke path the title uses. Every one of the 16 inputs goes through the same `Remap` (unit-tested for all of them); one swap was run. Rebinding is by settings file only; no screen edits it yet.
+  - Found on the way: with the owner's own Xbox Series X pad plugged in, it took slot 0 and the virtual pad slot 1, and START on slot 1 did not skip the intro either (`analysis/remap-control-20261025-123425`, frames identical to the first, failed remap run). The runs then hid the real pad with `SDL_GAMECONTROLLER_IGNORE_DEVICES=0x045E/0x0B13`. Whether the original also ignores pad 2 at the intro is for ticket 17 to check on Edge.
+  - Still open: keyboard and mouse. The SDK's keyboard driver acts only while the window has focus, which a headless run never has.

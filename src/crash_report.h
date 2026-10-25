@@ -26,5 +26,9 @@ void SetGuestMemory(const uint8_t* virtual_membase, const uint8_t* physical_memb
 
 // --ts4_debug_force_crash / --ts4_debug_force_abort: crashes the calling thread.
 void CrashIfAsked();
+// --ts4_debug_force_crash_at_frame: the guest frame to crash at (-1 for none), and the crash
+// itself, called once each frame is shown (frame_dumps.cpp, on the GPU thread).
+int64_t CrashFrameAsked();
+void CrashIfAskedAtFrame(uint64_t frame);
 
 }  // namespace topspin4::crash

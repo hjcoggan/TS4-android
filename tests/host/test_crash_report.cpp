@@ -234,3 +234,33 @@ TEST_CASE("No dump request without the switch, or with a malformed one") {
   CHECK_FALSE(ParseDumpRequest(
       {"topspin4.exe", "--ts4-write-crash-dump", "x", "1", "0", "0", "0", "C:/a.dmp"}));
 }
+
+TEST_CASE("A dump leaves out the guest views' mapped memory but keeps host stacks inside them") {
+  // As in the first forced crash: the physical view at 0x3'0000'0000 maps 512 MB, and a host
+  // thread's stack sits at 0x3'6EBD'F000, inside the view's 4 GB window.
+  const uint64_t views[2] = {0x200000000, 0x300000000};
+  const std::vector<MemoryRegion> regions = {
+      {0x200000000, 0x80000000, true},   // virtual view, first 2 GB
+      {0x280000000, 0x20000000, false},  // a host heap in a gap of the virtual window
+      {0x2A0000000, 0x60000000, true},   // virtual view, the rest
+      {0x300000000, 0x20000000, true},   // physical view, 512 MB
+      {0x36EB00000, 0x100000, false},    // the crashed thread's stack
+      {0x3F0000000, 0x20000000, true},   // a mapping running past the window's end
+      {0x500000000, 0x10000000, true},   // a mapping outside every window
+  };
+
+  const auto pieces = GuestPieces(regions, views);
+
+  const std::vector<std::pair<uint64_t, uint32_t>> expected = {
+      {0x200000000, 0x40000000}, {0x240000000, 0x40000000},  // 2 GB in 1 GB pieces
+      {0x2A0000000, 0x40000000}, {0x2E0000000, 0x20000000},
+      {0x300000000, 0x20000000},
+      {0x3F0000000, 0x10000000},  // clipped at 0x4'0000'0000
+  };
+  CHECK(pieces == expected);
+}
+
+TEST_CASE("A dump without guest views removes nothing") {
+  const uint64_t views[2] = {0, 0};
+  CHECK(GuestPieces({{0x200000000, 0x1000, true}}, views).empty());
+}

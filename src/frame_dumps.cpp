@@ -1,6 +1,7 @@
 // Frame dumps, exit after a frame and the session report for scene runs (see frame_dumps.h).
 
 #include "frame_dumps.h"
+#include "crash_report.h"
 
 #include <chrono>
 #include <cstdio>
@@ -211,6 +212,7 @@ void OnFrameShown(uint64_t frame) {
     rex::FlushLogging();
     std::_Exit(0);
   }
+  topspin4::crash::CrashIfAskedAtFrame(frame);
 }
 
 }  // namespace
@@ -263,7 +265,8 @@ void Install(rex::Runtime* runtime) {
       REXLOG_ERROR("frame dumps: cannot write {}", path);
     }
   }
-  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1 && !g_frame_times) {
+  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1 && !g_frame_times &&
+      topspin4::crash::CrashFrameAsked() < 0) {
     return;
   }
   rex::system::SetFrameShownObserver(&OnFrameShown);
