@@ -1,0 +1,12 @@
+# Xenia Edge, boot to the main menu (scripts/edge.ps1 plays it on a virtual pad), resting on the
+# title screen first for captures. Frame times are wall-clock at 60 a second from launch. The
+# title is up by about 8 s; START at 15 s loads the practice ground (up by about 30 s); START at
+# 34 s opens the main menu.
+at 300
+press START
+at 420
+press START
+at 900
+press START
+at 2040
+press START
