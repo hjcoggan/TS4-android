@@ -32,6 +32,9 @@ REXCVAR_DEFINE_INT32(ts4_exit_after_frame, -1, "TopSpin4",
                      "session report and exit");
 REXCVAR_DEFINE_STRING(ts4_session_report, "", "TopSpin4",
                       "Scene runs: the session report (JSON) written on ts4_exit_after_frame");
+REXCVAR_DEFINE_STRING(ts4_frame_times_csv, "", "TopSpin4",
+                      "Write the host time of every frame shown (frame,ms) to this CSV, for "
+                      "scripts/frame_pacing.py");
 REXCVAR_DEFINE_BOOL(ts4_fps_log, false, "TopSpin4",
                     "Log the guest frame rate (VdSwap calls) once a second, for comparison "
                     "with the Oracle's scripts/edge.ps1 -FrameLog");
@@ -56,6 +59,7 @@ std::filesystem::path g_dir;
 int64_t g_exit_after = -1;
 std::filesystem::path g_report;
 std::chrono::steady_clock::time_point g_start;
+FILE* g_frame_times = nullptr;  // --ts4_frame_times_csv
 std::vector<Dump> g_dumps;  // GPU thread only, as is every function below but Install
 int64_t g_renderdoc_frame = -1;
 #if defined(_WIN32)
@@ -168,6 +172,14 @@ void LogFrameRate() {
 }
 
 void OnFrameShown(uint64_t frame) {
+  if (g_frame_times) {
+    const double ms = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - g_start)
+                          .count();
+    std::fprintf(g_frame_times, "%llu,%.3f\n", static_cast<unsigned long long>(frame), ms);
+    // A run killed at its deadline still leaves the times up to the last second.
+    if (frame % 60 == 0) std::fflush(g_frame_times);
+  }
   CaptureWithRenderDoc(frame);
   if (g_frames.contains(frame)) {
     SaveDump(frame);
@@ -222,7 +234,15 @@ void Install(rex::Runtime* runtime) {
   if (REXCVAR_GET(ts4_fps_log)) {
     std::thread(LogFrameRate).detach();
   }
-  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1) {
+  if (const std::string path = REXCVAR_GET(ts4_frame_times_csv); !path.empty()) {
+    g_frame_times = std::fopen(path.c_str(), "w");
+    if (g_frame_times) {
+      std::fputs("frame,ms\n", g_frame_times);
+    } else {
+      REXLOG_ERROR("frame dumps: cannot write {}", path);
+    }
+  }
+  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1 && !g_frame_times) {
     return;
   }
   rex::system::SetFrameShownObserver(&OnFrameShown);

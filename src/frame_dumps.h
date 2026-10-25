@@ -8,6 +8,7 @@
 //   --ts4_session_report=<file>  the session report (JSON), written on that exit
 //   --ts4_renderdoc_frame=N      under RenderDoc, capture exactly guest frame N
 //   --ts4_fps_log                log "fps: <rate> (guest swaps <n>)" once a second
+//   --ts4_frame_times_csv=<file> the host time of every frame shown, for scripts/frame_pacing.py
 //
 // A frame number counts the swaps before it, the clock the scripted pad's `at <frame>` uses
 // (src/script_input.h). Each dump is the presenter's guest output of that swap, taken on the

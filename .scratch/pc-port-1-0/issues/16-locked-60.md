@@ -10,3 +10,11 @@
 - [ ] Frame-time variance during a match meets the WWE pacing bar
 - [ ] Spin-wait and fence behaviour does not cause hitches
 - [ ] Measured with the WWE frame-pacing tooling
+
+## Comments
+- 2026-10-25 (Claude), no game run (owner's request). Pacing tooling, adapted from WWE's `scripts/analyze_hitches.py` because that one needs PresentMon (which records nothing unelevated on this PC) and WWE's own logs.
+  - `--ts4_frame_times_csv=<file>` (src/frame_dumps.h) writes the host time of every frame shown, measured on the GPU thread. `scripts/smoke.ps1` now writes `frame_times.csv` on every run.
+  - `scripts/frame_pacing.py <frame_times.csv>` judges it against WWE's bar: no hitch (an interval over 25 ms), every frame within 1 ms of a step, and a 1 % low within 16.7 ms.
+  - Top Spin 4's own 30 fps cutaways (ticket 01) count as a step (33.3 ms ± 1), and the 1 % low is taken over the 60 Hz frames only. Its limit: times are taken when a frame reaches the presenter, so judder on the display side is not seen.
+  - Unit-tested (tests/test_frame_pacing.py: steady 60, a hitch, an even 30 Hz cutaway, a frame between steps, off-step frames, CSV loading). No box ticked: nothing has been measured yet. Next run: `smoke.ps1 -InputScript scripts/input/boot-to-exhibition.txt`, then `frame_pacing.py <run>/frame_times.csv`.
+  - Leads from docs/research/recomp-community-help.md for the spin-wait and hitch boxes: the Oracle runs a cooperative guest scheduler (`guest_scheduler = true`), and the port does not; ReXGlue #521 (AMD fence waits); `db16cyc` spin hints dropped as no-ops.
