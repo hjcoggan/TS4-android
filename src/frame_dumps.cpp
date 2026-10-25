@@ -13,6 +13,14 @@
 #include <rex/system/guest_swaps.h>
 #include <rex/ui/presenter.h>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+
+#include "thirdparty/renderdoc_app.h"
+#endif
+
 REXCVAR_DEFINE_STRING(ts4_dump_frames, "", "TopSpin4",
                       "Scene runs: guest frames to save as PNGs into ts4_dump_dir, "
                       "comma-separated (src/frame_dumps.h)");
@@ -23,6 +31,9 @@ REXCVAR_DEFINE_INT32(ts4_exit_after_frame, -1, "TopSpin4",
                      "session report and exit");
 REXCVAR_DEFINE_STRING(ts4_session_report, "", "TopSpin4",
                       "Scene runs: the session report (JSON) written on ts4_exit_after_frame");
+REXCVAR_DEFINE_INT32(ts4_renderdoc_frame, -1, "TopSpin4",
+                     "With RenderDoc attached (renderdoccmd capture): capture this guest frame, "
+                     "everything the GPU does between the swap before it and its own");
 
 namespace topspin4::frame_dumps {
 
@@ -42,6 +53,30 @@ int64_t g_exit_after = -1;
 std::filesystem::path g_report;
 std::chrono::steady_clock::time_point g_start;
 std::vector<Dump> g_dumps;  // GPU thread only, as is every function below but Install
+int64_t g_renderdoc_frame = -1;
+#if defined(_WIN32)
+RENDERDOC_API_1_1_2* g_renderdoc = nullptr;
+#endif
+
+// Start a RenderDoc capture as the frame before the wanted one is shown, end it with the wanted
+// one: the capture then holds exactly that guest frame's GPU work, on the GPU thread that
+// submits it.
+void CaptureWithRenderDoc(uint64_t frame) {
+#if defined(_WIN32)
+  if (!g_renderdoc) {
+    return;
+  }
+  if (int64_t(frame) + 1 == g_renderdoc_frame) {
+    g_renderdoc->StartFrameCapture(nullptr, nullptr);
+  } else if (int64_t(frame) == g_renderdoc_frame) {
+    const bool captured = g_renderdoc->EndFrameCapture(nullptr, nullptr) == 1;
+    REXLOG_INFO("frame dumps: RenderDoc capture of frame {} {}", frame,
+                captured ? "written" : "failed");
+  }
+#else
+  (void)frame;
+#endif
+}
 
 std::string JsonString(const std::string& text) {
   std::string out = "\"";
@@ -112,6 +147,7 @@ void WriteReport(uint64_t frame) {
 }
 
 void OnFrameShown(uint64_t frame) {
+  CaptureWithRenderDoc(frame);
   if (g_frames.contains(frame)) {
     SaveDump(frame);
   }
@@ -134,6 +170,22 @@ void Install(rex::Runtime* runtime) {
   g_dir = REXCVAR_GET(ts4_dump_dir);
   g_exit_after = REXCVAR_GET(ts4_exit_after_frame);
   g_report = REXCVAR_GET(ts4_session_report);
+  g_renderdoc_frame = REXCVAR_GET(ts4_renderdoc_frame);
+#if defined(_WIN32)
+  if (g_renderdoc_frame >= 1) {
+    // RenderDoc is loaded into the process only when the game is started under it.
+    HMODULE module = GetModuleHandleA("renderdoc.dll");
+    auto get_api = module ? reinterpret_cast<pRENDERDOC_GetAPI>(
+                                GetProcAddress(module, "RENDERDOC_GetAPI"))
+                          : nullptr;
+    if (!get_api ||
+        get_api(eRENDERDOC_API_Version_1_1_2, reinterpret_cast<void**>(&g_renderdoc)) != 1) {
+      REXLOG_ERROR("frame dumps: --ts4_renderdoc_frame needs the game started under RenderDoc "
+                   "(scripts/rdoc.ps1 capture)");
+      g_renderdoc = nullptr;
+    }
+  }
+#endif
   if (!g_frames.empty()) {
     if (g_dir.empty()) {
       REXLOG_ERROR("frame dumps: --ts4_dump_frames needs --ts4_dump_dir");
@@ -146,7 +198,7 @@ void Install(rex::Runtime* runtime) {
       }
     }
   }
-  if (g_frames.empty() && g_exit_after < 0) {
+  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1) {
     return;
   }
   rex::system::SetFrameShownObserver(&OnFrameShown);

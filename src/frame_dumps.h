@@ -6,6 +6,7 @@
 //   --ts4_exit_after_frame=N     after frame N is shown (and dumped), write the session report
 //                                and exit with code 0
 //   --ts4_session_report=<file>  the session report (JSON), written on that exit
+//   --ts4_renderdoc_frame=N      under RenderDoc, capture exactly guest frame N
 //
 // A frame number counts the swaps before it, the clock the scripted pad's `at <frame>` uses
 // (src/script_input.h). Each dump is the presenter's guest output of that swap, taken on the

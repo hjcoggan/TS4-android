@@ -1,0 +1,21 @@
+# Xenia Edge, boot to the practice ground (scripts/edge.ps1 plays it on a virtual pad).
+# Frame times are wall-clock at 60 a second from launch (scripts/edge_pad.py): Edge boots slower
+# than the port and has no frame count to anchor to. START skips the intro videos and passes the
+# title; the last press must land on the title screen, since START on the practice ground opens
+# the main menu.
+at 300
+press START
+at 420
+press START
+at 540
+press START
+at 660
+press START
+at 780
+press START
+at 900
+press START
+at 1020
+press START
+at 1140
+press START

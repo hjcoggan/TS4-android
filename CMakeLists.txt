@@ -43,6 +43,20 @@ foreach(topspin4_target topspin4 topspin4_recomp topspin4_Loader_DLL topspin4_Sw
     endif()
 endforeach()
 
+# Host unit tests of pure host code (scripts/build.ps1 -Action Test): Catch2 from the SDK tree,
+# opt-in and outside the default build, as in WWE All Stars.
+option(TOPSPIN4_BUILD_TESTS "Build the host unit tests" OFF)
+if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
+    enable_testing()
+    add_executable(topspin4_host_tests EXCLUDE_FROM_ALL
+        tests/host/test_frame_dumps.cpp
+        ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
+    target_include_directories(topspin4_host_tests PRIVATE src
+        ${REXSDK_DIR}/thirdparty/catch2/extras)
+    target_link_libraries(topspin4_host_tests PRIVATE rex::runtime)
+    add_test(NAME topspin4_host_tests COMMAND topspin4_host_tests)
+endif()
+
 if(NOT REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
     # No codegen output yet: the host starts, says so and exits (ticket 03).
     target_compile_definitions(topspin4 PRIVATE TOPSPIN4_NO_GUEST_CODE)

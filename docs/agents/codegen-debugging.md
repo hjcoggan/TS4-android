@@ -41,15 +41,26 @@ run on the FSI render-target path (`TopSpin4App` defaults it); the host render-t
 Swing's frames black. A run passing `--render_target_path_vulkan` overrides the default.
 
 **An object renders black or wrong, the rest of the frame is fine.** Compare with the Oracle
-by frame: dump the port's frame (`--ts4_dump_frames`), and capture both sides with RenderDoc
-(installed; `qrenderdoc --python script.py` runs a script against a capture, launched from
-PowerShell, not bash). Run Edge on Vulkan for its capture (`gpu = "vulkan"` in its config, put
-back afterwards); the owner drives it with a controller, since Edge ignores posted keys. Match the
-object's draws in both captures by index count, then diff bindings, views, samplers, constants and
-the translated SPIR-V. RenderDoc cannot step the port's shaders (FSI) or Edge's (barycentrics), so
-to see a value inside a shader, temporarily make the translator write a register to colour 0 for
-one shader hash (`analysis/shaders/` from `--dump_shaders` gives the Xenos disassembly to walk).
-The black player came from the fetch exponent adjust read from the wrong dword (patch 0032).
+by frame, one draw at a time:
+1. The Oracle's frame: `pwsh scripts/edge.ps1 -Renderer vulkan -ShotsAt 25 -RenderDocAt 30`
+   drives Edge on a virtual pad (`scripts/input/edge-boot-to-practice.txt`) and captures with
+   RenderDoc. The port's: `pwsh scripts/rdoc.ps1 capture -Frame 1050`.
+2. Find the object's draws in both captures by index count, then diff them in one replay each:
+   `pwsh scripts/rdoc.ps1 query <capture> 'draws --indices 1999' 'draw <eid>' 'texture <id> --all-mips'`
+   (bindings, view swizzles, samplers, constant blocks, the pixel shader's SPIR-V).
+3. When inputs match and the output differs, look inside the shader: RenderDoc cannot step the
+   port's shaders (FSI) or Edge's (barycentrics). `--dump_shaders=<dir>` gives each shader's Xenos
+   disassembly; the probe (patch 0033) shows a register as the shader's colour, right after a
+   chosen instruction: `--gpu_debug_ps_hash=<16 hex> --gpu_debug_ps_register=0
+   --gpu_debug_ps_components=xzw --gpu_debug_ps_after=156`. Walk the chain back from the output
+   until a value goes wrong.
+
+A difference from Edge is a lead, not a cause, until you show the different branch runs for
+this draw: decode the fetch constant or register state before blaming it. Edge's translator is a
+newer fork, so most differences in its SPIR-V are plumbing. The black practice player was the
+fetch exponent adjust read from the wrong fetch-constant dword (patch 0032). A translator change
+needs no cache reset: `cache/shaders/shareable` holds guest ucode (`.xsh`) and pipeline
+descriptions (`.xpso`), and shaders are translated again on every run.
 
 **A runtime change seems to have no effect.** `topspin4_stage_dlls` (CMakeLists.txt) copies the
 runtime and GPU plugin DLLs next to the exe on every build; check their timestamps there.
@@ -67,9 +78,14 @@ runtime and GPU plugin DLLs next to the exe on every build; check their timestam
 - Scene runs: `python scripts/scene_runner.py tests/scenes/boot-main-menu.toml` plays a scene
   twice, dumps its capture frames (exactly the guest frame named, from the GPU's swap) and
   checks they repeat. One frame from a smoke run: `-ExtraArguments
-  '--ts4_dump_frames=1400','--ts4_dump_dir=<dir>'` (`src/frame_dumps.h`). Smoke and scene runs
-  share `analysis/game-run.lock`, so a second run is refused while one is going. Loading screens
-  show a random tip each boot, so a capture never lands on one.
+  '--ts4_dump_frames=1400','--ts4_dump_dir=<dir>'` (`src/frame_dumps.h`). Smoke, scene and
+  `rdoc.ps1 capture` runs share `analysis/game-run.lock`, so a second run is refused while one
+  is going. Capture frames on steady screens: loading screens show a random tip each boot, and
+  the practice ground's labels slide in and the player idles.
+- The Oracle: Xenia Edge with TU1 installed (title bar `v0.0.1.3`; `scripts/edge.ps1` refuses
+  anything else). It reads input only from a pad: `scripts/edge.ps1` plays input scripts on a
+  ViGEm virtual pad (`winget install ViGEm.ViGEmBus`, `pip install vgamepad`), at 60 frames a
+  second of wall clock.
 
 - Names for Swing functions: `symbols/tu1-symbols.csv`, with the method in
   `docs/research/tu1-symbol-map.md`. Local Ghidra project of all three TU1 Modules:

@@ -13,3 +13,7 @@
 - [ ] Visible glitches (cross-fade flicker, vertex explosions, camera problems) are listed with timestamps
 - [ ] Reference captures of the title screen, the main menu and a mid-match frame are saved locally (not committed)
 - [ ] Findings are written up under docs/research/
+
+## Comments
+
+- 2026-10-25 (Claude): The Oracle can now be run unattended. TU1 is installed in Edge (title bar `v0.0.1.3`; earlier Edge runs, including `.tools/xenia-edge/xenia.log`, were the base build `v0.0.0.3`). `scripts/edge.ps1` plays an input script on a ViGEm virtual pad, saves window screenshots at given seconds, and with `-Renderer vulkan -RenderDocAt <s>` takes a RenderDoc capture. `scripts/input/edge-boot-to-practice.txt` reaches the practice ground by about 23 s. No box is ticked: the full match, fps and load times still need doing.

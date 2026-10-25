@@ -1,0 +1,183 @@
+diff --git a/include/rex/graphics/pipeline/shader/spirv_translator.h b/include/rex/graphics/pipeline/shader/spirv_translator.h
+index dce3dbf..e8b1e6b 100644
+--- a/include/rex/graphics/pipeline/shader/spirv_translator.h
++++ b/include/rex/graphics/pipeline/shader/spirv_translator.h
+@@ -487,7 +487,14 @@ class SpirvShaderTranslator : public ShaderTranslator {
+ 
+   void ProcessVertexFetchInstruction(const ParsedVertexFetchInstruction& instr) override;
+   void ProcessTextureFetchInstruction(const ParsedTextureFetchInstruction& instr) override;
+-  void ProcessAluInstruction(const ParsedAluInstruction& instr,
++  void ProcessInstructionEnd(uint32_t ucode_address) override;
++  // --gpu_debug_ps_*: whether this pixel shader is the probed one, and the register captured
++  // after --gpu_debug_ps_after (NoResult when not probing or probing at the end).
++  bool IsDebugProbedPixelShader() const;
++  void StoreDebugProbeColor();
++  bool debug_probe_ = false;
++  spv::Id debug_probe_capture_ = spv::NoResult;
++    void ProcessAluInstruction(const ParsedAluInstruction& instr,
+                              uint8_t memexport_eM_potentially_written_before) override;
+ 
+  private:
+diff --git a/include/rex/graphics/pipeline/shader/translator.h b/include/rex/graphics/pipeline/shader/translator.h
+index 340ced5..32e9772 100644
+--- a/include/rex/graphics/pipeline/shader/translator.h
++++ b/include/rex/graphics/pipeline/shader/translator.h
+@@ -123,6 +123,9 @@ class ShaderTranslator {
+   virtual void ProcessVertexFetchInstruction(const ParsedVertexFetchInstruction& /*instr*/) {}
+   // Handles translation for texture fetch instructions.
+   virtual void ProcessTextureFetchInstruction(const ParsedTextureFetchInstruction& /*instr*/) {}
++  // Handles the end of an ALU or fetch instruction, with its ucode address (the instruction
++  // number the disassembly prints).
++  virtual void ProcessInstructionEnd(uint32_t /*ucode_address*/) {}
+   // Handles translation for ALU instructions.
+   // memexport_eM_potentially_written_before needs to be handled by `kill`
+   // instruction to make sure memory exports for the eM# writes earlier in
+diff --git a/src/graphics/pipeline/shader/spirv_translator.cpp b/src/graphics/pipeline/shader/spirv_translator.cpp
+index 1774f97..ef68ab5 100644
+--- a/src/graphics/pipeline/shader/spirv_translator.cpp
++++ b/src/graphics/pipeline/shader/spirv_translator.cpp
+@@ -10,10 +10,12 @@
+  */
+ 
+ #include <algorithm>
++#include <charconv>
+ #include <cstddef>
+ #include <cstdint>
+ #include <memory>
+ #include <string>
++#include <string_view>
+ #include <utility>
+ #include <vector>
+ 
+@@ -21,6 +23,7 @@
+ #include <fmt/format.h>
+ 
+ #include <rex/assert.h>
++#include <rex/cvar.h>
+ #include <rex/graphics/pipeline/shader/spirv.h>
+ #include <rex/graphics/pipeline/shader/spirv_translator.h>
+ #include <rex/math.h>
+@@ -28,6 +31,20 @@
+ 
+ namespace rex::graphics {
+ 
++// A pixel shader register made visible: the probed shader's colour 0 becomes the chosen components
++// of the register, clamped to 0...1, as R, G and B. For finding where a shader's maths goes wrong
++// when the frame debugger can't step it (FSI); see the codegen debugging guide.
++REXCVAR_DEFINE_STRING(gpu_debug_ps_hash, "", "GPU/Debug",
++                      "Pixel shader to probe: its ucode hash, 16 hex digits as --dump_shaders "
++                      "names it");
++REXCVAR_DEFINE_INT32(gpu_debug_ps_register, -1, "GPU/Debug",
++                     "Probe: the register (rN) shown as colour 0 of gpu_debug_ps_hash");
++REXCVAR_DEFINE_STRING(gpu_debug_ps_components, "xyz", "GPU/Debug",
++                      "Probe: up to three components of the register (xyzw) shown as R, G, B");
++REXCVAR_DEFINE_INT32(gpu_debug_ps_after, -1, "GPU/Debug",
++                     "Probe: take the register right after this ucode instruction (the number "
++                     "the disassembly prints); -1 takes it at the end of the shader");
++
+ SpirvShaderTranslator::Features::Features(bool all)
+     : spirv_version(all ? spv::Spv_1_5 : spv::Spv_1_0),
+       max_storage_buffer_range(all ? UINT32_MAX : (128 * 1024 * 1024)),
+@@ -514,6 +531,13 @@ void SpirvShaderTranslator::StartTranslation() {
+       var_main_registers_ = builder_->createVariable(spv::NoPrecision, spv::StorageClassFunction,
+                                                      type_register_array, "xe_var_registers");
+     }
++    debug_probe_ = IsDebugProbedPixelShader();
++    debug_probe_capture_ = spv::NoResult;
++    if (debug_probe_ && REXCVAR_GET(gpu_debug_ps_after) >= 0) {
++      debug_probe_capture_ = builder_->createVariable(
++          spv::NoPrecision, spv::StorageClassFunction, type_float4_, "xe_var_debug_probe",
++          const_float4_0_);
++    }
+     if (IsSpirvRectangleListVertexLoopEnabled()) {
+       Modification shader_modification = GetSpirvShaderModification();
+       var_main_rectangle_guest_vertex_index_ =
+@@ -4324,4 +4348,63 @@ spv::Id SpirvShaderTranslator::LinearToPWLGamma(spv::Id linear, bool linear_pre_
+       offset);
+ }
+ 
++bool SpirvShaderTranslator::IsDebugProbedPixelShader() const {
++  const std::string& hash_text = REXCVAR_GET(gpu_debug_ps_hash);
++  if (!is_pixel_shader() || hash_text.empty() || REXCVAR_GET(gpu_debug_ps_register) < 0 ||
++      uint32_t(REXCVAR_GET(gpu_debug_ps_register)) >= register_count()) {
++    return false;
++  }
++  uint64_t hash = 0;
++  const auto [end, error] =
++      std::from_chars(hash_text.data(), hash_text.data() + hash_text.size(), hash, 16);
++  return error == std::errc() && end == hash_text.data() + hash_text.size() &&
++         hash == current_shader().ucode_data_hash();
++}
++
++void SpirvShaderTranslator::ProcessInstructionEnd(uint32_t ucode_address) {
++  if (debug_probe_capture_ == spv::NoResult ||
++      int32_t(ucode_address) != REXCVAR_GET(gpu_debug_ps_after)) {
++    return;
++  }
++  id_vector_temp_util_.clear();
++  id_vector_temp_util_.push_back(builder_->makeIntConstant(REXCVAR_GET(gpu_debug_ps_register)));
++  builder_->createStore(
++      builder_->createLoad(builder_->createAccessChain(spv::StorageClassFunction,
++                                                       var_main_registers_, id_vector_temp_util_),
++                           spv::NoPrecision),
++      debug_probe_capture_);
++}
++
++void SpirvShaderTranslator::StoreDebugProbeColor() {
++  if (!debug_probe_ || !(current_shader().writes_color_targets() & 1)) {
++    return;
++  }
++  spv::Id value;
++  if (debug_probe_capture_ != spv::NoResult) {
++    value = builder_->createLoad(debug_probe_capture_, spv::NoPrecision);
++  } else {
++    id_vector_temp_util_.clear();
++    id_vector_temp_util_.push_back(builder_->makeIntConstant(REXCVAR_GET(gpu_debug_ps_register)));
++    value = builder_->createLoad(builder_->createAccessChain(spv::StorageClassFunction,
++                                                             var_main_registers_,
++                                                             id_vector_temp_util_),
++                                 spv::NoPrecision);
++  }
++  spv::Id channels[4] = {const_float_0_, const_float_0_, const_float_0_, const_float_1_};
++  const std::string& components = REXCVAR_GET(gpu_debug_ps_components);
++  for (size_t i = 0; i < 3 && i < components.size(); ++i) {
++    size_t component = std::string_view("xyzw").find(components[i]);
++    if (component == std::string_view::npos) {
++      continue;
++    }
++    channels[i] = builder_->createTriBuiltinCall(
++        type_float_, ext_inst_glsl_std_450_, GLSLstd450NClamp,
++        builder_->createCompositeExtract(value, type_float_, uint32_t(component)), const_float_0_,
++        const_float_1_);
++  }
++  id_vector_temp_util_.assign(channels, channels + 4);
++  builder_->createStore(builder_->createCompositeConstruct(type_float4_, id_vector_temp_util_),
++                        output_or_var_fragment_data_[0]);
++}
++
+ }  // namespace rex::graphics
+diff --git a/src/graphics/pipeline/shader/spirv_translator_rb.cpp b/src/graphics/pipeline/shader/spirv_translator_rb.cpp
+index 765c141..7a79ac7 100644
+--- a/src/graphics/pipeline/shader/spirv_translator_rb.cpp
++++ b/src/graphics/pipeline/shader/spirv_translator_rb.cpp
+@@ -398,6 +398,8 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
+   // Loaded if needed.
+   spv::Id msaa_samples = spv::NoResult;
+ 
++  StoreDebugProbeColor();
++
+   if (edram_fragment_shader_interlock_ && !FSI_IsDepthStencilEarly()) {
+     if (msaa_samples == spv::NoResult) {
+       msaa_samples = LoadMsaaSamplesFromFlags();
+diff --git a/src/graphics/pipeline/shader/translator.cpp b/src/graphics/pipeline/shader/translator.cpp
+index e472251..400f7eb 100644
+--- a/src/graphics/pipeline/shader/translator.cpp
++++ b/src/graphics/pipeline/shader/translator.cpp
+@@ -917,6 +917,7 @@ void ShaderTranslator::TranslateExecInstructions(const ParsedExecInstruction& in
+         eM_potentially_written_before |= uint8_t(1) << alu_instr.scalar_result.storage_index;
+       }
+     }
++    ProcessInstructionEnd(instr_offset);
+   }
+ 
+   ProcessExecInstructionEnd(instr);

@@ -23,6 +23,7 @@ renumbered once committed, so a fix to an earlier patch is a new patch on top.
 | `0030-io-trace` | `--io_trace` logs every successful file open and every guest thread start and exit, so a run lines up against the Oracle's log (`.tools/xenia-edge/xenia.log`). Off by default. |
 | `0031-frame-shown-observer` | Calls a host observer on the GPU thread after each swap's image is the presenter's newest guest output, numbered on the `GuestSwapCount` clock, so scene runs dump exactly the frame the scripted pad's `at <frame>` names (`src/frame_dumps.h`). |
 | `0032-spirv-fetch-exp-adjust-word` | The SPIR-V translator read a texture fetch's exponent adjust from fetch-constant dword 4 (where bits 12:21 are the LOD bias) instead of dword 3, so every fetch was scaled by 2^(LOD-bias bits): the practice-ground player rendered black and the court lines vanished. The DXBC translator already read dword 3. |
+| `0033-gpu-debug-ps-probe` | `--gpu_debug_ps_hash/_register/_components/_after`: one pixel shader's colour 0 shows a register's components, optionally right after a chosen ucode instruction, for shaders RenderDoc cannot step (FSI). Adds a translator hook after each ALU or fetch instruction. Off unless the hash is set. |
 
 ## Carried over from WWE All Stars (ADR-0004)
 

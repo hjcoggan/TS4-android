@@ -12,6 +12,28 @@ $git = (Get-Command git).Source
 # behind in the tool trees and which then blocked every git command there.
 $env:GIT_OPTIONAL_LOCKS = '0'
 
+# Runs git in a tool tree, waiting out an index.lock that another git process (an editor's git
+# integration refreshing the same tree, say) holds for a moment. A lock still there after the
+# wait while no git process runs at all was left by one that died (seen while new-patch.ps1
+# rewrote the tree), so it is removed.
+function Invoke-TreeGit([string]$Tree, [string[]]$Arguments) {
+    $lockPath = "$Tree/.git/index.lock"
+    for ($attempt = 1; ; $attempt++) {
+        for ($wait = 0; $wait -lt 50 -and (Test-Path -LiteralPath $lockPath); $wait++) {
+            Start-Sleep -Milliseconds 200
+        }
+        if ((Test-Path -LiteralPath $lockPath) -and !(Get-Process git -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $lockPath
+            Write-Host "Removed an ownerless $($Tree | Split-Path -Leaf)/.git/index.lock"
+        }
+        try {
+            return Invoke-Hidden $git (@('-C', $Tree) + $Arguments)
+        } catch {
+            if ($attempt -ge 5 -or !(Test-Path -LiteralPath "$Tree/.git/index.lock")) { throw }
+        }
+    }
+}
+
 $series = @(
     @{ Patches = 'patches/rexglue'; Tree = '.tools/rexglue-source' }
 )
@@ -33,8 +55,8 @@ foreach ($entry in $series) {
         Write-Output "Removed a stale $($entry.Tree)/.git/index.lock from $($lock.LastWriteTime)"
     }
     if ($Reset) {
-        $null = Invoke-Hidden $git @('-C', $tree, 'checkout', '--', '.')
-        $null = Invoke-Hidden $git @('-C', $tree, 'clean', '-fdq')
+        $null = Invoke-TreeGit $tree @('checkout', '--', '.')
+        $null = Invoke-TreeGit $tree @('clean', '-fdq')
         Remove-Item -LiteralPath $stamp -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $stamp) {
@@ -44,13 +66,13 @@ foreach ($entry in $series) {
         }
         throw "$($entry.Tree) carries a different patch set. Rerun with -Reset to apply this one from scratch."
     }
-    $dirty = (Invoke-Hidden $git @('-C', $tree, 'status', '--porcelain', '--ignore-submodules=dirty') | Out-String).Trim()
+    $dirty = (Invoke-TreeGit $tree @('status', '--porcelain', '--ignore-submodules=dirty') | Out-String).Trim()
     if ($dirty) { throw "$($entry.Tree) has local changes and no patch stamp. Rerun with -Reset to discard them." }
     foreach ($patch in $patches) {
         $result = & $git -C $tree apply --whitespace=nowarn $patch.FullName 2>&1
         if ($LASTEXITCODE -ne 0) {
-            $null = Invoke-Hidden $git @('-C', $tree, 'checkout', '--', '.')
-            $null = Invoke-Hidden $git @('-C', $tree, 'clean', '-fdq')
+            $null = Invoke-TreeGit $tree @('checkout', '--', '.')
+            $null = Invoke-TreeGit $tree @('clean', '-fdq')
             throw "Patch $($entry.Patches)/$($patch.Name) does not apply to $($entry.Tree); the tree was reset.`n$($result -join "`n")"
         }
     }

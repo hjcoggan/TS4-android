@@ -44,6 +44,9 @@ if ($InputScript) {
     Copy-Item -LiteralPath $InputScript "$run/input.txt"
     $arguments += "--ts4_input_script=$run/input.txt"
 }
+# pwsh -File hands an array over as one string ('--a=1','--b=2'): split it back into flags.
+$ExtraArguments = @($ExtraArguments | ForEach-Object { $_ -split "[',\s]+(?=--)" } |
+    ForEach-Object { $_.Trim("' ,") } | Where-Object { $_ })
 foreach ($argument in $ExtraArguments) {
     if ($argument -notmatch '^--[a-z0-9_]+=') { throw "Invalid runtime argument: $argument" }
     $arguments += $argument
