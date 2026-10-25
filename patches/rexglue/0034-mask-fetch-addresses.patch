@@ -1,0 +1,182 @@
+diff --git a/include/rex/graphics/pipeline/shader/spirv_translator.h b/include/rex/graphics/pipeline/shader/spirv_translator.h
+index e8b1e6b..469302d 100644
+--- a/include/rex/graphics/pipeline/shader/spirv_translator.h
++++ b/include/rex/graphics/pipeline/shader/spirv_translator.h
+@@ -33,7 +33,7 @@ class SpirvShaderTranslator : public ShaderTranslator {
+     // TODO(Triang3l): Change to 0xYYYYMMDD once it's out of the rapid
+     // prototyping stage (easier to do small granular updates with an
+     // incremental counter).
+-    static constexpr uint32_t kVersion = 12;
++    static constexpr uint32_t kVersion = 13;
+ 
+     enum class DepthStencilMode : uint32_t {
+       kNoModifiers,
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 19874a5..0ba9991 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -2506,19 +2506,24 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint3
+                       vfetch_index, vfetch_constant.dword_0, vfetch_constant.dword_1);
+           return false;
+       }
++      // Mask to physical, as the shader does: the guest may fetch through a mirror window
++      // (0xC0000000 and up, as Top Spin 4's XPS geometry does), which shared memory would
++      // otherwise reject as out of bounds and drop the draw (as Xenia Edge 2fce2d8).
++      const uint32_t vfetch_address_dwords =
++          xenos::CpuToGpu(uint32_t(vfetch_constant.address) << 2) >> 2;
+       VertexBufferState& state = vertex_buffer_states_[vfetch_index];
+-      if (state.address == vfetch_constant.address && state.size == vfetch_constant.size) {
++      if (state.address == vfetch_address_dwords && state.size == vfetch_constant.size) {
+         vertex_buffers_in_sync_[vfetch_index >> 6] |= vfetch_bit;
+         continue;
+       }
+-      if (!shared_memory_->RequestRange(vfetch_constant.address << 2, vfetch_constant.size << 2)) {
++      if (!shared_memory_->RequestRange(vfetch_address_dwords << 2, vfetch_constant.size << 2)) {
+         REXGPU_ERROR(
+             "Failed to request vertex buffer at 0x{:08X} (size {}) in the "
+             "shared memory",
+-            vfetch_constant.address << 2, vfetch_constant.size << 2);
++            vfetch_address_dwords << 2, vfetch_constant.size << 2);
+         return false;
+       }
+-      state.address = vfetch_constant.address;
++      state.address = vfetch_address_dwords;
+       state.size = vfetch_constant.size;
+       vertex_buffers_in_sync_[vfetch_index >> 6] |= vfetch_bit;
+     }
+diff --git a/src/graphics/pipeline/shader/spirv_translator_fetch.cpp b/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
+index c1ce983..eace4d7 100644
+--- a/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
++++ b/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
+@@ -67,10 +67,15 @@ void SpirvShaderTranslator::ProcessVertexFetchInstruction(
+     // not a texture fetch) here instead of dropping draws with invalid vertex
+     // fetch constants on the CPU when proper bound checks are added - vfetch
+     // may be conditional, so fetch constants may also be used conditionally.
++    // The dword address, masked to physical as on the CPU side: the guest may fetch through
++    // a mirror window (as Xenia Edge 2fce2d8).
+     address = builder_->createUnaryOp(
+         spv::OpBitcast, type_int_,
+-        builder_->createBinOp(spv::OpShiftRightLogical, type_uint_, fetch_constant_word_0,
+-                              builder_->makeUintConstant(2)));
++        builder_->createBinOp(
++            spv::OpBitwiseAnd, type_uint_,
++            builder_->createBinOp(spv::OpShiftRightLogical, type_uint_, fetch_constant_word_0,
++                                  builder_->makeUintConstant(2)),
++            builder_->makeUintConstant(0x1FFFFFFF >> 2)));
+     if (instr.attributes.stride) {
+       // Convert the index to an integer by flooring or by rounding to the
+       // nearest (as floor(index + 0.5) because rounding to the nearest even
+diff --git a/src/graphics/pipeline/shader/spirv_translator_memexport.cpp b/src/graphics/pipeline/shader/spirv_translator_memexport.cpp
+index 14c0ea9..1640dc8 100644
+--- a/src/graphics/pipeline/shader/spirv_translator_memexport.cpp
++++ b/src/graphics/pipeline/shader/spirv_translator_memexport.cpp
+@@ -710,13 +710,17 @@ void SpirvShaderTranslator::ExportToMemory(uint8_t export_eM) {
+ 
+   // Get the eM0 address in bytes.
+   // Left-shift the stream base address by 2 to both convert it from dwords to
+-  // bytes and drop the upper bits.
++  // bytes and drop the upper bits, then mask it to physical as the CPU side does (a mirror
++  // window address would be past the shared memory; as Xenia Edge 2fce2d8).
+   spv::Id const_uint_2 = builder_->makeUintConstant(2);
+   spv::Id eM0_address_bytes = builder_->createBinOp(
+       spv::OpIAdd, type_uint_,
+-      builder_->createBinOp(spv::OpShiftLeftLogical, type_uint_,
+-                            builder_->createCompositeExtract(eA_vector, type_uint_, 0),
+-                            const_uint_2),
++      builder_->createBinOp(
++          spv::OpBitwiseAnd, type_uint_,
++          builder_->createBinOp(spv::OpShiftLeftLogical, type_uint_,
++                                builder_->createCompositeExtract(eA_vector, type_uint_, 0),
++                                const_uint_2),
++          builder_->makeUintConstant(0x1FFFFFFF)),
+       builder_->createBinOp(spv::OpShiftLeftLogical, type_uint_, eM0_index, element_bytes_log2));
+ 
+   // Store based on the element size.
+diff --git a/src/graphics/primitive_processor.cpp b/src/graphics/primitive_processor.cpp
+index d49e9c3..1f7dfbd 100644
+--- a/src/graphics/primitive_processor.cpp
++++ b/src/graphics/primitive_processor.cpp
+@@ -477,7 +477,9 @@ bool PrimitiveProcessor::Process(ProcessingResult& result_out) {
+       // Get the index buffer memory range.
+       uint32_t index_size_log2 = guest_index_format == xenos::IndexFormat::kInt16 ? 1 : 2;
+       // The base should already be aligned, but aligning here too for safety.
+-      guest_index_base = regs[XE_GPU_REG_VGT_DMA_BASE] & ~uint32_t((1 << index_size_log2) - 1);
++      // Masked to physical: the base may be in a mirror window (as Xenia Edge 2fce2d8).
++      guest_index_base =
++          xenos::CpuToGpu(regs[XE_GPU_REG_VGT_DMA_BASE]) & ~uint32_t((1 << index_size_log2) - 1);
+       guest_index_buffer_needed_bytes = guest_draw_vertex_count << index_size_log2;
+       if (guest_index_base > SharedMemory::kBufferSize ||
+           SharedMemory::kBufferSize - guest_index_base < guest_index_buffer_needed_bytes) {
+@@ -615,7 +617,9 @@ bool PrimitiveProcessor::Process(ProcessingResult& result_out) {
+     // Get the index buffer memory range.
+     uint32_t index_size_log2 = guest_index_format == xenos::IndexFormat::kInt16 ? 1 : 2;
+     // The base should already be aligned, but aligning here too for safety.
+-    guest_index_base = regs[XE_GPU_REG_VGT_DMA_BASE] & ~uint32_t((1 << index_size_log2) - 1);
++    // Masked to physical: the base may be in a mirror window (as Xenia Edge 2fce2d8).
++    guest_index_base =
++        xenos::CpuToGpu(regs[XE_GPU_REG_VGT_DMA_BASE]) & ~uint32_t((1 << index_size_log2) - 1);
+     guest_index_buffer_needed_bytes = guest_draw_vertex_count << index_size_log2;
+     if (guest_index_base > SharedMemory::kBufferSize ||
+         SharedMemory::kBufferSize - guest_index_base < guest_index_buffer_needed_bytes) {
+diff --git a/src/graphics/util/draw.cpp b/src/graphics/util/draw.cpp
+index 305380e..ed5c650 100644
+--- a/src/graphics/util/draw.cpp
++++ b/src/graphics/util/draw.cpp
+@@ -665,12 +665,14 @@ void AddMemExportRanges(const RegisterFile& regs, const Shader& shader,
+         break;
+     }
+     uint32_t stream_size_bytes = stream.index_count * (format_info.bits_per_pixel >> 3);
++    // Masked to physical, as the shader does (as Xenia Edge 2fce2d8).
++    const uint32_t base_address_dwords = xenos::CpuToGpu(uint32_t(stream.base_address) << 2) >> 2;
+     // Try to reduce the number of shared memory operations when writing
+     // different elements into the same buffer through different exports
+     // (happens in 4D5307E6).
+     bool range_reused = false;
+     for (MemExportRange& range : ranges_out) {
+-      if (range.base_address_dwords == stream.base_address) {
++      if (range.base_address_dwords == base_address_dwords) {
+         range.size_bytes = std::max(range.size_bytes, stream_size_bytes);
+         range_reused = true;
+         break;
+@@ -678,7 +680,7 @@ void AddMemExportRanges(const RegisterFile& regs, const Shader& shader,
+     }
+     // Add a new range if haven't expanded an existing one.
+     if (!range_reused) {
+-      ranges_out.emplace_back(uint32_t(stream.base_address), stream_size_bytes);
++      ranges_out.emplace_back(base_address_dwords, stream_size_bytes);
+     }
+   }
+ }
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 774f1ac..19fef8b 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -4084,19 +4084,24 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+                       vfetch_index, vfetch_constant.dword_0, vfetch_constant.dword_1);
+           return false;
+       }
++      // Mask to physical, as the shader does: the guest may fetch through a mirror window
++      // (0xC0000000 and up, as Top Spin 4's XPS geometry does), which shared memory would
++      // otherwise reject as out of bounds and drop the draw (as Xenia Edge 2fce2d8).
++      const uint32_t vfetch_address_dwords =
++          xenos::CpuToGpu(uint32_t(vfetch_constant.address) << 2) >> 2;
+       VertexBufferState& state = vertex_buffer_states_[vfetch_index];
+-      if (state.address == vfetch_constant.address && state.size == vfetch_constant.size) {
++      if (state.address == vfetch_address_dwords && state.size == vfetch_constant.size) {
+         vertex_buffers_in_sync_[vfetch_index >> 6] |= vfetch_bit;
+         continue;
+       }
+-      if (!shared_memory_->RequestRange(vfetch_constant.address << 2, vfetch_constant.size << 2)) {
++      if (!shared_memory_->RequestRange(vfetch_address_dwords << 2, vfetch_constant.size << 2)) {
+         REXGPU_ERROR(
+             "Failed to request vertex buffer at 0x{:08X} (size {}) in the shared "
+             "memory",
+-            vfetch_constant.address << 2, vfetch_constant.size << 2);
++            vfetch_address_dwords << 2, vfetch_constant.size << 2);
+         return false;
+       }
+-      state.address = vfetch_constant.address;
++      state.address = vfetch_address_dwords;
+       state.size = vfetch_constant.size;
+       vertex_buffers_in_sync_[vfetch_index >> 6] |= vfetch_bit;
+     }

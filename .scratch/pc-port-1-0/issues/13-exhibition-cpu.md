@@ -22,3 +22,9 @@
   - `scripts/input/boot-to-exhibition.txt` on the new default (`analysis/smoke-20261025-110104`): rallies 60 fps, close-ups 30 (as on Edge), menus 55-60. Every dump renders. The mid-match frames match Edge's `ref-300.png` by eye.
   - The regression guard is the `boot-main-menu` scene: it passes on the default, and with `REX_EXECUTE_UNCLIPPED_DRAW_VS_ON_CPU=false` it fails, since frame 1400 is black.
   - Still in the log: `Failed to request vertex buffer at 0x-3FEFFF00` with a failed draw, 384 times in the owner's match. Not looked at yet.
+- 2026-10-25 (Claude), no game run (owner's request): the `Failed to request vertex buffer at 0x-3FEFFF00` draws. Research (`docs/research/recomp-community-help.md`, section 1) traced them:
+  - The address is `0xC0100100` (printed signed): a mirror-window address that ReXGlue hands to shared memory unmasked, so the request fails and the draw is dropped.
+  - Edge masks vertex-fetch, index-base and memexport addresses to physical, on the CPU side and in the shaders (`2fce2d8`), and its log shows no such failure.
+  - Canary labels Top Spin 4 `gpu-xps`, and both Modules import `KeLockL2`, so the geometry is probably XPS.
+  Ported Edge's fix as patch `0034-mask-fetch-addresses`. The game builds; whether the dropped geometry now draws is unobserved. To check on the next allowed run: the error count in the log during a match, and the frames against Edge.
+  Two follow-ups if geometry comes out stale: ReXGlue doesn't write-watch the `0x7F000000` XPS window (Canary `2270830` makes it a physical heap), and its vertex-buffer residency cache never re-uploads a buffer rewritten in place (rexglue #510; Edge dropped the cache in `c2674b1`).
