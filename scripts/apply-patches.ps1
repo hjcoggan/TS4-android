@@ -3,7 +3,9 @@
 # the exact series applied instead of checking patches one by one. A patch that fails leaves the
 # tree as it was before this run and stops with the patch's name. -Reset first discards the
 # tree's changes (the applied series and any edits), so a changed series applies from scratch.
-param([switch]$Reset)
+# -Tool rexglue or -Tool xenosrecomp limits the run to that series, so resetting one tree leaves
+# the other's files (and the builds that depend on their timestamps) untouched.
+param([switch]$Reset, [ValidateSet('rexglue', 'xenosrecomp')][string[]]$Tool = @())
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/Invoke-Hidden.ps1"
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -38,6 +40,7 @@ $series = @(
     @{ Patches = 'patches/rexglue'; Tree = '.tools/rexglue-source' },
     @{ Patches = 'patches/xenosrecomp'; Tree = '.tools/xenosrecomp' }
 )
+if ($Tool) { $series = @($series | Where-Object { ($_.Patches -replace '^patches/', '') -in $Tool }) }
 foreach ($entry in $series) {
     $tree = "$projectRoot/$($entry.Tree)"
     $patches = @(Get-ChildItem "$projectRoot/$($entry.Patches)" -Filter '*.patch' | Sort-Object Name)

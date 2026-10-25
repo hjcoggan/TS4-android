@@ -25,5 +25,6 @@ __pycache__/
 /metadata/
 # The local Ghidra project of the TU1 Modules (scripts/ghidra-project.ps1)
 /ghidra/
-# Agent worktrees
-/.claude/
+# Agent worktrees and local settings; the shared project settings are versioned
+/.claude/*
+!/.claude/settings.json

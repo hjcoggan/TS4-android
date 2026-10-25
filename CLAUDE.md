@@ -7,6 +7,7 @@ Goals, 1.0 scope, milestones and way of work: `docs/goals.md`. Read it before st
 - A change is done only after it passes the smoke run and has been compared with the Oracle (Xenia Edge).
 - Before committing, run `pwsh scripts/build.ps1 -Action Check`.
 - Smoke run or codegen fails (unregistered target, crash, stall): `docs/agents/codegen-debugging.md`.
+- Native draws differently from Classic, or adding a D3D hook: `docs/agents/native-debugging.md`.
 
 ## Agent skills
 

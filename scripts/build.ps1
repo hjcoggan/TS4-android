@@ -3,7 +3,8 @@ param(
     # Launcher publishes the preparation front end (topspin4-setup) to out/launcher/publish;
     # LauncherTest runs the launcher's xUnit tests. Neither needs game data.
     # Check runs every test that needs no game data: pytest, the host unit tests (Test), then
-    # LauncherTest. Run it before committing. Test builds and runs the host unit tests
+    # LauncherTest; with generated code present, also scripts/d3d_callsites.py. Run it before
+    # committing. Test builds and runs the host unit tests
     # (tests/host) alone.
     [ValidateSet('Configure', 'Build', 'Codegen', 'Launcher', 'LauncherTest', 'Check', 'Test')][string]$Action = 'Build',
     [string]$VisualStudioRoot = 'C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools',
@@ -24,6 +25,12 @@ New-Item -ItemType Directory -Force analysis | Out-Null
 if ($Action -eq 'Check') {
     & python -m pytest "$projectRoot/tests" -q
     if ($LASTEXITCODE -ne 0) { throw "pytest failed (exit $LASTEXITCODE)" }
+    # The D3D hooks' argument registers against the game's call sites; needs the generated code,
+    # which a tree without game data does not have.
+    if ((Test-Path "$projectRoot/generated/loader") -and (Test-Path "$projectRoot/generated/swing")) {
+        & python "$PSScriptRoot/d3d_callsites.py"
+        if ($LASTEXITCODE -ne 0) { throw "d3d_callsites.py flagged hook arguments (exit $LASTEXITCODE)" }
+    }
     & $PSCommandPath -Action Test -Jobs $Jobs -Configuration $Configuration
     & $PSCommandPath -Action LauncherTest -Jobs $Jobs
     return

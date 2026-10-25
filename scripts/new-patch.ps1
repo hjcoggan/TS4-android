@@ -52,4 +52,5 @@ $path = "$folder/{0:D4}-$Name.patch" -f $number
 # --output writes git's bytes as they are (no console re-encoding).
 $null = Invoke-Git @('diff', '--binary', "--output=$path", $seriesTree, $workTree)
 Write-Output "Wrote patches/$Tool/$(Split-Path $path -Leaf)"
-& "$PSScriptRoot/apply-patches.ps1" -Reset
+# Only this series: resetting the other tree would touch every file in it and force a rebuild.
+& "$PSScriptRoot/apply-patches.ps1" -Reset -Tool $Tool
