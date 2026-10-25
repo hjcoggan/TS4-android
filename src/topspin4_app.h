@@ -15,6 +15,7 @@
 #include "crash_report.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
+#include "online_unavailable.h"
 #include "remapped_input.h"
 #include "script_input.h"
 #include "settings/config_file.h"
@@ -78,10 +79,12 @@ class TopSpin4App : public rex::ReXApp {
     // between them made the 360 Hz variable-refresh panel show 10 ms / 28 ms pairs through
     // every cutaway; skipping that present showed an even 33 ms, with play unchanged (PresentMon,
     // ticket 16). So off here, unless the command line, environment or config set it.
-    if (const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo("present_repeat_held_vblanks");
-        flag && flag->source == rex::cvar::Source::kDefault) {
-      rex::cvar::SetFlagByName("present_repeat_held_vblanks", "false");
-    }
+    SetUnlessSetElsewhere("present_repeat_held_vblanks", "false");
+    // There is no Xbox LIVE to sign in to. Where the game still opens the sign-in UI (its LIVE
+    // prompt in another language, src/online_unavailable.h), the SDK's stub broadcast a sign-in
+    // change that never happened, too early for the game's listener, and the menu waited
+    // forever. The picker closing with no change returns the game to its menu (ticket 15).
+    SetUnlessSetElsewhere("signin_ui_closes_unchanged", "true");
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
     topspin4::crash::SetSettingsFile(path);
@@ -118,7 +121,16 @@ class TopSpin4App : public rex::ReXApp {
     }
   }
 
+  // A cvar's value for Top Spin 4, unless the command line, environment or config set it.
+  static void SetUnlessSetElsewhere(std::string_view name, std::string_view value) {
+    if (const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(name);
+        flag && flag->source == rex::cvar::Source::kDefault) {
+      rex::cvar::SetFlagByName(name, value);
+    }
+  }
+
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
     // input system, so no binding can steer it.
     topspin4::InstallRemappedInput(config);

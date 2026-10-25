@@ -1,0 +1,17 @@
+diff --git a/src/kernel/xam/xam_ui.cpp b/src/kernel/xam/xam_ui.cpp
+index 80c64d3..09b7bc6 100644
+--- a/src/kernel/xam/xam_ui.cpp
++++ b/src/kernel/xam/xam_ui.cpp
+@@ -295,6 +295,12 @@ u32 XamShowMessageBoxUI_entry(u32 user_index, mapped_wstring title_ptr, mapped_w
+         REX_KERNEL_MEMORY()->TranslateVirtual(button_ptr));
+     buttons.push_back(rex::string::to_utf8(button));
+   }
++  {
++    std::string listed;
++    for (const std::string& button : buttons) listed += (listed.empty() ? "" : " | ") + button;
++    REXKRNL_INFO("XamShowMessageBoxUI: \"{}\": \"{}\" [{}] focus {}", title, text_str, listed,
++                 uint32_t(active_button));
++  }
+ 
+   X_RESULT result;
+   if (REXCVAR_GET(headless)) {

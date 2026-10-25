@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, load_scene, repeatability,  # noqa: E402
+from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, load_scene, log_failures, repeatability,  # noqa: E402
                           run_failures)
 
 GOOD = """
@@ -49,11 +49,26 @@ def test_check_overrides_one_value_and_keeps_the_rest():
     ('name = "x"\nfrom = "boot"\ninput = ""\n[[capture]]\nframe = -3\n', "frame"),
     ('name = "x"\nfrom = "boot"\ninput = ""\n[[capture]]\nframe = 1\n[check]\nfoo = 1\n', "foo"),
     ('name = "x"\nfrom = "boot"\ninput = ""\n[[capture]]\nframe = 1\n[check]\nruns = 1\n', "runs"),
+    ('name = "x"\nfrom = "boot"\nlog = "one"\ninput = ""\n[[capture]]\nframe = 1\n', "log"),
     ("name = ", "TOML"),
 ])
 def test_bad_scenes_say_what_is_wrong(text, says):
     with pytest.raises(SceneError, match=says):
         load_scene(text)
+
+
+def test_a_scene_names_the_log_lines_every_run_must_show():
+    scene = load_scene('log = ["closed with no sign-in change"]\n' + GOOD)
+    assert scene.log == ["closed with no sign-in change"]
+    assert load_scene(GOOD).log == []
+
+
+def test_a_run_fails_on_each_expected_log_text_it_lacks():
+    log = "[info] XamShowMessageBoxUI: rewritten by the host\n"
+    assert log_failures(log, ["rewritten by the host"]) == []
+    assert log_failures(log, ["rewritten by the host", "XamShowSigninUI"]) == [
+        "log has no line with 'XamShowSigninUI'"]
+    assert log_failures(None, ["rewritten"]) == ["log has no line with 'rewritten'"]
 
 
 def report(*frames, guest_swaps=None, max_luma=200):

@@ -98,6 +98,7 @@ class Scene:
     input: str
     frames: list
     check: dict = field(default_factory=lambda: dict(DEFAULTS))
+    log: list = field(default_factory=list)  # text every run's runtime.log must contain
 
 
 def load_scene(text):
@@ -133,7 +134,16 @@ def load_scene(text):
     if check["runs"] < 2:
         raise SceneError(f"scene '{name}': [check] runs must be at least 2, so captures can be "
                          "compared")
-    return Scene(name, script, sorted(set(frames)), check)
+    log = data.get("log", [])
+    if not isinstance(log, list) or not all(isinstance(line, str) and line for line in log):
+        raise SceneError(f"scene '{name}': 'log' must be a list of non-empty strings")
+    return Scene(name, script, sorted(set(frames)), check, log)
+
+
+def log_failures(log_text, expected):
+    """What a run's log lacks: each expected text it does not contain (a missing log lacks all)."""
+    return [f"log has no line with {text!r}" for text in expected
+            if log_text is None or text not in log_text]
 
 
 def run_failures(report, frames):
@@ -241,7 +251,11 @@ def run_scene(scene, out, exe):
     with GameRunLock(LOCK):
         for label in labels:
             shots[label], report = run_game(label, scene, out, exe)
-            runs[label] = {"report": report, "failures": run_failures(report, scene.frames)}
+            log_path = out / label / "runtime.log"
+            log_text = log_path.read_text(encoding="utf-8", errors="replace")                 if log_path.exists() else None
+            runs[label] = {"report": report,
+                           "failures": run_failures(report, scene.frames) +
+                           log_failures(log_text, scene.log)}
     captures = []
     for frame in scene.frames:
         missing = [label for label in labels if frame not in shots[label]]

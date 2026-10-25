@@ -1,0 +1,120 @@
+diff --git a/include/rex/system/kernel_state.h b/include/rex/system/kernel_state.h
+index 9b9cf9e..ffb52b1 100644
+--- a/include/rex/system/kernel_state.h
++++ b/include/rex/system/kernel_state.h
+@@ -321,6 +321,16 @@ class KernelState {
+       std::function<X_RESULT(uint32_t&, uint32_t&)> completion_callback, uint32_t overlapped_ptr,
+       std::function<void()> pre_callback = nullptr, std::function<void()> post_callback = nullptr);
+ 
++  // Runs `fn` on the kernel's dispatch thread, after the work queued before it. The thread is
++  // joined at shutdown, so a wait inside `fn` gives up once dispatch_running() is false.
++  void Dispatch(std::function<void()> fn);
++  bool dispatch_running() const { return dispatch_thread_running_; }
++
++  // Notification listeners created so far (XamNotifyCreateListener), so a system UI can wait
++  // for the title's listener before broadcasting to it.
++  uint64_t notify_listeners_created() const { return notify_listeners_created_; }
++  void NoteNotifyListenerCreated() { ++notify_listeners_created_; }
++
+   bool Save(stream::ByteStream* stream);
+   bool Restore(stream::ByteStream* stream);
+ 
+@@ -395,6 +405,7 @@ class KernelState {
+   util::NativeList dpc_list_;
+   std::condition_variable_any dispatch_cond_;
+   std::list<std::function<void()>> dispatch_queue_;
++  std::atomic<uint64_t> notify_listeners_created_{0};
+ 
+   friend class XObject;
+ };
+diff --git a/src/kernel/xam/xam_notify.cpp b/src/kernel/xam/xam_notify.cpp
+index 9abcef6..a786da7 100644
+--- a/src/kernel/xam/xam_notify.cpp
++++ b/src/kernel/xam/xam_notify.cpp
+@@ -35,6 +35,7 @@ uint32_t xeXamNotifyCreateListener(uint64_t mask, uint32_t is_system, uint32_t m
+ 
+   // Handle ref is incremented, so return that.
+   uint32_t handle = listener->handle();
++  REX_KERNEL_STATE()->NoteNotifyListenerCreated();
+ 
+   REXKRNL_DEBUG(
+       "XamNotifyCreateListener(mask={:#018x}, is_system={}, max_version={}) -> handle={:08X}", mask,
+diff --git a/src/kernel/xam/xam_user.cpp b/src/kernel/xam/xam_user.cpp
+index 8778066..8523518 100644
+--- a/src/kernel/xam/xam_user.cpp
++++ b/src/kernel/xam/xam_user.cpp
+@@ -12,6 +12,7 @@
+ // Disable warnings about unused parameters for kernel functions
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
++#include <chrono>
+ #include <cstring>
+ 
+ #include <rex/cvar.h>
+@@ -27,8 +28,13 @@
+ #include <rex/system/xio.h>
+ #include <rex/system/xthread.h>
+ #include <rex/system/xtypes.h>
++#include <rex/thread.h>
+ 
+ REXCVAR_DEFINE_UINT32(user_language, 1, "Kernel", "User's language ID");
++REXCVAR_DEFINE_BOOL(signin_ui_closes_unchanged, false, "Kernel",
++                    "XamShowSigninUI acts as a picker the player closed: XN_SYS_UI opens and "
++                    "closes after the title's listener exists, and no sign-in change is "
++                    "broadcast (off: a sign-in change and XN_SYS_UI 0 at once, inside the call)");
+ 
+ namespace rex {
+ namespace kernel {
+@@ -475,9 +481,35 @@ u32 XamUserAreUsersFriends_entry(u32 user_index, u32 unk1, u32 unk2, mapped_u32
+   }
+ }
+ 
++constexpr uint32_t kXNotificationSystemUI = 0x00000009;  // XN_SYS_UI
++
+ u32 XamShowSigninUI_entry(u32 unk, u32 unk_mask) {
+   // Mask values vary. Probably matching user types? Local/remote?
+ 
++  if (REXCVAR_GET(signin_ui_closes_unchanged)) {
++    // The player closed the picker: the system UI opens and closes, and no sign-in changed.
++    // As on the console the call returns first: titles create their XN_SYS_UI listener after
++    // it and wait for 1, then 0 (Top Spin 4's Swing 0x888C1570). So the kernel's dispatch
++    // thread waits for that listener (up to 2 s), then broadcasts; it also keeps two calls'
++    // broadcasts from interleaving.
++    REXKRNL_INFO("XamShowSigninUI({:08X}, {:08X}): closed with no sign-in change", uint32_t(unk),
++                 uint32_t(unk_mask));
++    KernelState* kernel = REX_KERNEL_STATE();
++    const uint64_t listeners = kernel->notify_listeners_created();
++    kernel->Dispatch([kernel, listeners] {
++      for (int waited = 0; waited < 2000 && kernel->dispatch_running() &&
++                           kernel->notify_listeners_created() == listeners;
++           waited += 5) {
++        rex::thread::Sleep(std::chrono::milliseconds(5));
++      }
++      if (!kernel->dispatch_running()) return;
++      kernel->BroadcastNotification(kXNotificationSystemUI, 1);
++      rex::thread::Sleep(std::chrono::milliseconds(100));
++      kernel->BroadcastNotification(kXNotificationSystemUI, 0);
++    });
++    return X_ERROR_SUCCESS;
++  }
++
+   // To fix game modes that display a 4 profile signin UI (even if playing
+   // alone):
+   // XN_SYS_SIGNINCHANGED
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 7ac6489..7b84771 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -1267,6 +1267,12 @@ void KernelState::CompleteOverlappedDeferredEx(
+   dispatch_cond_.notify_all();
+ }
+ 
++void KernelState::Dispatch(std::function<void()> fn) {
++  auto global_lock = global_critical_region_.Acquire();
++  dispatch_queue_.push_back(std::move(fn));
++  dispatch_cond_.notify_all();
++}
++
+ DPCImpersonationScope KernelState::BeginDPCImpersonation() {
+   auto* thread = XThread::GetCurrentThread();
+   auto* ctx = thread->thread_state()->context();

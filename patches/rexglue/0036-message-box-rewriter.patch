@@ -1,0 +1,126 @@
+diff --git a/include/rex/kernel/xam/message_box.h b/include/rex/kernel/xam/message_box.h
+new file mode 100644
+index 0000000..792939c
+--- /dev/null
++++ b/include/rex/kernel/xam/message_box.h
+@@ -0,0 +1,30 @@
++/**
++ * @file        kernel/xam/message_box.h
++ * @brief       Host hook on the title's XamShowMessageBoxUI dialogs
++ */
++
++#pragma once
++
++#include <cstdint>
++#include <functional>
++#include <optional>
++#include <string>
++#include <vector>
++
++namespace rex::kernel::xam {
++
++// A message box as the title asked for it, before it shows.
++struct TitleMessageBox {
++  std::string title;
++  std::string text;
++  std::vector<std::string> buttons;
++  uint32_t active_button = 0;
++};
++
++// Called for each XamShowMessageBoxUI before the dialog shows (or before headless answers it).
++// It may change the box; when it returns an answer, the title gets that button index whatever
++// the player picks, else the player's choice. One rewriter; nullptr removes it.
++using MessageBoxRewriter = std::function<std::optional<uint32_t>(TitleMessageBox& box)>;
++void SetMessageBoxRewriter(MessageBoxRewriter rewriter);
++
++}  // namespace rex::kernel::xam
+diff --git a/src/kernel/xam/xam_ui.cpp b/src/kernel/xam/xam_ui.cpp
+index 09b7bc6..d39e1f1 100644
+--- a/src/kernel/xam/xam_ui.cpp
++++ b/src/kernel/xam/xam_ui.cpp
+@@ -22,6 +22,7 @@ REXCVAR_DEFINE_BOOL(headless, false, "Kernel",
+ REXCVAR_DEFINE_STRING(headless_keyboard_text, "", "Kernel",
+                       "With headless: the text a keyboard prompt without default text "
+                       "answers (automated runs that must name something)");
++#include <rex/kernel/xam/message_box.h>
+ #include <rex/kernel/xam/private.h>
+ #include <rex/hook.h>
+ #include <rex/types.h>
+@@ -267,6 +268,9 @@ class MessageBoxDialog : public XamDialog {
+   uint32_t chosen_button_ = 0;
+ };
+ 
++// Set once by the host at startup (message_box.h).
++MessageBoxRewriter g_message_box_rewriter;
++
+ // https://www.se7ensins.com/forums/threads/working-xshowmessageboxui.844116/
+ u32 XamShowMessageBoxUI_entry(u32 user_index, mapped_wstring title_ptr, mapped_wstring text_ptr,
+                               u32 button_count, mapped_u32 button_ptrs, u32 active_button,
+@@ -301,12 +305,28 @@ u32 XamShowMessageBoxUI_entry(u32 user_index, mapped_wstring title_ptr, mapped_w
+     REXKRNL_INFO("XamShowMessageBoxUI: \"{}\": \"{}\" [{}] focus {}", title, text_str, listed,
+                  uint32_t(active_button));
+   }
++  uint32_t focus = uint32_t(active_button);
++  std::optional<uint32_t> answer;
++  if (g_message_box_rewriter) {
++    TitleMessageBox box{title, text_str, buttons, focus};
++    answer = g_message_box_rewriter(box);
++    if (box.title != title || box.text != text_str || box.buttons != buttons ||
++        box.active_button != focus || answer) {
++      title = std::move(box.title);
++      text_str = std::move(box.text);
++      buttons = std::move(box.buttons);
++      focus = box.active_button;
++      REXKRNL_INFO("XamShowMessageBoxUI: rewritten by the host to \"{}\" ({} buttons){}", text_str,
++                   buttons.size(),
++                   answer ? fmt::format("; the title gets button {}", *answer) : std::string());
++    }
++  }
+ 
+   X_RESULT result;
+   if (REXCVAR_GET(headless)) {
+     // Auto-pick the focused button.
+-    auto run = [result_ptr, active_button]() -> X_RESULT {
+-      *result_ptr = static_cast<uint32_t>(active_button);
++    auto run = [result_ptr, focus, answer]() -> X_RESULT {
++      *result_ptr = answer.value_or(focus);
+       return X_ERROR_SUCCESS;
+     };
+     result = xeXamDispatchHeadless(run, overlapped.guest_address());
+@@ -326,20 +346,20 @@ u32 XamShowMessageBoxUI_entry(u32 user_index, mapped_wstring title_ptr, mapped_w
+         // config.pszMainIcon = TD_INFORMATION_ICON;
+         break;
+     }
+-    auto close = [result_ptr](MessageBoxDialog* dialog) -> X_RESULT {
+-      *result_ptr = dialog->chosen_button();
++    auto close = [result_ptr, answer](MessageBoxDialog* dialog) -> X_RESULT {
++      *result_ptr = answer.value_or(dialog->chosen_button());
+       return X_ERROR_SUCCESS;
+     };
+     const Runtime* emulator = REX_KERNEL_STATE()->emulator();
+     ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+     if (imgui_drawer) {
+       result = xeXamDispatchDialog<MessageBoxDialog>(
+-          new MessageBoxDialog(imgui_drawer, title, text_str, buttons, active_button), close,
++          new MessageBoxDialog(imgui_drawer, title, text_str, buttons, focus), close,
+           overlapped.guest_address());
+     } else {
+       // Fallback to headless if no drawer available
+-      auto run = [result_ptr, active_button]() -> X_RESULT {
+-        *result_ptr = static_cast<uint32_t>(active_button);
++      auto run = [result_ptr, focus, answer]() -> X_RESULT {
++        *result_ptr = answer.value_or(focus);
+         return X_ERROR_SUCCESS;
+       };
+       result = xeXamDispatchHeadless(run, overlapped.guest_address());
+@@ -348,6 +368,10 @@ u32 XamShowMessageBoxUI_entry(u32 user_index, mapped_wstring title_ptr, mapped_w
+   return result;
+ }
+ 
++void SetMessageBoxRewriter(MessageBoxRewriter rewriter) {
++  g_message_box_rewriter = std::move(rewriter);
++}
++
+ class KeyboardInputDialog : public XamDialog {
+  public:
+   KeyboardInputDialog(rex::ui::ImGuiDrawer* imgui_drawer, std::string title,

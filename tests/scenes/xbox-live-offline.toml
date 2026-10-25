@@ -1,0 +1,46 @@
+# Main menu -> Xbox LIVE (the way to Player Match and World Tour) with no Xbox LIVE (ticket 15).
+# The game's "only available with an Xbox LIVE-enabled gamer profile... sign-in?" system message
+# box is rewritten to the unavailable message with one OK, and the game gets NO
+# (src/online_unavailable.h): no sign-in UI opens, and the main menu takes input again, so B
+# asks for the title screen. Headless draws no system dialog, so the log carries the message.
+# Run: python scripts/scene_runner.py tests/scenes/xbox-live-offline.toml
+
+name = "xbox-live-offline"
+from = "boot"
+log = [
+  "XamShowMessageBoxUI: rewritten by the host to \"Online features are not available yet.",
+  "the title gets button 1",
+]
+
+input = """
+# To the main menu, as boot-main-menu.toml.
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
+# Main menu up by about frame 1300: DOWN to Xbox LIVE, A.
+at 1450
+press DOWN
+at 1500
+press A
+# Back on the main menu by frame 1600; B asks to go to the title screen.
+at 2300
+press B
+"""
+
+[[capture]]  # main menu, Xbox LIVE highlighted again after the message
+frame = 1700
+[[capture]]  # "WARNING: Would you like to go to the Title Screen?"
+frame = 2450
