@@ -58,3 +58,23 @@ def test_frame_times_load_from_the_csv(tmp_path):
     path = tmp_path / "frame_times.csv"
     path.write_text("frame,ms\n1,1000.000\n2,1016.700\n3,1033.300\n", encoding="utf-8")
     assert load_frame_times(path) == pytest.approx([1000.0, 1016.7, 1033.3])
+
+
+def test_a_lone_33_ms_frame_in_60_hz_play_is_a_dropped_frame_not_a_cutaway():
+    verdict = judge(times([1000 / 60] * 100 + [1000 / 30] + [1000 / 60] * 100))
+    assert len(verdict.hitches) == 1
+    assert verdict.at_30hz == 0
+    assert not verdict.passed
+
+
+def test_a_run_flipping_between_60_and_30_is_hitching_not_a_cutaway():
+    verdict = judge(times([1000 / 60, 1000 / 30] * 50))
+    assert len(verdict.hitches) == 50
+    assert not verdict.passed
+
+
+def test_a_window_judges_only_the_frames_inside_it():
+    # A load stall at the start, then a clean match from 2 s on.
+    run = times([300.0] + [1000 / 60] * 600, start=0.0)
+    assert not judge(run).passed
+    assert judge(run, from_s=2.0).passed

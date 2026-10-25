@@ -20,6 +20,13 @@ inline std::filesystem::path SettingsPath(const std::filesystem::path& user_data
   return user_data_root / "topspin4.settings.toml";
 }
 
+// A path in UTF-8, for logs: path::string() goes through the ANSI code page and throws on a name
+// it cannot map (a user name in the per-user folder can be one).
+inline std::string Utf8(const std::filesystem::path& path) {
+  const std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
 // The text with key set to the TOML literal value: its line replaced (keeping the line end), or
 // appended if the text has none.
 inline std::string SetTomlKey(std::string_view text, std::string_view key, std::string_view value) {
@@ -81,7 +88,8 @@ inline std::string ReadText(const std::filesystem::path& path) {
 inline bool WriteTextAtomically(const std::filesystem::path& path, const std::string& text) {
   std::error_code error;
   std::filesystem::create_directories(path.parent_path(), error);
-  const std::filesystem::path temporary = path.string() + ".tmp";
+  std::filesystem::path temporary = path;
+  temporary += ".tmp";
   {
     std::ofstream out{temporary, std::ios::binary | std::ios::trunc};
     if (!out) {

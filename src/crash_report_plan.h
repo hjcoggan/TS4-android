@@ -18,7 +18,7 @@ namespace topspin4::crash {
 struct CrashFacts {
   std::string version;
   std::string commit;
-  std::string renderer;        // "classic" or "native"
+  std::string renderer;        // "classic", "native", or Classic with why Native is not drawing
   std::string gpu_name;        // empty before the GPU is known
   std::string driver_version;  // empty before the GPU is known
   uint32_t exception_status = 0;

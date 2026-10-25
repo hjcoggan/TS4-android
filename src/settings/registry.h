@@ -64,9 +64,6 @@ inline const std::vector<Setting>& PlayerSettings() {
        {kRendererClassic, kRendererNative},
        "Renderer: classic (Xenos GPU emulation, the reference) or native (Vulkan; not built "
        "yet, so Classic draws until it is). Takes effect at the next start"},
-      {"ts4_unlock_agassi_outfit", Setting::Kind::kBool, "false", {},
-       "Make the Agassi preorder outfit selectable, as the preorder code did on the Xbox 360. "
-       "Takes effect at the next start"},
       {"mnk_mode", Setting::Kind::kBool, "false", {},
        "Play with keyboard and mouse, as a controller of their own"},
       {"mnk_mouse", Setting::Kind::kBool, "false", {},

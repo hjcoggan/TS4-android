@@ -3,15 +3,18 @@
 The port writes the host time of every frame it shows with --ts4_frame_times_csv (src/frame_dumps.h),
 measured on the GPU thread as each guest swap is processed, which needs no PresentMon. Each
 interval between frames is judged as in WWE's scripts/analyze_hitches.py:
-- on a step: within 1 ms of the game's 60 Hz step (16.7 ms) or of its own 30 Hz step (33.3 ms),
-  which Top Spin 4 presents in its cutaways (docs/research/oracle-baseline.md);
-- a hitch: longer than 25 ms and not on the 30 Hz step (a game frame held or skipped);
+- on a step: within 1 ms of the game's 60 Hz step (16.7 ms), or of its own 30 Hz step (33.3 ms)
+  inside a run of at least MIN_30HZ_RUN such frames: Top Spin 4 presents its cutaways at an even
+  30 Hz for a second or more (docs/research/oracle-baseline.md), where WWE flags such windows
+  with --allow-30hz. A lone 33.3 ms frame in 60 Hz play is a held frame;
+- a hitch: longer than 25 ms and not a cutaway step (a game frame held or skipped);
 - the 1 % low: the frame time only the slowest 1 % of the 60 Hz frames exceed, against WWE's
   match bar of 16.7 ms.
-A run passes with no hitch, every frame on a step, and that 1 % low. The times are when frames
+A run passes with no hitch, every frame on a step, and that 1 % low. --from/--to (seconds since
+the game started) judge a window, such as the match, instead of the whole run with its loads. The times are when frames
 reach the presenter, not when they reach the screen, so display-side judder is not seen.
 
-    python scripts/frame_pacing.py <frame_times.csv>
+    python scripts/frame_pacing.py <frame_times.csv> [--from S] [--to S]
 """
 import argparse
 import csv
@@ -24,6 +27,7 @@ STEP_30_MS = 1000 / 30
 ON_STEP_SLACK_MS = 1.0
 HITCH_MS = 25.0
 ONE_PERCENT_LOW_BAR_MS = 16.7
+MIN_30HZ_RUN = 6  # 0.2 s; the shortest cutaway measured on the Oracle lasted 1 s
 
 
 @dataclass
@@ -47,20 +51,32 @@ def load_frame_times(path):
         return [float(row["ms"]) for row in csv.DictReader(file)]
 
 
-def judge(times_ms):
-    verdict = Verdict(frames=len(times_ms))
+def judge(times_ms, from_s=None, to_s=None):
+    """The verdict on the frames shown in [from_s, to_s] (seconds; the whole run by default)."""
+    shown = [t for t in times_ms
+             if (from_s is None or t >= from_s * 1000) and (to_s is None or t <= to_s * 1000)]
+    intervals = [(now, now - previous) for previous, now in zip(shown, shown[1:])]
+    on_30 = [abs(ms - STEP_30_MS) <= ON_STEP_SLACK_MS for _, ms in intervals]
+    # A 30 Hz frame is a cutaway step only inside a long enough run of them.
+    cutaway = [False] * len(intervals)
+    start = 0
+    while start < len(intervals):
+        end = start
+        while end < len(intervals) and on_30[end]:
+            end += 1
+        if end - start >= MIN_30HZ_RUN:
+            cutaway[start:end] = [True] * (end - start)
+        start = max(end, start + 1)
+    verdict = Verdict(frames=len(shown))
     at_60 = []
-    for previous, now in zip(times_ms, times_ms[1:]):
-        ms = now - previous
-        on_60 = abs(ms - STEP_60_MS) <= ON_STEP_SLACK_MS
-        on_30 = abs(ms - STEP_30_MS) <= ON_STEP_SLACK_MS
-        if on_30:
+    for (now, ms), is_cutaway in zip(intervals, cutaway):
+        if is_cutaway:
             verdict.at_30hz += 1
         elif ms > HITCH_MS:
             verdict.hitches.append((now, ms))
-        elif not on_60:
+        elif abs(ms - STEP_60_MS) > ON_STEP_SLACK_MS:
             verdict.uneven += 1
-        if not on_30:
+        if not is_cutaway:
             at_60.append(ms)
         verdict.worst = max(verdict.worst, ms)
     if at_60:
@@ -72,8 +88,10 @@ def judge(times_ms):
 def main():
     ap = argparse.ArgumentParser(description="Frame pacing of a port run against WWE's bar.")
     ap.add_argument("frame_times")
+    ap.add_argument("--from", dest="from_s", type=float, help="window start, seconds")
+    ap.add_argument("--to", dest="to_s", type=float, help="window end, seconds")
     args = ap.parse_args()
-    verdict = judge(load_frame_times(args.frame_times))
+    verdict = judge(load_frame_times(args.frame_times), args.from_s, args.to_s)
     print(f"{verdict.frames} frames, {verdict.at_30hz} at the game's 30 Hz step; "
           f"1 % low {verdict.one_percent_low:.2f} ms, worst {verdict.worst:.2f} ms; "
           f"uneven {verdict.uneven}, hitches {len(verdict.hitches)}: "

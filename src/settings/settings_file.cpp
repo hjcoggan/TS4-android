@@ -5,6 +5,7 @@
 
 #include <toml++/toml.hpp>
 
+#include "settings/config_file.h"
 #include "settings/registry.h"
 
 namespace topspin4::settings {
@@ -17,17 +18,20 @@ LoadReport LoadSettingsFile(const std::filesystem::path& path, const ApplySettin
   }
   toml::table table;
   try {
-    table = toml::parse_file(path.string());
+    // Read through the wide path: the per-user folder holds the Windows user name, which
+    // path::string() cannot always map to the code page (it throws).
+    table = toml::parse(ReadText(path));
   } catch (const toml::parse_error& parse_error) {
     report.file = LoadReport::File::kCorrupt;
-    report.set_aside = path.string() + ".corrupt";
+    report.set_aside = path;
+    report.set_aside += ".corrupt";
     std::filesystem::rename(path, report.set_aside, error);
     report.warnings.push_back(
-        "settings file " + path.string() + " is not valid TOML (" +
+        "settings file " + Utf8(path) + " is not valid TOML (" +
         std::string(parse_error.description()) + ", line " +
         std::to_string(parse_error.source().begin.line) + "); using the defaults" +
         (error ? std::string(" (could not set it aside: ") + error.message() + ")"
-               : "; the file was moved to " + report.set_aside.string()));
+               : "; the file was moved to " + Utf8(report.set_aside)));
     if (error) report.set_aside.clear();
     return report;
   }

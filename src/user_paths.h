@@ -18,9 +18,9 @@ inline constexpr std::string_view kFolderName = "TopSpin4Recomp";
 
 using Environment = std::function<std::optional<std::string>(std::string_view)>;
 
-// The folder, from the environment, whether the game runs under Wine, and the Windows app data
-// folder it goes under (roaming for saves and settings, local for the shader cache).
-inline std::filesystem::path UserDataRoot(const Environment& environment, bool under_wine,
+// The game's folder under a Windows app data folder (roaming for saves and settings, local for
+// the shader cache), or under the Linux user's XDG data folder when the game runs under Wine.
+inline std::filesystem::path AppFolder(const Environment& environment, bool under_wine,
                                           const std::filesystem::path& app_data) {
   if (under_wine) {
     // XDG_DATA_HOME when it is absolute (the spec says to ignore a relative one), else

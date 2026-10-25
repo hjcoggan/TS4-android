@@ -48,7 +48,7 @@ std::filesystem::path KnownFolder(const KNOWNFOLDERID& id) {
 
 std::filesystem::path DefaultUserDataRoot() {
 #if defined(_WIN32)
-  return UserDataRoot(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_RoamingAppData));
+  return AppFolder(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_RoamingAppData));
 #else
   // A native Linux build is after 1.0 (docs/goals.md); keep the SDK's user folder until then.
   return rex::filesystem::GetUserFolder() / kFolderName;
@@ -57,7 +57,7 @@ std::filesystem::path DefaultUserDataRoot() {
 
 std::filesystem::path DefaultCacheRoot() {
 #if defined(_WIN32)
-  return UserDataRoot(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_LocalAppData)) / "cache";
+  return AppFolder(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_LocalAppData)) / "cache";
 #else
   return DefaultUserDataRoot() / "cache";
 #endif

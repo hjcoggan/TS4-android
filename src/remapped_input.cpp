@@ -144,7 +144,12 @@ X_RESULT RemappedDriver::GetDeviceKeystroke(DeviceId id, uint32_t flags,
                                             X_INPUT_KEYSTROKE* out) {
   const X_RESULT result = inner_->GetDeviceKeystroke(id, flags, out);
   if (result == X_ERROR_SUCCESS && out) {
-    out->virtual_key = pad::RemapKeystroke(out->virtual_key, bindings_);
+    const std::optional<uint16_t> key = pad::RemapKeystroke(out->virtual_key, bindings_);
+    if (!key) {
+      // The input drives no action: the game sees no keystroke this poll.
+      return X_ERROR_EMPTY;
+    }
+    out->virtual_key = *key;
   }
   return result;
 }

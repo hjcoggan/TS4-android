@@ -16,7 +16,7 @@
 #include "crash_dump_request.h"
 #include "crash_report_plan.h"
 #include "crash_zip.h"
-#include "settings/registry.h"
+#include "settings/renderer_choice.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -204,10 +204,12 @@ CrashFacts Facts(uint32_t code, const std::tm& now) {
   CrashFacts facts;
   facts.version = TOPSPIN4_VERSION;
   facts.commit = TOPSPIN4_COMMIT;
-  // No Native renderer is built yet (ticket 26), so Classic draws whatever the setting says.
-  facts.renderer = rex::cvar::GetFlagByName("ts4_renderer") == settings::kRendererNative
-                       ? "classic (Native asked for, not built)"
-                       : "classic";
+  // No Native renderer is built yet (ticket 26).
+  const settings::RendererChoice choice =
+      settings::ChooseRenderer(rex::cvar::GetFlagByName("ts4_renderer"), false);
+  facts.renderer = choice.renderer == settings::Renderer::kNative ? "native"
+                   : choice.note.empty()                          ? "classic"
+                                                                  : "classic (Native asked for, not built)";
   facts.exception_status = code;
   facts.stamp = Stamp(now);
   const std::string log = rex::cvar::GetFlagByName("log_file");
@@ -308,7 +310,7 @@ void WriteReport(const CrashFacts& facts, const std::tm& now, EXCEPTION_POINTERS
   }
   g_report_written = true;
   std::filesystem::remove(dump, error);
-  // Keep the wording: WWE's launcher links the report from this line (GameExitReport.cs).
+  // Keep the wording: a launcher can link the report from this line, as WWE All Stars' does.
   const std::u8string path = zip_path.u8string();
   REXLOG_ERROR("crash report: saved {}", std::string(path.begin(), path.end()));
   rex::FlushLogging();

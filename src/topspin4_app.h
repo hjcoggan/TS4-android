@@ -71,7 +71,8 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   // The player's settings (ticket 10), once logging can report on them and before the runtime
-  // and the GPU plugin read them. A setting also given on the command line keeps that value.
+  // and the GPU plugin read them. A setting also given on the command line or as a REX_<NAME>
+  // environment variable keeps that value.
   void OnPostInitLogging() override {
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
@@ -79,7 +80,8 @@ class TopSpin4App : public rex::ReXApp {
     const settings::LoadReport report =
         settings::LoadSettingsFile(path, [](std::string_view key, std::string_view value) {
           const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
-          if (flag && flag->source == rex::cvar::Source::kCommandLine) {
+          if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
+                       flag->source == rex::cvar::Source::kEnvironment)) {
             return true;
           }
           return rex::cvar::SetFlagByName(key, value);
@@ -87,8 +89,19 @@ class TopSpin4App : public rex::ReXApp {
     for (const std::string& warning : report.warnings) {
       REXLOG_WARN("{}", warning);
     }
+    // The registry's defaults are the original behaviour (tests/host/test_settings.cpp); the
+    // cvars state theirs again (settings_cvars.cpp, and the SDK's for keyboard and mouse).
+    for (const settings::Setting& setting : settings::PlayerSettings()) {
+      const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(setting.key);
+      if (!flag) {
+        REXLOG_ERROR("Settings: {} has no cvar", setting.key);
+      } else if (flag->default_value != setting.default_value) {
+        REXLOG_ERROR("Settings: {} defaults to {} as a cvar but to {} in the registry",
+                     setting.key, flag->default_value, setting.default_value);
+      }
+    }
     if (report.file == settings::LoadReport::File::kLoaded) {
-      REXLOG_INFO("Settings: {}", path.string());
+      REXLOG_INFO("Settings: {}", settings::Utf8(path));
     }
     const settings::RendererChoice renderer =
         settings::ChooseRenderer(REXCVAR_GET(ts4_renderer), false);

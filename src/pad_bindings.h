@@ -59,12 +59,12 @@ struct InputInfo {
 };
 
 inline constexpr std::array<InputInfo, kInputCount> kInputs = {{
-    {"a", kButtonA, 0x5800},           {"b", kButtonB, 0x5801},
+    {"a", kButtonA, kVkPadA},          {"b", kButtonB, kVkPadB},
     {"x", kButtonX, 0x5802},           {"y", kButtonY, 0x5803},
     {"lb", kButtonLeftShoulder, 0x5805}, {"rb", kButtonRightShoulder, 0x5804},
     {"lt", 0, 0x5806},                 {"rt", 0, 0x5807},
     {"ls", kButtonLeftThumb, 0x5816},  {"rs", kButtonRightThumb, 0x5817},
-    {"back", kButtonBack, 0x5815},     {"start", kButtonStart, 0x5814},
+    {"back", kButtonBack, 0x5815},     {"start", kButtonStart, kVkPadStart},
     {"up", kButtonDpadUp, 0x5810},     {"down", kButtonDpadDown, 0x5811},
     {"left", kButtonDpadLeft, 0x5812}, {"right", kButtonDpadRight, 0x5813},
 }};
@@ -154,15 +154,16 @@ inline Pad Remap(const Pad& physical, const Bindings& bindings) {
   return out;
 }
 
-// A keystroke from a physical input comes out as the first action that input drives; codes
+// A keystroke from a physical input comes out as the first action that input drives, and not
+// at all from an input that drives none (a hand-edited double binding left it unbound). Codes
 // outside the 16 inputs (stick directions) pass through.
-inline uint16_t RemapKeystroke(uint16_t virtual_key, const Bindings& bindings) {
+inline std::optional<uint16_t> RemapKeystroke(uint16_t virtual_key, const Bindings& bindings) {
   for (size_t p = 0; p < kInputCount; ++p) {
     if (kInputs[p].virtual_key != virtual_key) continue;
     for (size_t a = 0; a < kInputCount; ++a) {
       if (bindings.Source(Input(a)) == Input(p)) return kInputs[a].virtual_key;
     }
-    return virtual_key;
+    return std::nullopt;
   }
   return virtual_key;
 }

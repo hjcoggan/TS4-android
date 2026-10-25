@@ -95,3 +95,10 @@ TEST_CASE("Menus see a remapped button's keystroke as the action it drives") {
   // Stick directions are not bindable and pass through.
   CHECK(RemapKeystroke(0x5820, bindings) == 0x5820);
 }
+
+TEST_CASE("A physical input that drives no action sends no keystroke") {
+  Bindings bindings = Bindings::Default();
+  bindings.Set(Input::kB, Input::kA);  // hand-edited: nothing is driven by B now
+  CHECK_FALSE(RemapKeystroke(kVkPadB, bindings).has_value());
+  CHECK(RemapKeystroke(kVkPadA, bindings) == kVkPadA);
+}

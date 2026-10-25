@@ -71,17 +71,17 @@ TEST_CASE("A saved setting is written whole, through a temporary file") {
   const fs::path path = SettingsPath(folder.path);
   CHECK(path == folder.path / "topspin4.settings.toml");
   REQUIRE(SaveSetting(path, "ts4_renderer", "\"native\""));
-  REQUIRE(SaveSetting(path, "ts4_unlock_agassi_outfit", "true"));
-  CHECK(ReadText(path) == "ts4_renderer = \"native\"\nts4_unlock_agassi_outfit = true\n");
+  REQUIRE(SaveSetting(path, "mnk_mode", "true"));
+  CHECK(ReadText(path) == "ts4_renderer = \"native\"\nmnk_mode = true\n");
   CHECK_FALSE(fs::exists(path.string() + ".tmp"));
 }
 
 TEST_CASE("Every setting defaults to the original game's behaviour") {
-  // Classic is the reference renderer (ADR-0005); the disc keeps the Agassi outfit locked.
+  // Classic is the reference renderer (ADR-0005); keyboard and mouse were no 360 input.
   REQUIRE(FindSetting("ts4_renderer"));
   CHECK(FindSetting("ts4_renderer")->default_value == "classic");
-  REQUIRE(FindSetting("ts4_unlock_agassi_outfit"));
-  CHECK(FindSetting("ts4_unlock_agassi_outfit")->default_value == "false");
+  REQUIRE(FindSetting("mnk_mode"));
+  CHECK(FindSetting("mnk_mode")->default_value == "false");
   for (const Setting& setting : PlayerSettings()) {
     INFO(setting.key);
     CHECK(setting.Allows(setting.default_value));
@@ -99,12 +99,12 @@ TEST_CASE("A saved setting is set again at the next start") {
   TempFolder folder;
   const fs::path path = SettingsPath(folder.path);
   REQUIRE(SaveSetting(path, "ts4_renderer", TomlLiteral(*FindSetting("ts4_renderer"), "native")));
-  REQUIRE(SaveSetting(path, "ts4_unlock_agassi_outfit",
-                      TomlLiteral(*FindSetting("ts4_unlock_agassi_outfit"), "true")));
+  REQUIRE(SaveSetting(path, "mnk_mode",
+                      TomlLiteral(*FindSetting("mnk_mode"), "true")));
   Loaded loaded(path);
   CHECK(loaded.report.file == LoadReport::File::kLoaded);
   CHECK(loaded.values == std::map<std::string, std::string>{
-                             {"ts4_renderer", "native"}, {"ts4_unlock_agassi_outfit", "true"}});
+                             {"ts4_renderer", "native"}, {"mnk_mode", "true"}});
   CHECK(loaded.report.warnings.empty());
 }
 
@@ -113,7 +113,7 @@ TEST_CASE("A value a setting does not allow is skipped with a warning; unknown k
   const fs::path path = SettingsPath(folder.path);
   WriteFile(path,
             "ts4_renderer = \"vulkan\"\n"
-            "ts4_unlock_agassi_outfit = 1\n"
+            "mnk_mode = 1\n"
             "some_removed_setting = true\n");
   Loaded loaded(path);
   CHECK(loaded.report.file == LoadReport::File::kLoaded);

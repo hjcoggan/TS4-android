@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <thread>
 
@@ -45,6 +46,26 @@ REXCVAR_DEFINE_INT32(ts4_renderdoc_frame, -1, "TopSpin4",
 namespace topspin4::frame_dumps {
 
 namespace {
+
+// fopen through the wide path on Windows: a narrow one goes through the ANSI code page, and the
+// folders come from the command line in UTF-8.
+std::string Utf8Text(const std::filesystem::path& path) {
+  const std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
+std::filesystem::path Utf8Path(const std::string& text) {
+  return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
+FILE* OpenFile(const std::filesystem::path& path, const char* mode) {
+#if defined(_WIN32)
+  const std::wstring wide_mode(mode, mode + std::strlen(mode));
+  return _wfopen(path.c_str(), wide_mode.c_str());
+#else
+  return std::fopen(path.c_str(), mode);
+#endif
+}
 
 struct Dump {
   uint64_t frame;
@@ -114,20 +135,20 @@ void SaveDump(uint64_t frame) {
     }
   }
   const std::filesystem::path path = g_dir / DumpFileName(frame);
-  FILE* file = std::fopen(path.string().c_str(), "wb");
+  FILE* file = OpenFile(path, "wb");
   if (!file) {
-    REXLOG_WARN("frame dumps: cannot write {}", path.string());
+    REXLOG_WARN("frame dumps: cannot write {}", Utf8Text(path));
     return;
   }
   const std::vector<uint8_t> png = EncodePngRgb(rgb.data(), image.width, image.height);
   const bool written = std::fwrite(png.data(), 1, png.size(), file) == png.size();
   if (std::fclose(file) != 0 || !written) {
-    REXLOG_WARN("frame dumps: writing {} failed", path.string());
+    REXLOG_WARN("frame dumps: writing {} failed", Utf8Text(path));
     return;
   }
   REXLOG_INFO("frame dumps: frame {} ({}x{}, max luma {}) to {}", frame, image.width,
-              image.height, max_luma, path.string());
-  g_dumps.push_back({frame, path.filename().string(), image.width, image.height, max_luma});
+              image.height, max_luma, Utf8Text(path));
+  g_dumps.push_back({frame, Utf8Text(path.filename()), image.width, image.height, max_luma});
 }
 
 void WriteReport(uint64_t frame) {
@@ -147,10 +168,10 @@ void WriteReport(uint64_t frame) {
                         i ? "," : "", d.frame, JsonString(d.file), d.width, d.height, d.max_luma);
   }
   json += "\n ]\n}\n";
-  FILE* file = std::fopen(g_report.string().c_str(), "wb");
+  FILE* file = OpenFile(g_report, "wb");
   const bool written = file && std::fwrite(json.data(), 1, json.size(), file) == json.size();
   if (!file || std::fclose(file) != 0 || !written) {
-    REXLOG_WARN("frame dumps: cannot write the session report {}", g_report.string());
+    REXLOG_WARN("frame dumps: cannot write the session report {}", Utf8Text(g_report));
   }
 }
 
@@ -200,9 +221,9 @@ void Install(rex::Runtime* runtime) {
   if (!ParseFrameList(REXCVAR_GET(ts4_dump_frames), g_frames)) {
     REXLOG_ERROR("frame dumps: bad --ts4_dump_frames list '{}'", REXCVAR_GET(ts4_dump_frames));
   }
-  g_dir = REXCVAR_GET(ts4_dump_dir);
+  g_dir = Utf8Path(REXCVAR_GET(ts4_dump_dir));
   g_exit_after = REXCVAR_GET(ts4_exit_after_frame);
-  g_report = REXCVAR_GET(ts4_session_report);
+  g_report = Utf8Path(REXCVAR_GET(ts4_session_report));
   g_renderdoc_frame = REXCVAR_GET(ts4_renderdoc_frame);
 #if defined(_WIN32)
   if (g_renderdoc_frame >= 1) {
@@ -227,7 +248,7 @@ void Install(rex::Runtime* runtime) {
       std::error_code error;
       std::filesystem::create_directories(g_dir, error);
       if (error) {
-        REXLOG_ERROR("frame dumps: cannot create {}: {}", g_dir.string(), error.message());
+        REXLOG_ERROR("frame dumps: cannot create {}: {}", Utf8Text(g_dir), error.message());
       }
     }
   }
@@ -235,7 +256,7 @@ void Install(rex::Runtime* runtime) {
     std::thread(LogFrameRate).detach();
   }
   if (const std::string path = REXCVAR_GET(ts4_frame_times_csv); !path.empty()) {
-    g_frame_times = std::fopen(path.c_str(), "w");
+    g_frame_times = OpenFile(Utf8Path(path), "w");
     if (g_frame_times) {
       std::fputs("frame,ms\n", g_frame_times);
     } else {
