@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 (Hand-off to Swing), 04 (TU1 symbol map), 01 (Oracle Baseline)
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] Title-server login and patch request are short-circuited to the offline result through hooks
 - [x] The DLC check finishes immediately
@@ -23,3 +23,4 @@
 - 2026-10-25 (Claude), ticket audit, part 2: compared with Edge on TU1, captured unattended (`scripts/edge.ps1`, `scripts/input/edge-boot-to-main-menu.txt`, screenshots kept locally in `analysis/edge-menu/`). The port's title screen (frame 480) matches Edge's: same logo, text and background (side by side in `analysis/edge-menu/compare-title.png`). Boot to title, both skipping the intro with START: the port is up by frame ~350 (about 6 s), Edge by its 8-9 s screenshot. The written Baseline (ticket 01) does not exist yet; these are the Oracle's own numbers under the same input. Only the title-server hooks box remains (ticket 15).
 - 2026-10-25 (Claude), ticket audit, part 3: the title-server box judged on its own. The boot path never waits on the server (title in about 6 s, main menu as on Edge), because nothing on it calls the login, not because anything short-circuits it: there are no hooks, and selecting Xbox LIVE leaves the game waiting silently (ticket 15's comment). So the box stays open until the login and patch request are short-circuited, which ticket 15's work will do.
 - 2026-10-25 (Claude), from ticket 15's runs: the silent Xbox LIVE wait was not the title server. The game's own check finds the profile not LIVE-enabled and asks to sign in; the wait was the SDK's sign-in UI stub (fixed in patch 0037). No run, Xbox LIVE included, reaches a title-server login or patch request: the only network call seen is `XNetLogonGetTitleID` at boot, a stub that returns at once. So nothing needs short-circuiting on the paths run so far; whether that settles this box (it asks for hooks) is the owner's call. Unchecked: Career, King of the Court and Academy (ticket 15).
+- 2026-10-25 (Claude), status check: needs-info. Every box is ticked except the title-server hooks. No path run so far reaches a title-server login or patch request: boot, title, main menu, Xbox LIVE, an Exhibition match, and now the Career start, Academy lesson and King of the Court scenes. Their logs show only the `XNetLogonGetTitleID` stub at boot (`analysis/scenes/*/run-1/runtime.log`). So there is nothing to short-circuit. The owner decides whether that settles the box (and the ticket), or whether hooks should be built anyway.
