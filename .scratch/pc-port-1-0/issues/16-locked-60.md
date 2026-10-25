@@ -19,3 +19,8 @@
   - Unit-tested (tests/test_frame_pacing.py: steady 60, a hitch, an even 30 Hz cutaway, a frame between steps, off-step frames, CSV loading). No box ticked: nothing has been measured yet. Next run: `smoke.ps1 -InputScript scripts/input/boot-to-exhibition.txt`, then `frame_pacing.py <run>/frame_times.csv`.
   - Leads from docs/research/recomp-community-help.md for the spin-wait and hitch boxes: the Oracle runs a cooperative guest scheduler (`guest_scheduler = true`), and the port does not; ReXGlue #521 (AMD fence waits); `db16cyc` spin hints dropped as no-ops.
 - 2026-10-25 (Claude), after review: `frame_pacing.py` counts a 33.3 ms frame as a cutaway step only inside a run of at least 6 such frames, as WWE allows 30 Hz only in flagged windows. A lone dropped frame, or a run flipping between 60 and 30, is a hitch. `--from`/`--to` judge a window (the match) instead of the whole run with its loads.
+- 2026-10-25 (Claude): first measurement, `analysis/smoke-20261025-114304/frame_times.csv`.
+  - `frame_pacing.py --from 66 --to 73` (rallies): 0 hitches, but 103 of 420 intervals more than 1 ms off 16.7 (worst 18.95 ms, 1 % low 18.5 ms).
+  - `--from 60` (the whole match): the cutaways' 30 Hz frames spread from 31.8 to 35.1 ms. So they fail the ±1 ms rule, aren't recognised as an even cutaway run, and count as hitches.
+  - Not a verdict yet. The times are taken when the GPU thread processes each swap, and the presenter paces the actual present later, so this jitter may never reach the screen.
+  - Next: timestamp at present (the presenter's vblank-paced present, patches `0016-present-wait` and `0024-guest-vblank-rate`), then judge again. Only if the present times jitter too is the spread real.
