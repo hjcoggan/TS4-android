@@ -54,7 +54,7 @@ switch ($Verb) {
         foreach ($argument in $extra) {
             if ($argument -notmatch '^--[a-z0-9_]+=') { throw "Invalid runtime argument: $argument" }
         }
-        $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1', '--headless',
+        $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1', '--headless', '--window_hidden=true',
             "--game_data_root=$projectRoot/gamedata", "--update_data_root=$projectRoot/updatedata",
             "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
             "--log_file=$Out/runtime.log", '--log_level=info', '--log_flush_interval=1',

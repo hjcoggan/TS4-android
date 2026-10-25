@@ -12,10 +12,18 @@
 
 namespace topspin4::native {
 
+// A guest format Vulkan cannot sample directly, decoded on upload (texture_decode.h).
+enum class Decode : uint8_t {
+  kNone,
+  kCtx1,  // 4x4 blocks of 8 bytes to R8G8 texels
+};
+
 struct FormatInfo {
   VkFormat format = VK_FORMAT_UNDEFINED;
+  // The guest data's shape; with a decode, the host image holds 1x1 texels of format.
   uint32_t block_size = 1;  // texels per block side
   uint32_t bytes_per_block_log2 = 0;
+  Decode decode = Decode::kNone;
 };
 
 // Host formats whose component order matches the guest one after the endian
@@ -55,6 +63,8 @@ constexpr FormatInfo GetFormatInfo(rex::graphics::xenos::TextureFormat format) {
       return {VK_FORMAT_R16G16B16A16_SFLOAT, 1, 3};
     case F::k_32_FLOAT:
       return {VK_FORMAT_R32_SFLOAT, 1, 2};
+    case F::k_CTX1:  // Top Spin 4's menu text
+      return {VK_FORMAT_R8G8_UNORM, 4, 3, Decode::kCtx1};
     default:
       return {};
   }

@@ -71,9 +71,16 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
   TS4_D3D_DECLARE(address);                                \
   REX_HOOK_RAW(TS4_D3D_SUB(address)) {                     \
     [[maybe_unused]] constexpr auto module = TS4_D3D_MODULE; \
-    ::topspin4::d3d::Count(module, TS4_D3D_FN(name));      \
+    constexpr auto fn = TS4_D3D_FN(name);                  \
+    ::topspin4::d3d::Count(module, fn);                    \
     [[maybe_unused]] auto& sink = ::topspin4::d3d::GetSink();
-#define TS4_D3D_CALL(address) TS4_D3D_IMP(address)(ctx, base)
+// The original, between the census's draw-attribution callbacks (set only under the census).
+#define TS4_D3D_CALL(address)                                                   \
+  do {                                                                          \
+    if (sink.call_entry) sink.call_entry(module, fn, base, uint32_t(ctx.lr));   \
+    TS4_D3D_IMP(address)(ctx, base);                                            \
+    if (sink.call_exit) sink.call_exit(module, fn, base);                       \
+  } while (0)
 #define TS4_D3D_END }
 
 #define TS4_D3D_HOOK_COUNTED(name, address) \
@@ -120,8 +127,9 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
   const uint32_t device = ctx.r3.u32;                                            \
   const uint32_t flags = ctx.r4.u32;                                             \
   const uint32_t destination = ctx.r6.u32;                                       \
+  const uint32_t level = ctx.r8.u32;                                             \
   TS4_D3D_CALL(address);                                                         \
-  if (sink.resolve) sink.resolve(module, base, device, flags, destination);      \
+  if (sink.resolve) sink.resolve(module, base, device, flags, destination, level); \
   TS4_D3D_END
 
 // D3DDevice_SetStreamSource: r4 = stream, r5 = vertex buffer, r6 = offset, r7 = stride.

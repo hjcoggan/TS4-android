@@ -153,7 +153,7 @@ void ShaderCreated(Module, const uint8_t* base, uint32_t container, uint32_t obj
 
 void Present(Module module, const uint8_t* base, uint32_t device, uint32_t front_buffer) {
   if (census::Enabled()) {
-    census::OnPresent(module);
+    census::OnPresent(module, device);
   }
   native::OnPresent(base, device, front_buffer);
 }
@@ -167,8 +167,9 @@ void Clear(Module, const uint8_t* base, uint32_t device, uint32_t flags, const i
   native::OnClear(base, device, flags, rect, color, depth, stencil);
 }
 
-void Resolve(Module, const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination) {
-  native::OnResolve(base, device, flags, destination);
+void Resolve(Module, const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination,
+             uint32_t level) {
+  native::OnResolve(base, device, flags, destination, level);
 }
 
 void SetStreamSource(Module, uint32_t stream, uint32_t stride) {
@@ -199,6 +200,8 @@ void InstallHost(const std::filesystem::path& cache_root) {
   if (census::Enabled()) {
     sink.present = &Present;
     sink.mirror_commit = &census::OnMirrorCommit;
+    sink.call_entry = &census::OnCallEntry;
+    sink.call_exit = &census::OnCallExit;
   }
   // Shaders are tracked on Classic too, for --ts4_shader_dump_dir and the top-up folder.
   sink.shader_created = &ShaderCreated;

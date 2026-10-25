@@ -11,13 +11,19 @@ report, a capture is missing or black, or the dumps' frame clock strays from the
 (run_failures). Each later run's captures are judged against
 the first run's: per pixel NVIDIA FLIP, and a capture differs when a tile x tile block has more
 than tile_hot_max pixels above hot_flip (WWE's tile rule). Mean FLIP is reported, never used to
-decide. Native against Classic (ticket 26 on) and the Oracle comparison come later.
+decide. The Oracle comparison comes later.
+
+With --native N (ticket 26), N Native runs follow the Classic ones. Each Native capture is judged
+per pixel against the envelope of the Classic runs (the lowest FLIP error over them), with the
+same tile rule, as in WWE's scene runner. A Native run also fails on any renderer fallback, draw
+skip, Native debug cvar or Enhancement its session report shows (native_failures).
 
 Runs never overlap: the game animates by elapsed time, so a run slowed by another reaches a
 different state at the same frame number. A lock (analysis/game-run.lock, shared with
 scripts/smoke.ps1) refuses a second run while one is going.
 
     python scripts/scene_runner.py tests/scenes/boot-main-menu.toml [--out DIR] [--runs N]
+                                   [--native N] [--shader-pack FILE]
 
 Results and captures go to analysis/scenes/<name>/ (not committed).
 Exit code: 0 pass, 1 fail, 2 the scene could not run.
@@ -168,6 +174,37 @@ def run_failures(report, frames):
     return failures
 
 
+def native_failures(report):
+    """What fails a Native run, from its session report's "renderer" object (src/native): Native
+    not active (a renderer fallback), any draw skip, a Native debug cvar, an Enhancement on."""
+    if report is None:
+        return []  # run_failures already says there is no report
+    renderer = report.get("renderer")
+    if renderer is None:
+        return ["the session report has no renderer object"]
+    failures = []
+    if not renderer.get("native_active"):
+        failures.append(f"Native was not active (renderer fallback: {renderer.get('fallback')})")
+    for reason, record in sorted(renderer.get("draw_skips", {}).items()):
+        failures.append(f"draw skip {reason}: {record['total']} from frame {record['first_frame']} "
+                        f"(key {record['first_key']})")
+    for name in renderer.get("debug_cvars", []):
+        failures.append(f"debug cvar {name} is set")
+    for enhancement in renderer.get("enhancements", []):
+        if enhancement.get("on"):
+            failures.append(f"Enhancement {enhancement['name']} is on")
+    if renderer.get("gpu_failure"):
+        failures.append(f"GPU failure {renderer['gpu_failure']}")
+    return failures
+
+
+def envelope_error(references, test, error_map=None):
+    """Per-pixel error of test against several references: the lowest error over them, so a
+    pixel the references disagree on passes when test matches any of them."""
+    error_map = error_map or flip_map
+    return np.minimum.reduce([error_map(reference, test) for reference in references])
+
+
 def flip_map(reference, test):
     """Per-pixel FLIP error (0..1) of test against reference, both HxWx3 sRGB in 0..1."""
     import flip_evaluator as flip
@@ -200,7 +237,7 @@ def repeatability(images, check, error_map=flip_map):
             for i, image in enumerate(images[1:], start=1)}
 
 
-def run_game(label, scene, out, exe):
+def run_game(label, scene, out, exe, extra_flags=()):
     """One run that dumps every capture frame and exits after the last one; returns
     ({frame: png path}, session report or None)."""
     run_dir = out / label
@@ -218,12 +255,17 @@ def run_game(label, scene, out, exe):
              f"--game_data_root={ROOT / 'gamedata'}", f"--update_data_root={ROOT / 'updatedata'}",
              f"--user_data_root={run_dir / 'userdata'}", f"--cache_root={run_dir / 'cache'}",
              f"--log_file={run_dir / 'runtime.log'}", "--log_level=info",
-             "--log_flush_interval=1", "--headless", "--audio_mute=true",
+             "--log_flush_interval=1", "--headless", "--window_hidden=true", "--audio_mute=true",
              f"--ts4_input_script={script}",
              f"--ts4_dump_frames={','.join(map(str, scene.frames))}",
              f"--ts4_dump_dir={dumps}", f"--ts4_exit_after_frame={max(scene.frames)}",
-             f"--ts4_session_report={report_path}"]
-    proc = subprocess.Popen([str(exe), *flags], cwd=exe.parent,
+             f"--ts4_session_report={report_path}", *extra_flags]
+    # Unattended: the window is never shown (--window_hidden, patch 0038), and the process starts
+    # hidden too, so a run never takes the desktop's focus.
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = 0  # SW_HIDE
+    proc = subprocess.Popen([str(exe), *flags], cwd=exe.parent, startupinfo=startup,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # The game presents 60 frames a second when it keeps up; allow half that, plus start-up.
     try:
@@ -245,28 +287,42 @@ def load_image(path):
     return np.asarray(Image.open(path).convert("RGB"), np.float32) / 255
 
 
-def run_scene(scene, out, exe):
-    labels = [f"run-{i + 1}" for i in range(int(scene.check["runs"]))]
+def read_log(path):
+    return path.read_text(encoding="utf-8", errors="replace") if path.exists() else None
+
+
+def run_scene(scene, out, exe, native_runs=0, shader_pack=None):
+    classic = [f"run-{i + 1}" for i in range(int(scene.check["runs"]))]
+    native = [f"native-{i + 1}" for i in range(native_runs)]
+    native_flags = ["--ts4_renderer=native"]
+    if shader_pack:
+        native_flags.append(f"--ts4_shader_pack={shader_pack}")
     shots, runs = {}, {}
     with GameRunLock(LOCK):
-        for label in labels:
-            shots[label], report = run_game(label, scene, out, exe)
-            log_path = out / label / "runtime.log"
-            log_text = log_path.read_text(encoding="utf-8", errors="replace")                 if log_path.exists() else None
-            runs[label] = {"report": report,
-                           "failures": run_failures(report, scene.frames) +
-                           log_failures(log_text, scene.log)}
+        for label in classic + native:
+            is_native = label in native
+            shots[label], report = run_game(label, scene, out, exe,
+                                            native_flags if is_native else ["--ts4_renderer=classic"])
+            failures = (run_failures(report, scene.frames) +
+                        log_failures(read_log(out / label / "runtime.log"), scene.log))
+            if is_native:
+                failures += native_failures(report)
+            runs[label] = {"report": report, "failures": failures}
     captures = []
     for frame in scene.frames:
-        missing = [label for label in labels if frame not in shots[label]]
+        missing = [label for label in classic + native if frame not in shots[label]]
         if missing:
             captures.append({"frame": frame, "passed": False, "error": f"no capture from {missing}"})
             continue
-        verdicts = repeatability([load_image(shots[label][frame]) for label in labels],
-                                 scene.check)
+        references = [load_image(shots[label][frame]) for label in classic]
+        verdicts = repeatability(references, scene.check)
+        for label in native:
+            verdicts[label] = judge_capture(
+                envelope_error(references, load_image(shots[label][frame])), scene.check)
         captures.append({"frame": frame, "passed": all(v["passed"] for v in verdicts.values()),
                          "runs": verdicts,
-                         "images": {label: shots[label][frame].as_posix() for label in labels}})
+                         "images": {label: shots[label][frame].as_posix()
+                                    for label in classic + native}})
     passed = all(c["passed"] for c in captures) and not any(r["failures"] for r in runs.values())
     result = {"scene": scene.name, "passed": passed, "check": scene.check, "runs": runs,
               "captures": captures}
@@ -280,6 +336,10 @@ def main(argv):
     parser.add_argument("--out", type=Path)
     parser.add_argument("--exe", type=Path, default=EXE)
     parser.add_argument("--runs", type=int, help="override the scene's [check] runs (2 or more)")
+    parser.add_argument("--native", type=int, default=0,
+                        help="Native runs after the Classic ones, judged against them")
+    parser.add_argument("--shader-pack", type=Path,
+                        help="the shader pack Native runs load (default: the one in cache/)")
     args = parser.parse_args(argv)
     try:
         scene = load_scene(args.scene.read_text(encoding="utf-8"))
@@ -298,7 +358,8 @@ def main(argv):
     print(f"scene {scene.name}: frames {scene.frames}, {scene.check['runs']} runs, out {out}",
           flush=True)
     try:
-        result = run_scene(scene, out, args.exe.resolve())
+        shader_pack = args.shader_pack.resolve() if args.shader_pack else None
+        result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack)
     except RunLockBusy as error:
         print(f"scene error: {error}", file=sys.stderr)
         return 2
@@ -310,7 +371,8 @@ def main(argv):
             print(f"  frame {c['frame']}: FAIL  {c['error']}")
             continue
         for label, v in c["runs"].items():
-            print(f"  frame {c['frame']} {label} vs run-1: {'PASS' if v['passed'] else 'FAIL'}  "
+            against = "Classic" if label.startswith("native") else "run-1"
+            print(f"  frame {c['frame']} {label} vs {against}: {'PASS' if v['passed'] else 'FAIL'}  "
                   f"worst tile {v['worst_tile_hot']} hot px (K={scene.check['tile_hot_max']}), "
                   f"mean FLIP {v['mean_flip']:.4f}")
     print(f"scene {scene.name}: {'PASS' if result['passed'] else 'FAIL'}  ({out / 'result.json'})")

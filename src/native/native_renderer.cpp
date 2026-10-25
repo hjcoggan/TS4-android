@@ -45,6 +45,7 @@
 #include "native/draw_skips.h"
 #include "native/fault_finder.h"
 #include "native/frame_dumps.h"
+#include "native/rect_list.h"
 #include "native/renderer_fallback.h"
 #include "native/gpu_failure.h"
 #include "native/shader_pack.h"
@@ -1940,7 +1941,8 @@ void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
 
 }  // namespace
 
-void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination) {
+void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination,
+               uint32_t level) {
   const HookTimer timer;
   if (!g.device) {
     return;
@@ -1991,7 +1993,9 @@ void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t de
   if (destination && depth_resolve) {
     ResolveDepth(d3d, textures::LoadFetchConstant(base + destination + kTextureFetchConstant));
   }
-  if (destination && source && copy_command != 3) {
+  // Resolve targets hold level 0 only; a resolve into a lower mip (Swing's mip chains) must not
+  // overwrite it.
+  if (destination && source && copy_command != 3 && level == 0) {
     const textures::FetchConstant fetch =
         textures::LoadFetchConstant(base + destination + kTextureFetchConstant);
     const textures::ResolveTarget target =
@@ -2367,6 +2371,54 @@ int BindStreams(const uint8_t* d3d, const VertexLayout& layout, const uint32_t* 
   return -1;
 }
 
+// A rectangle list's streams for vertices [first_vertex, + vertex_count), expanded to two
+// triangles per rectangle (rect_list.h). False after counting the draw as bad_stream or
+// vertex_upload.
+bool BindRectStreams(const uint8_t* d3d, const VertexLayout& layout, const uint32_t* strides,
+                     uint32_t first_vertex, uint32_t vertex_count) {
+  vertex_count -= vertex_count % 3;
+  for (uint32_t stream = 0; stream < kMaxStreams; ++stream) {
+    if (!(layout.stream_mask & (1u << stream))) {
+      continue;
+    }
+    const uint32_t fetch = LoadBE32(d3d + kDeviceStreamFetch - 8 * stream);
+    const uint32_t stride = strides[stream];
+    if ((fetch & 3) != 3 || !stride || (stride & 3)) {
+      SkipDraw(Skip::kBadStream, fetch);
+      return false;
+    }
+    uint64_t float_words = 0;
+    for (uint32_t i = 0; i < layout.attribute_count; ++i) {
+      const VertexAttribute& a = layout.attributes[i];
+      uint32_t words = 0;
+      switch (a.format) {
+        case VK_FORMAT_R32_SFLOAT: words = 1; break;
+        case VK_FORMAT_R32G32_SFLOAT: words = 2; break;
+        case VK_FORMAT_R32G32B32_SFLOAT: words = 3; break;
+        case VK_FORMAT_R32G32B32A32_SFLOAT: words = 4; break;
+        default: break;
+      }
+      if (a.stream == stream && words && a.offset / 4 + words <= 64) {
+        float_words |= ((uint64_t(1) << words) - 1) << (a.offset / 4);
+      }
+    }
+    const uint32_t stride_words = stride / 4;
+    std::vector<uint32_t> source(size_t(vertex_count) * stride_words);
+    SwapCopy32(source.data(), TranslatePhysical((fetch & ~3u) + first_vertex * stride),
+               source.size());
+    const std::vector<uint32_t> expanded =
+        rect_list::Expand(source.data(), stride_words, vertex_count, float_words);
+    const Upload upload = AllocateUpload(expanded.size() * 4, 16);
+    if (!upload.data) {
+      SkipDraw(Skip::kVertexUpload, expanded.size() * 4);
+      return false;
+    }
+    std::memcpy(upload.data, expanded.data(), expanded.size() * 4);
+    BindVertexBuffer(stream, upload.buffer, upload.offset, stride);
+  }
+  return true;
+}
+
 // Copies guest vertex data, which is fetched as 32-bit big-endian words.
 bool UploadVertices(const uint8_t* source, uint32_t bytes, uint32_t binding, uint32_t stride) {
   const Upload upload = AllocateUpload((bytes + 3) & ~3u, 16);
@@ -2495,7 +2547,12 @@ void OnDrawNonIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
   BeginFrameIfNeeded();
   VkPrimitiveTopology topology;
   bool quads;
-  if (!Topology(primitive, topology, quads)) {
+  // Rectangle lists (Swing's mip chains) become triangle lists of expanded vertices.
+  const bool rects = primitive == 8;
+  if (rects) {
+    topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    quads = false;
+  } else if (!Topology(primitive, topology, quads)) {
     SkipDraw(Skip::kUnsupportedPrimitive, primitive);
     return;
   }
@@ -2503,7 +2560,15 @@ void OnDrawNonIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
   uint32_t strides[kMaxStreams];
   std::memcpy(strides, g.stream_strides, sizeof(strides));
   const VertexLayout* layout = PrepareDraw(base, d3d, topology, strides);
-  if (!layout || BindStreams(d3d, *layout, strides, start_vertex, vertex_count) >= 0) {
+  if (!layout) {
+    return;
+  }
+  if (rects) {
+    if (!BindRectStreams(d3d, *layout, strides, start_vertex, vertex_count)) {
+      return;
+    }
+    vertex_count = vertex_count / 3 * 6;
+  } else if (BindStreams(d3d, *layout, strides, start_vertex, vertex_count) >= 0) {
     return;
   }
   const VkCommandBuffer cb = g.slot->main_cb;

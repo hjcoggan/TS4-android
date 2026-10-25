@@ -2,10 +2,16 @@
 # screenshots, and report crashes, unregistered call targets, missing jump-table entries, stalls
 # and the Title Update patches the Modules loaded with. Screenshots are graded black or not, and
 # -StacksAt takes every thread's stack (guest functions included) at the given seconds.
+#
+# Runs are unattended by default: the game window is never shown (patch 0038, --window_hidden)
+# and prompts answer themselves (--headless). Screenshots are then the game's own frame dumps
+# (src/frame_dumps.h), one every ScreenshotEvery x 60 guest frames. -Visible shows the window
+# and takes window captures instead.
 param(
     [ValidateRange(1, 600)][int]$Seconds = 30,
     [ValidateSet('info', 'debug', 'trace')][string]$LogLevel = 'info',
-    # Window screenshots every N seconds (0 = none); needs a visible window.
+    # Screenshots every N seconds (0 = none): frame dumps every N x 60 guest frames, or with
+    # -Visible window captures every N seconds.
     [ValidateRange(0, 600)][int]$ScreenshotEvery = 0,
     # A run still alive at the deadline whose log was quiet this long is reported as stalled.
     [ValidateRange(1, 600)][int]$StallSeconds = 10,
@@ -15,6 +21,9 @@ param(
     # steered by a pad someone happens to touch. The default skips the intro videos and stops
     # on the title screen; -InputScript '' plays with the real pads. Copied into the run folder.
     [string]$InputScript = "$PSScriptRoot/input/boot-to-title.txt",
+    # Show the game window (and its prompts) instead of running unattended.
+    [switch]$Visible,
+    # Accepted for older command lines; runs are headless unless -Visible.
     [switch]$Headless,
     # Seconds into the run at which to attach the debugger (scripts/lldb.cmd) and save every
     # thread's stack: stacks-<s>.txt in full, and stacks-<s>-guest.txt with one line per
@@ -39,7 +48,16 @@ $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1',
     "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
     "--log_file=$run/runtime.log", "--log_level=$LogLevel", '--log_flush_interval=1', '--ts4_fps_log=true',
     "--ts4_frame_times_csv=$run/frame_times.csv", "--present_pacing_log=$run/present_pacing.csv")
-if ($Headless) { $arguments += '--headless' }
+$dumpFrames = @()
+if (!$Visible) {
+    $arguments += '--headless', '--window_hidden=true'
+    if ($ScreenshotEvery -gt 0) {
+        for ($at = $ScreenshotEvery; $at -lt $Seconds; $at += $ScreenshotEvery) { $dumpFrames += $at * 60 }
+        if ($dumpFrames) {
+            $arguments += "--ts4_dump_frames=$($dumpFrames -join ',')", "--ts4_dump_dir=$run/dumps"
+        }
+    }
+}
 if ($InputScript) {
     if (!(Test-Path -LiteralPath $InputScript)) { throw "No input script at $InputScript" }
     Copy-Item -LiteralPath $InputScript "$run/input.txt"
@@ -66,8 +84,28 @@ public static class SmokeWin {
 # A capture whose brightest pixel, outside the top-left corner where overlays such as RTSS
 # draw, stays below this (0-255) counts as black.
 $blackMax = 16
-# Saves a window capture and returns its luminance (mean, max) on a 64x36 thumbnail of
-# everything but the top-left 16% x 14%; $null when no capture was taken.
+# Luminance (mean, max) of an image on a 64x36 thumbnail of everything but the top-left
+# 16% x 14%, and whether it counts as black.
+function Get-Grade([System.Drawing.Bitmap]$bitmap, [string]$path) {
+    $w = $bitmap.Width; $h = $bitmap.Height
+    $crop = [System.Drawing.Rectangle]::new([int]($w * 0.16), [int]($h * 0.14), $w - [int]($w * 0.16), $h - [int]($h * 0.14))
+    $thumb = [System.Drawing.Bitmap]::new(64, 36)
+    $tg = [System.Drawing.Graphics]::FromImage($thumb)
+    $tg.DrawImage($bitmap, [System.Drawing.Rectangle]::new(0, 0, 64, 36), $crop, [System.Drawing.GraphicsUnit]::Pixel)
+    $tg.Dispose()
+    $sum = 0.0; $max = 0
+    for ($y = 0; $y -lt 36; $y++) {
+        for ($x = 0; $x -lt 64; $x++) {
+            $c = $thumb.GetPixel($x, $y)
+            $l = [int](0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B)
+            $sum += $l; if ($l -gt $max) { $max = $l }
+        }
+    }
+    $thumb.Dispose()
+    [ordered]@{ file = (Split-Path $path -Leaf); mean = [math]::Round($sum / (64 * 36)); max = $max; black = $max -lt $blackMax }
+}
+
+# Saves a window capture (-Visible) and returns its grade; $null when no capture was taken.
 function Save-Screenshot([System.Diagnostics.Process]$p, [string]$path) {
     $p.Refresh()
     $handle = $p.MainWindowHandle
@@ -86,21 +124,7 @@ function Save-Screenshot([System.Diagnostics.Process]$p, [string]$path) {
     $grade = $null
     if ($ok) {
         $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-        $crop = [System.Drawing.Rectangle]::new([int]($w * 0.16), [int]($h * 0.14), $w - [int]($w * 0.16), $h - [int]($h * 0.14))
-        $thumb = [System.Drawing.Bitmap]::new(64, 36)
-        $tg = [System.Drawing.Graphics]::FromImage($thumb)
-        $tg.DrawImage($bitmap, [System.Drawing.Rectangle]::new(0, 0, 64, 36), $crop, [System.Drawing.GraphicsUnit]::Pixel)
-        $tg.Dispose()
-        $sum = 0.0; $max = 0
-        for ($y = 0; $y -lt 36; $y++) {
-            for ($x = 0; $x -lt 64; $x++) {
-                $c = $thumb.GetPixel($x, $y)
-                $l = [int](0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B)
-                $sum += $l; if ($l -gt $max) { $max = $l }
-            }
-        }
-        $thumb.Dispose()
-        $grade = [ordered]@{ file = (Split-Path $path -Leaf); mean = [math]::Round($sum / (64 * 36)); max = $max; black = $max -lt $blackMax }
+        $grade = Get-Grade $bitmap $path
     }
     $graphics.Dispose(); $bitmap.Dispose()
     $grade
@@ -152,7 +176,7 @@ try {
     $shot = 0
     $grades = [System.Collections.Generic.List[object]]::new()
     $stackTimes = [System.Collections.Generic.Queue[int]]::new([int[]]@($StacksAt | Where-Object { $_ -lt $Seconds } | Sort-Object -Unique))
-    $nextShot = if ($ScreenshotEvery -gt 0) { [double]$ScreenshotEvery } else { [double]::MaxValue }
+    $nextShot = if ($Visible -and $ScreenshotEvery -gt 0) { [double]$ScreenshotEvery } else { [double]::MaxValue }
     while (!$process.HasExited -and $timer.Elapsed.TotalSeconds -lt $Seconds) {
         $nextStack = if ($stackTimes.Count) { [double]$stackTimes.Peek() } else { [double]::MaxValue }
         $next = [math]::Min([math]::Min($nextShot, $nextStack), [double]$Seconds)
@@ -174,6 +198,16 @@ try {
             $quietSeconds = [math]::Round(((Get-Date) - (Get-Item "$run/runtime.log").LastWriteTime).TotalSeconds, 1)
         }
         $process.Kill($true); $process.WaitForExit()
+    }
+    # Unattended runs: the frame dumps become the screenshots, in order.
+    foreach ($frame in $dumpFrames) {
+        $dump = "$run/dumps/frame-{0:D6}.png" -f $frame
+        if (!(Test-Path -LiteralPath $dump)) { continue }
+        $shot++
+        $path = "$run/shot-{0:D3}.png" -f $shot
+        Copy-Item -LiteralPath $dump $path
+        $bitmap = [System.Drawing.Bitmap]::new($path)
+        try { $grades.Add((Get-Grade $bitmap $path)) } finally { $bitmap.Dispose() }
     }
     $stdout.GetAwaiter().GetResult() | Set-Content "$run/stdout.txt"
     $stderr.GetAwaiter().GetResult() | Set-Content "$run/stderr.txt"

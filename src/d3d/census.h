@@ -13,8 +13,16 @@ namespace topspin4::d3d::census {
 
 bool Enabled();
 
-// From the sink's Present: logs the census every 60 presents of a Module.
-void OnPresent(Module module);
+// From the sink's Present: logs both Modules' census every 60 presents of either, and every 600 the
+// draw attribution below.
+void OnPresent(Module module, uint32_t device);
+
+// Draw attribution: the device's ring write cursor (device +0x30) is read around every hooked
+// original. DRAW_INDX/DRAW_INDX_2 headers written between one hooked call's exit and the next
+// one's entry came from unhooked code, and are counted against that next call's guest caller
+// (lr); those written inside a call are counted against the hook (inclusive of nested hooks).
+void OnCallEntry(Module module, Fn fn, const uint8_t* base, uint32_t caller);
+void OnCallExit(Module module, Fn fn, const uint8_t* base);
 
 // From the sink's mirror commit: logs each distinct register group once (the mirror layout).
 void OnMirrorCommit(Module module, uint32_t device, uint32_t r4, uint32_t first_register,

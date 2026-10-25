@@ -82,8 +82,9 @@ void OnClear(const uint8_t* base, uint32_t device, uint32_t flags, const int32_t
              uint32_t color, float depth, uint32_t stencil);
 
 // D3DDevice_Resolve: flags (0..3 colour target, 4 depth-stencil) and the
-// destination texture object (0 for a clear-only resolve).
-void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination);
+// destination texture object (0 for a clear-only resolve) and its mip level.
+void OnResolve(const uint8_t* base, uint32_t device, uint32_t flags, uint32_t destination,
+               uint32_t level = 0);
 
 // User-memory draws completed by EndVertices or the inline-commit wrappers.
 // Indices, when present, address the vertex allocation with base_vertex added.

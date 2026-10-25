@@ -11,8 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, load_scene, log_failures, repeatability,  # noqa: E402
-                          run_failures)
+from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, envelope_error, load_scene, log_failures,  # noqa: E402
+                          native_failures, repeatability, run_failures)
 
 GOOD = """
 name = "boot-main-menu"
@@ -162,3 +162,50 @@ def test_the_lock_holds_against_the_smoke_runs_exclusive_open(tmp_path):
         holder.communicate("\n", timeout=30)
     with GameRunLock(lock):
         pass
+
+
+def report_with(renderer):
+    return {"exit_after_frame": 10, "guest_swaps": 12, "dumps": [], "renderer": renderer}
+
+
+NATIVE_CLEAN = {"native_requested": True, "native_active": True, "fallback": "none", "frames": 10,
+                "debug_cvars": [], "enhancements": [{"name": "ts4_native_cas", "on": False}],
+                "draw_skips": {}, "gpu_failure": ""}
+
+
+def test_a_clean_native_run_passes():
+    assert native_failures(report_with(NATIVE_CLEAN)) == []
+
+
+def test_a_renderer_fallback_fails_a_native_run():
+    renderer = dict(NATIVE_CLEAN, native_active=False, fallback="missing_shader_pack")
+    assert native_failures(report_with(renderer)) == [
+        "Native was not active (renderer fallback: missing_shader_pack)"]
+
+
+def test_every_draw_skip_debug_cvar_and_enhancement_fails_a_native_run():
+    renderer = dict(NATIVE_CLEAN,
+                    draw_skips={"no_texture": {"total": 3, "first_frame": 7, "first_key": "00ab"}},
+                    debug_cvars=["ts4_native_debug_no_blend"],
+                    enhancements=[{"name": "ts4_native_cas", "on": True}])
+    assert native_failures(report_with(renderer)) == [
+        "draw skip no_texture: 3 from frame 7 (key 00ab)",
+        "debug cvar ts4_native_debug_no_blend is set",
+        "Enhancement ts4_native_cas is on"]
+
+
+def test_a_report_without_a_renderer_object_fails_a_native_run():
+    assert native_failures({"exit_after_frame": 1, "guest_swaps": 2, "dumps": []}) == [
+        "the session report has no renderer object"]
+
+
+def test_native_is_judged_against_the_closest_classic_run_per_pixel():
+    a = np.zeros((2, 2, 3), np.float32)
+    b = np.ones((2, 2, 3), np.float32)
+    test = a.copy()
+    test[0, 0] = 1.0  # matches b there, a elsewhere
+
+    def error(reference, image):
+        return np.abs(reference - image).mean(axis=2)
+
+    assert envelope_error([a, b], test, error).max() == 0.0

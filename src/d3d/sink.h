@@ -55,9 +55,9 @@ struct Sink {
   void (*clear)(Module, const uint8_t* base, uint32_t device, uint32_t flags,
                 const int32_t rect[4], uint32_t color, float depth, uint32_t stencil);
   // D3DDevice_Resolve: flags (0..3 colour target, 4 depth-stencil) and the destination
-  // texture object (0 for a clear-only resolve).
+  // texture object (0 for a clear-only resolve) and its mip level.
   void (*resolve)(Module, const uint8_t* base, uint32_t device, uint32_t flags,
-                  uint32_t destination);
+                  uint32_t destination, uint32_t level);
   // D3DDevice_SetStreamSource: the stride, which the device does not keep.
   void (*set_stream_source)(Module, uint32_t stream, uint32_t stride);
   // D3DDevice_DrawIndexedVertices: indices from the device's index buffer.
@@ -78,6 +78,11 @@ struct Sink {
                          bool is_pixel_shader);
   // The XDK's shader register functions, on every shader object.
   void (*shader_registered)(Module, const uint8_t* base, uint32_t object, bool is_pixel_shader);
+  // Around every hooked original (census only): the hook and its guest caller (lr), so draw
+  // packets written to the ring between hooked calls can be attributed to the game code
+  // that wrote them (census.h).
+  void (*call_entry)(Module, Fn fn, const uint8_t* base, uint32_t caller);
+  void (*call_exit)(Module, Fn fn, const uint8_t* base);
   // The register-mirror commit (r3 device, r4, r5 first register, r6 mirror address).
   void (*mirror_commit)(Module, uint32_t device, uint32_t r4, uint32_t first_register,
                         uint32_t mirror);

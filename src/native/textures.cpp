@@ -1,5 +1,6 @@
 #include "native/textures.h"
 #include "native/host_paths.h"
+#include "native/texture_decode.h"
 #include "native/texture_formats.h"
 
 #include <algorithm>
@@ -530,6 +531,23 @@ void ReadTexture(TextureJob& job) {
     offset += row_bytes * by * t.layers;
   }
   EndianSwap(job.data.data(), total, fetch.endianness);
+  if (t.info.decode == Decode::kCtx1) {
+    // Each level's 4x4 blocks of 8 bytes become 16 R8G8 texels: 4x the bytes, the same row
+    // length in texels.
+    std::vector<uint8_t> decoded(total * 4);
+    for (uint32_t i = 0; i < job.region_count; ++i) {
+      VkBufferImageCopy& region = job.regions[i];
+      const uint32_t bx = region.bufferRowLength / 4, by = region.bufferImageHeight / 4;
+      const size_t level_bytes = size_t(bx) * by * 8;
+      for (uint32_t layer = 0; layer < t.layers; ++layer) {
+        texture_decode::DecodeCtx1Level(
+            job.data.data() + region.bufferOffset + layer * level_bytes, bx, by,
+            decoded.data() + region.bufferOffset * 4 + layer * level_bytes * 4);
+      }
+      region.bufferOffset *= 4;
+    }
+    job.data = std::move(decoded);
+  }
   if (const uint32_t dump = REXCVAR_GET(ts4_native_dump_texture);
       dump == 1 || (dump && dump == t.base_page << 12)) {
     DumpDds(t.base_page << 12, t.info.format, t.width, t.height, job.data.data(),

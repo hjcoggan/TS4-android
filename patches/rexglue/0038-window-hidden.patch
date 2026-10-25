@@ -1,0 +1,35 @@
+diff --git a/src/ui/window_sdl.cpp b/src/ui/window_sdl.cpp
+index 6b7ae64..1744374 100644
+--- a/src/ui/window_sdl.cpp
++++ b/src/ui/window_sdl.cpp
+@@ -40,6 +40,10 @@
+ #include <rex/ui/surface_gnulinux.h>
+ #endif
+ 
++REXCVAR_DEFINE_BOOL(window_hidden, false, "UI",
++                    "Never show the window or raise it (unattended runs); presenting and the "
++                    "presenter's guest output work as usual");
++
+ namespace rex::ui {
+ 
+ namespace {
+@@ -183,7 +187,9 @@ bool WindowSDL::OpenImpl() {
+   // desired state so a reopened window comes back with the state it had.
+   ApplyTextInputActiveNow();
+   ApplyCursorVisibilityNow();
+-  SDL_ShowWindow(sdl_window_);
++  if (!REXCVAR_GET(window_hidden)) {
++    SDL_ShowWindow(sdl_window_);
++  }
+ 
+   // Actualize state for the common Window code. Listener dispatch is handled
+   // by Window::Open after OpenImpl returns; these only record initial state.
+@@ -366,7 +372,7 @@ void WindowSDL::RearmCursorAutoHideTimer() {
+ }
+ 
+ void WindowSDL::FocusImpl() {
+-  if (!sdl_window_) {
++  if (!sdl_window_ || REXCVAR_GET(window_hidden)) {
+     return;
+   }
+   SDL_RaiseWindow(sdl_window_);
