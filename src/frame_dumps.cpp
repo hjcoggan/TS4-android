@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <thread>
 
 #include <rex/cvar.h>
 #include <rex/logging.h>
@@ -31,6 +32,9 @@ REXCVAR_DEFINE_INT32(ts4_exit_after_frame, -1, "TopSpin4",
                      "session report and exit");
 REXCVAR_DEFINE_STRING(ts4_session_report, "", "TopSpin4",
                       "Scene runs: the session report (JSON) written on ts4_exit_after_frame");
+REXCVAR_DEFINE_BOOL(ts4_fps_log, false, "TopSpin4",
+                    "Log the guest frame rate (VdSwap calls) once a second, for comparison "
+                    "with the Oracle's scripts/edge.ps1 -FrameLog");
 REXCVAR_DEFINE_INT32(ts4_renderdoc_frame, -1, "TopSpin4",
                      "With RenderDoc attached (renderdoccmd capture): capture this guest frame, "
                      "everything the GPU does between the swap before it and its own");
@@ -146,6 +150,23 @@ void WriteReport(uint64_t frame) {
   }
 }
 
+// Once a second, the guest swaps since the last line over the time since it. Its own thread,
+// so a stalled guest still logs (0 fps) instead of going quiet.
+void LogFrameRate() {
+  using Clock = std::chrono::steady_clock;
+  auto last_time = Clock::now();
+  uint64_t last_swaps = rex::system::GuestSwapCount();
+  for (auto next = last_time + std::chrono::seconds(1);; next += std::chrono::seconds(1)) {
+    std::this_thread::sleep_until(next);
+    const auto now = Clock::now();
+    const uint64_t swaps = rex::system::GuestSwapCount();
+    const double seconds = std::chrono::duration<double>(now - last_time).count();
+    REXLOG_INFO("fps: {:.1f} (guest swaps {})", (swaps - last_swaps) / seconds, swaps);
+    last_time = now;
+    last_swaps = swaps;
+  }
+}
+
 void OnFrameShown(uint64_t frame) {
   CaptureWithRenderDoc(frame);
   if (g_frames.contains(frame)) {
@@ -197,6 +218,9 @@ void Install(rex::Runtime* runtime) {
         REXLOG_ERROR("frame dumps: cannot create {}: {}", g_dir.string(), error.message());
       }
     }
+  }
+  if (REXCVAR_GET(ts4_fps_log)) {
+    std::thread(LogFrameRate).detach();
   }
   if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1) {
     return;

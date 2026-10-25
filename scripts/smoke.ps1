@@ -37,7 +37,7 @@ $info.RedirectStandardError = $true
 $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1',
     "--game_data_root=$projectRoot/gamedata", "--update_data_root=$projectRoot/updatedata",
     "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
-    "--log_file=$run/runtime.log", "--log_level=$LogLevel", '--log_flush_interval=1')
+    "--log_file=$run/runtime.log", "--log_level=$LogLevel", '--log_flush_interval=1', '--ts4_fps_log=true')
 if ($Headless) { $arguments += '--headless' }
 if ($InputScript) {
     if (!(Test-Path -LiteralPath $InputScript)) { throw "No input script at $InputScript" }
