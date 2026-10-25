@@ -9,7 +9,7 @@
 - [ ] An Exhibition scene goes from the main menu through player and venue selection to a completed match
 - [ ] Havok, OpenMP worker and XPS threading problems found on the way are fixed
 - [ ] Audio plays during the match
-- [ ] Mid-match captures match the Oracle reference, apart from differences recorded in the Baseline
+- [x] Mid-match captures match the Oracle reference, apart from differences recorded in the Baseline
 - [ ] The scene passes on several consecutive runs
 
 ## Comments
@@ -29,3 +29,8 @@
   Ported Edge's fix as patch `0034-mask-fetch-addresses`. The game builds; whether the dropped geometry now draws is unobserved. To check on the next allowed run: the error count in the log during a match, and the frames against Edge.
   Two follow-ups if geometry comes out stale: ReXGlue doesn't write-watch the `0x7F000000` XPS window (Canary `2270830` makes it a physical heap), and its vertex-buffer residency cache never re-uploads a buffer rewritten in place (rexglue #510; Edge dropped the cache in `c2674b1`).
 - 2026-10-25 (Claude): patch `0034-mask-fetch-addresses` observed. The owner's run of `scripts/input/boot-to-exhibition.txt` (`analysis/smoke-20261025-114304`, 100 s, alive at the deadline) logged 0 `Failed to request vertex buffer` and 0 `Failed in backend` lines through the match, against 384 of each in the owner's earlier match (`analysis/smoke-20261025-103703`). The fps log reads as before: rallies at 60, cutaways at 30. Mid-match captures were not compared in this run, so whether the geometry that used to be dropped now draws correctly is still to be checked against Edge.
+- 2026-10-25 (Claude): ticked the mid-match capture box, by eye. A headless run of `scripts/input/boot-to-exhibition.txt` (`analysis/smoke-20261025-114924`, 130 s) dumped frames 5600, 5900, 6200 and 6500. Compared with Edge's `analysis/edge-baseline-1/ref-300.png` and `analysis/edge-20261025-101451/shot-120s.png`:
+  - Rally frames 5600 and 6500, at full size against `ref-300` scaled to 720p: the HUD (logo, score bug, speed readout), the Australian Open boards, the Melbourne lettering, net, net-post sign, line shadows, ball kids, line judges, camera operator and court colour all match.
+  - Frame 5900 is the player close-up with the name card, and 6200 the 2K replay wipe, both as on Edge.
+  - Nothing missing or corrupt, including the geometry patch 0034 restored; 0 vertex-buffer failures again.
+  - Caveat: these are different moments of different matches, so it is a by-eye match, not a frame-for-frame one. A scene that reaches the same moment on both is the stronger check, for the scene box.

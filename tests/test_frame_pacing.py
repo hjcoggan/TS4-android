@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from frame_pacing import judge, load_frame_times  # noqa: E402
+from frame_pacing import judge, load_frame_times, load_present_log  # noqa: E402
 
 
 def times(intervals_ms, start=1000.0):
@@ -78,3 +78,25 @@ def test_a_window_judges_only_the_frames_inside_it():
     run = times([300.0] + [1000 / 60] * 600, start=0.0)
     assert not judge(run).passed
     assert judge(run, from_s=2.0).passed
+
+
+SWAP_LOG_HEADER = ("present_us,interval_us,repeated_vblanks,arrival_after_vblank_us,latency_us,"
+                   "guest_vblank,frames_replaced,external_sequence,"
+                   "present_id,wait_us,unshown,shown_id,shown_us,shown_after_present_us\n")
+
+
+def test_the_presenter_s_swap_log_loads_as_present_times_and_replaced_frames(tmp_path):
+    path = tmp_path / "present_pacing.csv"
+    path.write_text(SWAP_LOG_HEADER
+                    + "1000,0,0,500,4000,60,0,0,1,0,0,,,\n"
+                    + "17667,16667,0,480,4100,61,2,0,2,0,0,1,1500,500\n", encoding="utf-8")
+    times, replaced = load_present_log(path)
+    assert times == pytest.approx([1.0, 17.667])
+    assert replaced == [(17.667, 2)]
+
+
+def test_frames_the_presenter_replaced_unshown_fail_the_bar():
+    verdict = judge(times([1000 / 60] * 200), replaced=[(1500.0, 1)])
+    assert verdict.replaced == 1
+    assert not verdict.passed
+    assert judge(times([1000 / 60] * 200), replaced=[(99999.0, 1)]).passed  # outside the window

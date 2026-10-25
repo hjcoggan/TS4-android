@@ -24,3 +24,10 @@
   - `--from 60` (the whole match): the cutaways' 30 Hz frames spread from 31.8 to 35.1 ms. So they fail the ±1 ms rule, aren't recognised as an even cutaway run, and count as hitches.
   - Not a verdict yet. The times are taken when the GPU thread processes each swap, and the presenter paces the actual present later, so this jitter may never reach the screen.
   - Next: timestamp at present (the presenter's vblank-paced present, patches `0016-present-wait` and `0024-guest-vblank-rate`), then judge again. Only if the present times jitter too is the spread real.
+- 2026-10-25 (Claude): measured at present. `frame_pacing.py` now also reads the presenter's swap log (`--present_pacing_log`, written by `smoke.ps1` as `present_pacing.csv`): one row per guest frame at its paced present, plus the frames replaced unshown.
+  - Over 60-100 s of the match in `analysis/smoke-20261025-114924`: 2,155 frames, 241 at the cutaways' 30 Hz step, 1 % low 16.86 ms (the bar is 16.7), 10 uneven, 6 hitches, 0 replaced. The GPU-thread log of the same window reads 1 % low 34.95 ms and 191 hitches, so that jitter never reached the screen.
+  - The hitches, from the swap-log rows:
+    - 67.40 s and 98.86 s: the presenter waited 9.7 and 18.5 ms for the previous present to be shown (`wait_us`, `unshown 1`) while the guest frame was on time. Display or driver side.
+    - 74.19-74.25 s: inside a 30 Hz cutaway, one present waited 3.9 ms, giving 37.5 and 29.2 ms intervals and breaking the even run. Display side.
+    - 91.27 s: one vblank with no new guest frame (`repeated_vblanks 1`, no wait), a single held frame in 60 Hz play. Game or emulation side.
+  - Caveat: this was a headless run with a hidden window, so the display-side waits are suspect until measured in a visible window. Next: a visible-window run judged the same way; then, if they persist, the present-wait stalls (ReXGlue #521, AMD fence waits) and the held guest frame (the guest-scheduler and spin leads above).

@@ -38,7 +38,7 @@ $arguments = @('--gpu_plugin=xenos', '--vulkan_device=-1',
     "--game_data_root=$projectRoot/gamedata", "--update_data_root=$projectRoot/updatedata",
     "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
     "--log_file=$run/runtime.log", "--log_level=$LogLevel", '--log_flush_interval=1', '--ts4_fps_log=true',
-    "--ts4_frame_times_csv=$run/frame_times.csv")
+    "--ts4_frame_times_csv=$run/frame_times.csv", "--present_pacing_log=$run/present_pacing.csv")
 if ($Headless) { $arguments += '--headless' }
 if ($InputScript) {
     if (!(Test-Path -LiteralPath $InputScript)) { throw "No input script at $InputScript" }
