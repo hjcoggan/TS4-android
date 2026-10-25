@@ -1,0 +1,65 @@
+diff --git a/include/rex/system/guest_swaps.h b/include/rex/system/guest_swaps.h
+index 00521e0..efad7b4 100644
+--- a/include/rex/system/guest_swaps.h
++++ b/include/rex/system/guest_swaps.h
+@@ -13,4 +13,13 @@ namespace rex::system {
+ // it. Hosts time scripted input and frame captures by it.
+ uint64_t GuestSwapCount();
+ 
++// Called on the GPU thread once each swap's image is the presenter's newest guest output, with
++// the swaps the GPU had shown before it: the same clock as GuestSwapCount, so frame N here is
++// the one the guest presented after GuestSwapCount reached N. Hosts dump frames from it. One
++// observer; nullptr removes it.
++using FrameShownObserver = void (*)(uint64_t frame);
++void SetFrameShownObserver(FrameShownObserver observer);
++// The GPU's side: call after each swap.
++void NotifyFrameShown();
++
+ }  // namespace rex::system
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index df0c036..1dbf8a2 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -28,6 +28,7 @@
+ #include <rex/graphics/pipeline/texture/info.h>
+ #include <rex/graphics/sampler_info.h>
+ #include <rex/graphics/xenos.h>
++#include <rex/system/guest_swaps.h>
+ #include <rex/logging.h>
+ #include <rex/math.h>
+ #include <rex/memory.h>
+@@ -1048,6 +1049,7 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+   reader->AdvanceRead((count - 4) * sizeof(uint32_t));
+ 
+   IssueSwap(frontbuffer_ptr, frontbuffer_width, frontbuffer_height);
++  rex::system::NotifyFrameShown();
+ 
+   if (++g_draw_census.swaps % 60 == 0 && REXCVAR_GET(gpu_draw_census)) {
+     REXGPU_INFO("draw-census gpu swaps={} draw_indx={} draw_indx_2={} indirect={} "
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+index de53e58..d307229 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -92,6 +92,22 @@ std::atomic<uint64_t> guest_swaps{0};
+ }  // namespace
+ 
+ uint64_t GuestSwapCount() { return guest_swaps.load(std::memory_order_relaxed); }
++
++namespace {
++std::atomic<FrameShownObserver> frame_shown_observer{nullptr};
++uint64_t frames_shown = 0;  // GPU thread only
++}  // namespace
++
++void SetFrameShownObserver(FrameShownObserver observer) {
++  frame_shown_observer.store(observer, std::memory_order_release);
++}
++
++void NotifyFrameShown() {
++  const uint64_t frame = frames_shown++;
++  if (FrameShownObserver observer = frame_shown_observer.load(std::memory_order_acquire)) {
++    observer(frame);
++  }
++}
+ }  // namespace rex::system
+ 
+ namespace rex::kernel::xboxkrnl {

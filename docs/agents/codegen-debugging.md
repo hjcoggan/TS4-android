@@ -53,6 +53,13 @@ runtime and GPU plugin DLLs next to the exe on every build; check their timestam
 
 ## Where things are
 
+- Scene runs: `python scripts/scene_runner.py tests/scenes/boot-main-menu.toml` plays a scene
+  twice, dumps its capture frames (exactly the guest frame named, from the GPU's swap) and
+  checks they repeat. One frame from a smoke run: `-ExtraArguments
+  '--ts4_dump_frames=1400','--ts4_dump_dir=<dir>'` (`src/frame_dumps.h`). Smoke and scene runs
+  share `analysis/game-run.lock`, so a second run is refused while one is going. Loading screens
+  show a random tip each boot, so a capture never lands on one.
+
 - Names for Swing functions: `symbols/tu1-symbols.csv`, with the method in
   `docs/research/tu1-symbol-map.md`. Local Ghidra project of all three TU1 Modules:
   `ghidra/TopSpin4TU1` (built by `scripts/ghidra-project.ps1`).

@@ -1,0 +1,34 @@
+# Boot -> intro skipped -> Loader's title screen -> START (Swing loads the practice ground)
+# -> START -> main menu. Route from scripts/input/boot-to-main-menu.txt.
+# Run: python scripts/scene_runner.py tests/scenes/boot-main-menu.toml
+
+name = "boot-main-menu"
+from = "boot"
+
+# Scripted pad (src/script_input.h grammar); `at` anchors to guest frames, +-1.
+input = """
+# The intro videos and the 2K logos skip on START (keystrokes).
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+# The title screen is up from about frame 350.
+at 500
+press START
+# Practice ground is up by about frame 900; START opens the main menu.
+at 1100
+press START
+"""
+
+[[capture]]  # title screen, "Press START button"
+frame = 480
+[[capture]]  # main menu, GAME MODES highlighted
+frame = 1400

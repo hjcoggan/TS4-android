@@ -5,6 +5,7 @@
 #include <rex/system/guest_swaps.h>
 
 #include "fault_log.h"
+#include "frame_dumps.h"
 #include "script_input.h"
 
 class TopSpin4App : public rex::ReXApp {
@@ -32,4 +33,6 @@ class TopSpin4App : public rex::ReXApp {
   void OnPreSetup(rex::RuntimeConfig& config) override {
     topspin4::InstallScriptInput(config, &rex::system::GuestSwapCount);
   }
+
+  void OnPostSetup() override { topspin4::frame_dumps::Install(runtime()); }
 };

@@ -132,8 +132,16 @@ function Get-LogMatches([string]$log, [string]$pattern) {
 $process = [System.Diagnostics.Process]::new()
 $process.StartInfo = $info
 $started = $false
+$runLock = $null
 $timer = [System.Diagnostics.Stopwatch]::StartNew()
 try {
+    # Runs never overlap: the game animates by elapsed time, so a run slowed by another reaches
+    # a different state. scripts/scene_runner.py takes the same lock.
+    try {
+        $runLock = [System.IO.File]::Open("$projectRoot/analysis/game-run.lock", 'OpenOrCreate', 'ReadWrite', 'None')
+    } catch [System.IO.IOException] {
+        throw "A game run is going (analysis/game-run.lock is held); runs never overlap."
+    }
     $started = $process.Start()
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
@@ -192,4 +200,5 @@ try {
 } finally {
     if ($started -and !$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
     $process.Dispose()
+    if ($runLock) { $runLock.Dispose() }
 }

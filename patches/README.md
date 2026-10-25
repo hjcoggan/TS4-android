@@ -21,6 +21,7 @@ renumbered once committed, so a fix to an earlier patch is a new patch on top.
 | `0028-modules-from-own-folder` | 0027 matches by file name, so a module of the same name from another device (a DLC package's) would be wired to this build's code; modules now load only from the executable's own folder, compared as resolved by the VFS. |
 | `0029-guest-swap-count` | Counts `VdSwap` calls (`rex::system::GuestSwapCount`): the guest's frame count across both Modules' Direct3D copies, which the scripted pad times its steps by. |
 | `0030-io-trace` | `--io_trace` logs every successful file open and every guest thread start and exit, so a run lines up against the Oracle's log (`.tools/xenia-edge/xenia.log`). Off by default. |
+| `0031-frame-shown-observer` | Calls a host observer on the GPU thread after each swap's image is the presenter's newest guest output, numbered on the `GuestSwapCount` clock, so scene runs dump exactly the frame the scripted pad's `at <frame>` names (`src/frame_dumps.h`). |
 
 ## Carried over from WWE All Stars (ADR-0004)
 
