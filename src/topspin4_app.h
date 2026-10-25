@@ -1,11 +1,18 @@
 #pragma once
 
+#include <fmt/format.h>
 #include <rex/cvar.h>
+#include <rex/graphics/graphics_system.h>
 #include <rex/logging.h>
+#include <rex/memory.h>
 #include <rex/platform/env.h>
 #include <rex/rex_app.h>
+#include <rex/runtime.h>
 #include <rex/system/guest_swaps.h>
+#include <rex/ui/vulkan/provider.h>
+#include <rex/ui/window.h>
 
+#include "crash_report.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
 #include "script_input.h"
@@ -23,6 +30,9 @@ class TopSpin4App : public rex::ReXApp {
   using rex::ReXApp::ReXApp;
 
   static std::unique_ptr<rex::ui::WindowedApp> Create(rex::ui::WindowedAppContext& ctx) {
+    // First: in the crash report's dump helper (a second copy of the game), this writes the
+    // dump and exits.
+    topspin4::crash::Install();
     topspin4::fault_log::Install();
     return std::unique_ptr<TopSpin4App>(new TopSpin4App(ctx, "topspin4", PPCImageConfig));
   }
@@ -64,6 +74,7 @@ class TopSpin4App : public rex::ReXApp {
   void OnPostInitLogging() override {
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
+    topspin4::crash::SetSettingsFile(path);
     const settings::LoadReport report =
         settings::LoadSettingsFile(path, [](std::string_view key, std::string_view value) {
           const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
@@ -89,5 +100,23 @@ class TopSpin4App : public rex::ReXApp {
     topspin4::InstallScriptInput(config, &rex::system::GuestSwapCount);
   }
 
-  void OnPostSetup() override { topspin4::frame_dumps::Install(runtime()); }
+  void OnPostSetup() override {
+    topspin4::frame_dumps::Install(runtime());
+    // The crash report's facts known only now. Only the Vulkan backend is built, so the
+    // provider is a VulkanProvider.
+    if (auto* graphics = runtime()->graphics_system()) {
+      auto* provider = static_cast<rex::ui::vulkan::VulkanProvider*>(graphics->provider());
+      if (provider && provider->vulkan_device()) {
+        const auto& properties = provider->vulkan_device()->properties();
+        topspin4::crash::SetGpu(properties.deviceName,
+                                fmt::format("0x{:08X}", properties.driverVersion));
+      }
+    }
+    topspin4::crash::SetGuestMemory(runtime()->memory()->virtual_membase(),
+                                    runtime()->memory()->physical_membase());
+    if (auto* game_window = window()) {
+      topspin4::crash::SetWindow(game_window->GetNativeWindowHandle());
+    }
+    topspin4::crash::CrashIfAsked();
+  }
 };

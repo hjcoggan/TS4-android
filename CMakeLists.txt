@@ -10,6 +10,7 @@ include(cmake/rexglue.cmake)
 
 set(TOPSPIN4_SOURCES
     src/main.cpp
+    src/crash_report.cpp
     src/fault_log.cpp
     src/frame_dumps.cpp
     src/script_input.cpp
@@ -25,8 +26,16 @@ else()
 endif()
 
 rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
+# Crash report (src/crash_report.cpp): the version and commit go in its manifest.
+execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE TOPSPIN4_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT TOPSPIN4_COMMIT)
+    set(TOPSPIN4_COMMIT "unknown")
+endif()
+target_compile_definitions(topspin4 PRIVATE
+    TOPSPIN4_VERSION="${PROJECT_VERSION}" TOPSPIN4_COMMIT="${TOPSPIN4_COMMIT}")
 if(WIN32)
-    target_link_libraries(topspin4 PRIVATE dbghelp)
+    target_link_libraries(topspin4 PRIVATE dbghelp shell32)
     # The SDK stages its DLLs next to the exe only when the exe relinks, and a runtime
     # change that keeps the exports (or any GPU plugin change) does not relink it, so the
     # run would use stale DLLs. Copy them on every build.
@@ -55,6 +64,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_frame_dumps.cpp
         tests/host/test_user_paths.cpp
         tests/host/test_settings.cpp
+        tests/host/test_crash_report.cpp
         src/settings/settings_file.cpp
         ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
     target_include_directories(topspin4_host_tests PRIVATE src
@@ -73,4 +83,8 @@ endif()
 if(REXSDK_DIR)
     target_include_directories(topspin4 PRIVATE
         $<TARGET_PROPERTY:imgui::imgui,INTERFACE_INCLUDE_DIRECTORIES>)
+    # The crash report reads the GPU name through the SDK's Vulkan headers, which include
+    # RenderDoc's; the settings file is read with toml++. As in WWE All Stars.
+    target_include_directories(topspin4 PRIVATE ${REXSDK_DIR}/thirdparty/renderdoc
+        ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
 endif()
