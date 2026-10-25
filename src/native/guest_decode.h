@@ -124,6 +124,9 @@ struct DeclType {
   VkFormat uint_format;
   bool sixteen_bit;
   bool packed_normal;  // 10_11_11 / 11_11_10, decoded by the shader
+  // k_2_10_10_10 signed normalized (DEC3N), decoded by the shader for normal-like inputs
+  // (XenosRecomp's SPEC_CONSTANT_DEC3N_NORMAL, patches/xenosrecomp/0003-dec3n-normals).
+  bool dec3n_normal = false;
 };
 constexpr DeclType kDeclTypes[] = {
     {0x2C83A4, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32_UINT, false, false},
@@ -143,7 +146,7 @@ constexpr DeclType kDeclTypes[] = {
     {0x1A205A, VK_FORMAT_R16G16B16A16_UNORM, VK_FORMAT_R16G16B16A16_UINT, true, false},
     {0x2C82A1, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32_UINT, false, false},
     {0x2A2287, VK_FORMAT_A2B10G10R10_USCALED_PACK32, VK_FORMAT_R32_UINT, false, false},
-    {0x2A2187, VK_FORMAT_A2B10G10R10_SNORM_PACK32, VK_FORMAT_R32_UINT, false, false},
+    {0x2A2187, VK_FORMAT_A2B10G10R10_SNORM_PACK32, VK_FORMAT_R32_UINT, false, false, true},
     // Signed normalized 11_11_10 normals (X 10 bits, Y and Z 11): raw uint,
     // decoded by the shader. Its decoder knows no other packed layout.
     {0x2A2191, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32_UINT, false, true},
@@ -225,11 +228,13 @@ constexpr const DeclType* FindDeclType(uint32_t type) {
 // after the host's 32-bit vertex byte swap. TEXCOORDn: bit n (the shader swaps
 // .yxwz). POSITIONn: bit 16 + n swaps x/y, bit 24 + n also z/w, only for
 // four-component data: a two-component fetch has the defaults (0, 1) in z/w,
-// which must stay put (patches/xenosrecomp-wweallstars.patch, tfetchPosition).
+// which must stay put (patches/xenosrecomp/0001, tfetchPosition). BLENDWEIGHTn: bit 8 + n
+// (.yxwz; patches/xenosrecomp/0004-blend-weight-halves, Top Spin 4's USHORT4N skin weights).
 constexpr uint32_t HalfSwapBit(uint8_t usage, uint8_t index, bool sixteen_bit,
                                bool four_component) {
   if (!sixteen_bit || index > 7) return 0;
   if (usage == 5) return 1u << index;  // TEXCOORD
+  if (usage == 1) return 1u << (8 + index);  // BLENDWEIGHT
   if (usage == 0) {                    // POSITION
     return 1u << (16 + index) | (four_component ? 1u << (24 + index) : 0u);
   }

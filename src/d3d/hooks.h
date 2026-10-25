@@ -167,6 +167,18 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
     sink.draw_non_indexed(module, base, device, primitive, start_vertex, vertex_count);  \
   TS4_D3D_END
 
+// Shader constants from a constant buffer: r4 = the buffer's range table, r5 = the data base.
+// D3D sends them to the GPU (inline, or as LOAD_ALU_CONSTANT) without touching the device's
+// constant mirror, which is where the Native renderer reads constants.
+#define TS4_D3D_HOOK_SetShaderConstantsFromBuffer(name, address)                       \
+  TS4_D3D_BEGIN(name, address)                                                         \
+  const uint32_t device = ctx.r3.u32;                                                  \
+  const uint32_t table = ctx.r4.u32;                                                   \
+  const uint32_t data = ctx.r5.u32;                                                    \
+  TS4_D3D_CALL(address);                                                               \
+  if (sink.constants_from_buffer) sink.constants_from_buffer(module, base, device, table, data); \
+  TS4_D3D_END
+
 // Swing's DrawVertices, specialised by LTCG to start at vertex 0: r4 = primitive, r5 = vertex
 // count.
 #define TS4_D3D_HOOK_DrawVerticesFromZero(name, address)                              \

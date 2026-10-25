@@ -244,6 +244,8 @@ TEST_CASE("16-bit pairs get their halves swapped back for texcoords and position
   CHECK(HalfSwapBit(5, 3, true, false) == 1u << 3);   // TEXCOORD3
   CHECK(HalfSwapBit(0, 0, false, false) == 0u);       // 32-bit floats need no swap
   CHECK(HalfSwapBit(10, 0, true, true) == 0u);        // COLOR0 is not swapped
+  CHECK(HalfSwapBit(1, 0, true, true) == 1u << 8);    // BLENDWEIGHT0 (Top Spin 4's USHORT4N)
+  CHECK(HalfSwapBit(1, 0, false, false) == 0u);       // float weights need no swap
 }
 
 TEST_CASE("a 2-component 16-bit position swaps x/y only, keeping w = 1") {

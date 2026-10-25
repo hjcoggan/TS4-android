@@ -229,6 +229,7 @@ struct VertexLayout {
   uint32_t stream_mask = 0;
   bool packed_normal = false;
   bool byte_normal = false;
+  bool dec3n_normal = false;
   // Byte strides from the shader's vfetches (layouts built without a D3D
   // declaration); a stream's SetStreamSource stride takes precedence.
   uint32_t fetch_strides[kMaxStreams] = {};
@@ -289,6 +290,9 @@ const DeclEntry* GetDeclaration(const uint8_t* base, uint32_t object) {
     layout.stream_mask |= 1u << stream;
     if (decl_type->packed_normal && location->is_uint) {
       layout.packed_normal = true;
+    }
+    if (decl_type->dec3n_normal && location->is_uint) {
+      layout.dec3n_normal = true;
     }
     if ((usage == 3 || usage == 6 || usage == 7) && (type & 0x3F) == 6) {
       layout.byte_normal = true;
@@ -2139,6 +2143,9 @@ const DeclEntry* GetShaderLayout(const uint8_t* base, uint32_t object, const Nat
     if (decl_type->packed_normal && location->is_uint) {
       layout.packed_normal = true;
     }
+    if (decl_type->dec3n_normal && location->is_uint) {
+      layout.dec3n_normal = true;
+    }
     if ((input.usage == 3 || input.usage == 6 || input.usage == 7) && input.format == 6) {
       layout.byte_normal = true;
     }
@@ -2255,6 +2262,9 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
   }
   if (layout.byte_normal) {
     spec |= 4;  // SPEC_CONSTANT_BYTE_NORMAL
+  }
+  if (layout.dec3n_normal) {
+    spec |= 16;  // SPEC_CONSTANT_DEC3N_NORMAL
   }
   if ((color_control & 8) && (color_control & 7) != 7) {
     spec |= 2;  // SPEC_CONSTANT_ALPHA_TEST
@@ -2431,6 +2441,37 @@ bool UploadVertices(const uint8_t* source, uint32_t bytes, uint32_t binding, uin
 }
 
 }  // namespace
+
+void OnConstantsFromBuffer(const uint8_t* base, uint32_t device, uint32_t table, uint32_t data) {
+  if (!g.device || !table) {
+    return;
+  }
+  // The walk D3D does: table +20 = offset of the range list from the table; the list's +16 =
+  // its byte length; each 8-byte range = start float4 register (u16), dword count (u16), data
+  // offset (u32). Registers 0-255 are the vertex shader's, 256-511 the pixel shader's, laid
+  // out contiguously in the mirror from kDeviceVertexConstants.
+  const uint32_t list_offset = LoadBE32(base + table + 20);
+  if (!list_offset) {
+    return;
+  }
+  const uint32_t list = table + list_offset;
+  uint32_t entry = list + 20;
+  const uint32_t end = entry + LoadBE32(base + list + 16);
+  uint8_t* mirror = const_cast<uint8_t*>(base) + device + kDeviceVertexConstants;
+  while (entry < end) {
+    const uint32_t start = uint32_t(base[entry] << 8 | base[entry + 1]);
+    const uint32_t dwords = uint32_t(base[entry + 2] << 8 | base[entry + 3]);
+    if (!dwords) {
+      break;
+    }
+    const uint32_t source = LoadBE32(base + entry + 4) + data;
+    entry += 8;
+    if (start * 4 + dwords > 512 * 4) {
+      continue;
+    }
+    std::memcpy(mirror + start * 16, base + source, size_t(dwords) * 4);
+  }
+}
 
 void OnSetStreamSource(uint32_t stream, uint32_t stride) {
   if (stream < kMaxStreams) {
@@ -2679,6 +2720,13 @@ void OnDrawIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
           c += fmt::format(" {:.4g}", LoadBEFloat(d3d + kDevicePixelConstants + r * 16 + i * 4));
         }
         TRACE("  ps c{}:{}", r, c);
+      }
+      for (uint32_t r = 0; r < 256; r += 4) {
+        std::string c;
+        for (uint32_t i = 0; i < 16; ++i) {
+          c += fmt::format(" {:.4g}", LoadBEFloat(d3d + kDeviceVertexConstants + r * 16 + i * 4));
+        }
+        TRACE("  vs c{}:{}", r, c);
       }
       std::string b;
       for (uint32_t i = 0; i < 8; ++i) {

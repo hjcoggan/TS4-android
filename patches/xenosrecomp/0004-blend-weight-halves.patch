@@ -1,0 +1,49 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index d1a0407..7f6701b 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -397,6 +397,13 @@ float4 tfetchPosition(uint swapped, float4 value, uint semanticIndex)
+     if (swapped & (1u << (24 + semanticIndex))) value.zw = value.wz;
+     return value;
+ }
++
++// 16-bit blend weights: bit 8+i swaps each half pair (.yxwz), as texcoords do (Top Spin 4's
++// USHORT4N skin weights).
++float4 tfetchBlendWeight(uint swapped, float4 value, uint semanticIndex)
++{
++    return (swapped & (1u << (8 + semanticIndex))) != 0 ? value.yxwz : value;
++}
+ #else
+ float4 tfetchR11G11B10(uint4 value)
+ {
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index ba18abc..08c9786 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -274,6 +274,12 @@ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t a
+     case DeclUsage::Position:
+         print("tfetchPosition(g_SwappedTexcoords, ");
+         break;
++
++#ifdef SVR2011_RECOMP
++    case DeclUsage::BlendWeight:
++        print("tfetchBlendWeight(g_SwappedTexcoords, ");
++        break;
++#endif
+     }
+ #endif
+ 
+@@ -315,6 +321,13 @@ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t a
+     case DeclUsage::Position:
+         print(", {})", uint32_t(findResult->second.usageIndex));
+         break;
++
++#ifdef SVR2011_RECOMP
++    // 16-bit blend weights use bits 8+ (native HalfSwapBit).
++    case DeclUsage::BlendWeight:
++        print(", {})", uint32_t(findResult->second.usageIndex));
++        break;
++#endif
+     }
+ #endif
+ 

@@ -101,6 +101,11 @@ void OnSetStreamSource(uint32_t stream, uint32_t stride);
 void OnDrawNonIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
                       uint32_t start_vertex, uint32_t vertex_count);
 
+// Shader constants from a constant buffer (D3D's 0x8829DDB0 / 0x830D4FE0): table is the
+// buffer's range table, data its base. D3D sends them to the GPU only, so they are copied into
+// the device's constant mirror, where draws read constants.
+void OnConstantsFromBuffer(const uint8_t* base, uint32_t device, uint32_t table, uint32_t data);
+
 // D3DDevice_DrawIndexedVertices: indices from the device's index buffer.
 void OnDrawIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
                    int32_t base_vertex, uint32_t start_index, uint32_t index_count);

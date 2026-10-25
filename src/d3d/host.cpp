@@ -176,6 +176,11 @@ void SetStreamSource(Module, uint32_t stream, uint32_t stride) {
   native::OnSetStreamSource(stream, stride);
 }
 
+void ConstantsFromBuffer(Module, const uint8_t* base, uint32_t device, uint32_t table,
+                         uint32_t data) {
+  native::OnConstantsFromBuffer(base, device, table, data);
+}
+
 void DrawIndexed(Module, const uint8_t* base, uint32_t device, uint32_t primitive,
                  int32_t base_vertex, uint32_t start_index, uint32_t index_count) {
   native::OnDrawIndexed(base, device, primitive, base_vertex, start_index, index_count);
@@ -216,6 +221,7 @@ void InstallHost(const std::filesystem::path& cache_root) {
   sink.resolve = &Resolve;
   sink.set_stream_source = &SetStreamSource;
   sink.draw_indexed = &DrawIndexed;
+  sink.constants_from_buffer = &ConstantsFromBuffer;
   sink.draw_non_indexed = &DrawNonIndexed;
   sink.draw_vertices = &DrawVertices;
 }

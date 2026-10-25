@@ -73,6 +73,10 @@ struct Sink {
                         uint32_t vertex_count, uint32_t stride, uint32_t vertices,
                         uint32_t indices, uint32_t index_count, bool index32,
                         int32_t base_vertex);
+  // Shader constants set from a constant buffer (the range table and the data base), which D3D
+  // does not copy into the device's constant mirror.
+  void (*constants_from_buffer)(Module, const uint8_t* base, uint32_t device, uint32_t table,
+                                uint32_t data);
   // Create*Shader: the caller's container and the object made from it.
   void (*shader_created)(Module, const uint8_t* base, uint32_t container, uint32_t object,
                          bool is_pixel_shader);

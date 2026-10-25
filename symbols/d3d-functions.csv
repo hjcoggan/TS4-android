@@ -63,3 +63,7 @@ Swing_DLL.xex,882a3c60,Draw_882A3C60,census,builds DRAW_INDX_2
 Loader_DLL.xex,830ba770,IndirectBuffer,census,builds INDIRECT_BUFFER and INDIRECT_BUFFER_PFD
 Swing_DLL.xex,88291d68,IndirectBuffer,census,builds INDIRECT_BUFFER and INDIRECT_BUFFER_PFD
 Loader_DLL.xex,830aafd0,IndirectBufferWait,census,builds INDIRECT_BUFFER and WAIT_REG_MEM
+Loader_DLL.xex,830d4fe0,SetShaderConstantsFromBuffer,renderer,builds LOAD_ALU_CONSTANT or inline constant writes from a table of ranges; never updates the device's constant mirror; Swing unique
+Swing_DLL.xex,8829ddb0,SetShaderConstantsFromBuffer,renderer,builds LOAD_ALU_CONSTANT or inline constant writes from a table of ranges (r4 table, r5 data base); about 126 calls per main-menu frame
+Swing_DLL.xex,882f9a30,LoadAluConstant_882F9A30,census,game code outside the D3D copy that builds LOAD_ALU_CONSTANT
+Swing_DLL.xex,882fa850,LoadAluConstant_882FA850,census,game code outside the D3D copy that builds LOAD_ALU_CONSTANT

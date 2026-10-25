@@ -13,6 +13,7 @@ Commands:
   texture ID [--all-mips]     texel samples per mip and face, and PNGs of them
   rt EID                      the colour targets as they are after the draw, as PNGs
   pixel ID X Y [MIP] [SLICE]  one texel's value
+  history ID X Y              every event that wrote texel (X, Y): shader output and result
   actions FROM TO             every action between two events (passes, copies, dispatches with
                               the compute stage's textures and buffer ranges): follows a resolve
                               from render target through the EDRAM buffer to guest memory
@@ -186,6 +187,25 @@ def cmd_pixel(ctrl, textures, args):
         + " ".join(f"{c:.5g}" for c in v.floatValue[:4]) + f"  bits {bits}")
 
 
+def cmd_history(ctrl, textures, args):
+    """Every event that wrote texel (X, Y) of a texture: the shader's output and the texel after,
+    so a wrong pixel can be traced to the draw that made it."""
+    rid, t = find_texture(textures, int(args[0]))
+    x, y = int(args[1]), int(args[2])
+    ctrl.SetFrameEvent(walk(ctrl.GetRootActions(), [])[-1].eventId, False)
+    mods = ctrl.PixelHistory(rid, x, y, rd.Subresource(0, 0, 0), rd.CompType.Typeless)
+    say(f"history {fmt_tex(t)} ({x},{y}): {len(mods)} modifications")
+    for m in mods:
+        flags = []
+        if m.backfaceCulled: flags.append("culled")
+        if m.depthTestFailed: flags.append("depth-failed")
+        if m.scissorClipped: flags.append("scissored")
+        if m.shaderDiscarded: flags.append("discarded")
+        out = " ".join(f"{c:.4g}" for c in m.shaderOut.col.floatValue[:4])
+        post = " ".join(f"{c:.4g}" for c in m.postMod.col.floatValue[:4])
+        say(f"  eid {m.eventId} prim {m.primitiveID} out ({out}) after ({post}) {' '.join(flags)}")
+
+
 def all_actions(actions, out):
     for a in actions:
         out.append(a)
@@ -234,6 +254,7 @@ def cmd_buffer(ctrl, textures, args):
 
 
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
+            "history": cmd_history,
             "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
 
 def succeeded(result):

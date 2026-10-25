@@ -115,6 +115,38 @@ Result (`analysis/scenes/boot-main-menu`): title frame 480 worst tile 0, mean FL
 main menu frame 1400 worst tile 0, mean FLIP 0.0018. The session report shows Native active,
 fallback `none`, no draw skips, no debug cvars and no Enhancements.
 
+## In the match (2026-10-25)
+
+`tests/scenes/exhibition-match.toml` (boot to an Exhibition match, captures at player select
+and three in-match frames). Shaders created in the match were dumped on a Classic run and
+added to the pack (330 shaders, all convert). The match first came out flat and dark on Native:
+no sun, grey court lines (mean FLIP 0.54). RenderDoc captures of the same frame on both
+renderers (`analysis/rdoc-match-classic`, `analysis/rdoc-match-native`) narrowed it down:
+
+- Every texture input matched (shadow depth map, light maps, cube maps), and so did the pixel
+  and vertex constants, once aligned with Classic's packed registers. A pixel history
+  (`scripts/rdoc.ps1 query ... 'history <rt> X Y'`, new) showed the court's own draw
+  producing the darker colour.
+- **Normals.** Top Spin 4's normals, tangents and binormals are D3DDECLTYPE `0x2A2187`, Xenos
+  `k_2_10_10_10` signed normalized. Native passed them as raw bits, and the shader read them
+  as a float: a near-zero normal, so N·L was zero and the sun term vanished.
+  `patches/xenosrecomp/0003-dec3n-normals` decodes them (`SPEC_CONSTANT_DEC3N_NORMAL`).
+  Result: mean FLIP 0.54 to 0.048.
+- **Skin weights.** USHORT4N blend weights (`0x1A205A`) keep their 16-bit halves swapped
+  after the 32-bit vertex swap, as texcoords and positions do (WWE swapped those two only).
+  The wrong bone dominated, and ball kids, umpire and the CPU player came out twisted.
+  `patches/xenosrecomp/0004-blend-weight-halves` swaps them back (mask bit 8 + index).
+- **Shader constants from a buffer** (`SetShaderConstantsFromBuffer`, Loader `0x830D4FE0`,
+  Swing `0x8829DDB0`, about 180 calls a frame in the match) never reach the device's constant
+  mirror. Native now copies each range into the mirror. This did not change the match frame,
+  but without it any constant set only this way would be stale.
+
+Result: player select passes (worst tile 0), and the in-match frames match Classic's sun,
+shadows and lines. The remaining hot tiles (worst 50-107) sit on moving characters, the score
+and the radar-gun readout. The match is not deterministic from run to run: one Classic run
+was still in the walk-out cutscene at frame 3600, and Classic run against Classic run failed
+every match frame. Native active, no fallback, no draw skips (`analysis/scenes/exhibition-match`).
+
 ## Open
 
 - Of the `census` rows, only Swing's `Draw_88296A60` and `Draw_8828FF28` ran, once each, at
