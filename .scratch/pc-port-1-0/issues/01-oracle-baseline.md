@@ -4,15 +4,15 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A full Exhibition match against the CPU completes on Edge with TU1 installed, and the Edge build and settings are recorded
 - [x] Native internal resolution and aspect ratio are measured
 - [x] Frame rate during play, between points and in menus is recorded, answering whether the 360 build drops to 30 fps between points
 - [x] Boot-to-title, title-to-menu and match load times are measured
-- [ ] Visible glitches (cross-fade flicker, vertex explosions, camera problems) are listed with timestamps
+- [x] Visible glitches (cross-fade flicker, vertex explosions, camera problems) are listed with timestamps
 - [x] Reference captures of the title screen, the main menu and a mid-match frame are saved locally (not committed)
-- [ ] Findings are written up under docs/research/
+- [x] Findings are written up under docs/research/
 
 ## Comments
 
@@ -31,3 +31,4 @@
   - 60 fps: menus (player select 61 fps at 30 s; 32 of the first 44 s at 60, the rest load dips), rallies on the gameplay camera, and between points while the gameplay camera stays up (e.g. "DOUBLE FAULT" on the gameplay camera at 148 s, 59.5 fps).
   - 30 fps: the match intro and name card (44-58 s), player close-ups between points (136, 150-152, 188, 248-250, 285-288, 405-413, 523-524 s), the replay wipe and replays (336-350, 614-618, 666-679 s), and the changeover on the bench (425-448 s). Single 30 fps seconds on the gameplay camera (262 s) sit at the cut back from a close-up.
   The 30 fps stretches hold to within ±1 fps for up to 24 s while rallies hold 60, so this is the game presenting every other vblank in its cinematics, not Edge falling behind. The port must reproduce it (the simulation tick is tied to frame rate). Still open: the glitch list and the write-up under docs/research/.
+- 2026-10-25 (Claude): ticked the last two boxes; resolved. Glitches: the owner reports that both matches looked good on Edge. A sweep of all 1,365 screenshots of both sessions found nothing during play. It measured the brightness of every frame against its neighbours, checked each one that stood out, and looked over every 4th second. One unclassified item is listed: an all-white frame at 10 s of session 2, at the boot loading screen's backdrop change, not seen in session 1. The write-up is `docs/research/oracle-baseline.md`: setup, sessions, match completion, resolution, frame rate, load times, glitches and reference captures. M0 is done, pending the owner's acceptance.
