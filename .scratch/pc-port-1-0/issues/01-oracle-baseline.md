@@ -8,7 +8,7 @@
 
 - [x] A full Exhibition match against the CPU completes on Edge with TU1 installed, and the Edge build and settings are recorded
 - [x] Native internal resolution and aspect ratio are measured
-- [ ] Frame rate during play, between points and in menus is recorded, answering whether the 360 build drops to 30 fps between points
+- [x] Frame rate during play, between points and in menus is recorded, answering whether the 360 build drops to 30 fps between points
 - [x] Boot-to-title, title-to-menu and match load times are measured
 - [ ] Visible glitches (cross-fade flicker, vertex explosions, camera problems) are listed with timestamps
 - [x] Reference captures of the title screen, the main menu and a mid-match frame are saved locally (not committed)
@@ -27,3 +27,7 @@
   - `analysis/edge-fps-tooltest/`, window minimized, no screenshots: 2618 VdSwap hits against an Edge frame counter that reached 2609, so the log's `f:` counter is the guest swap count. The title, menus and the idle practice ground held 60 fps; the only dips were boot (second 1, 47 fps) and the title load (second 9, 54 fps). Every swap came through the Loader's thunk.
   - `analysis/edge-fps-tooltest-2/`, screenshots at 15, 25 and 40 s: 2519 swaps against a frame counter rise of 2517. 60 fps apart from 48-54 fps at 29-32 s and an Edge stall at 42-43 s (29, then 2 fps), all on the idle practice ground with no input after 19 s. The poller kept sampling through the screenshots, so the stall was Edge's own. The first run was clean over the same seconds, so this reads as an Edge or host hitch, not the game's pacing; unexplained so far.
   Next: the owner plays an Exhibition match under `pwsh scripts/edge.ps1 -NoPad -FrameLog -ShotEvery 1 -Seconds 900`, and the screenshots tell play, between points and menus apart in `fps.csv`.
+- 2026-10-25 (Claude): ticked the frame-rate box. The owner played Exhibition (Federer v Nadal, Rod Laver Arena) under `scripts/edge.ps1 -NoPad -FrameLog -ShotEvery 1` (`analysis/edge-20261025-101451/`: 680 s, 680 screenshots, `fps.csv`). 37131 VdSwap calls against an Edge frame counter rise of 37131. Over 679 s: 530 s at 60 fps, 100 s at a flat 29-31 fps, and 49 s in between (seconds that straddle a switch or a load). **Yes, the Reference build drops to 30 fps between points**, and it does so only in its cutaways:
+  - 60 fps: menus (player select 61 fps at 30 s; 32 of the first 44 s at 60, the rest load dips), rallies on the gameplay camera, and between points while the gameplay camera stays up (e.g. "DOUBLE FAULT" on the gameplay camera at 148 s, 59.5 fps).
+  - 30 fps: the match intro and name card (44-58 s), player close-ups between points (136, 150-152, 188, 248-250, 285-288, 405-413, 523-524 s), the replay wipe and replays (336-350, 614-618, 666-679 s), and the changeover on the bench (425-448 s). Single 30 fps seconds on the gameplay camera (262 s) sit at the cut back from a close-up.
+  The 30 fps stretches hold to within ±1 fps for up to 24 s while rallies hold 60, so this is the game presenting every other vblank in its cinematics, not Edge falling behind. The port must reproduce it (the simulation tick is tied to frame rate). Still open: the glitch list and the write-up under docs/research/.
