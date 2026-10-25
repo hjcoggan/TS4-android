@@ -18,12 +18,20 @@ per pixel against the envelope of the Classic runs (the lowest FLIP error over t
 same tile rule, as in WWE's scene runner. A Native run also fails on any renderer fallback, draw
 skip, Native debug cvar or Enhancement its session report shows (native_failures).
 
+With --dual N (needs --native), N more runs draw every frame with both renderers at once
+(--ts4_native_dual_compare): Classic presents and is dumped as usual, and Native writes its own
+image of the same frame. Each such pair is judged with the tile rule, so a scene whose game state
+differs between runs (a match: AI, load times) is still judged frame for frame. Native's own
+images come before the presenter's gamma ramp; the ramp is read off the Native runs, where both
+the presenter's and Native's own images of the same frames exist (fit_ramp). In this mode the
+dual verdicts decide; the Classic-against-Classic and envelope verdicts are reported only.
+
 Runs never overlap: the game animates by elapsed time, so a run slowed by another reaches a
 different state at the same frame number. A lock (analysis/game-run.lock, shared with
 scripts/smoke.ps1) refuses a second run while one is going.
 
     python scripts/scene_runner.py tests/scenes/boot-main-menu.toml [--out DIR] [--runs N]
-                                   [--native N] [--shader-pack FILE]
+                                   [--native N [--dual N]] [--shader-pack FILE]
 
 Results and captures go to analysis/scenes/<name>/ (not committed).
 Exit code: 0 pass, 1 fail, 2 the scene could not run.
@@ -174,6 +182,41 @@ def run_failures(report, frames):
     return failures
 
 
+def fit_ramp(pairs):
+    """The presenter's gamma ramp as a 256-entry table per channel, from (Native's own image,
+    the presenter's image of it) pairs, HxWx3 uint8. Values the pairs never show are
+    interpolated. Raises SceneError when one input value maps to several outputs (no ramp)."""
+    table = np.full((3, 256), -1, np.int32)
+    for own, shown in pairs:
+        for c in range(3):
+            a = own[..., c].ravel().astype(np.int32)
+            b = shown[..., c].ravel().astype(np.int32)
+            lo = np.full(256, 256, np.int32)
+            hi = np.full(256, -1, np.int32)
+            np.minimum.at(lo, a, b)
+            np.maximum.at(hi, a, b)
+            seen = hi >= 0
+            if np.any(hi[seen] - lo[seen] > 1):
+                raise SceneError("the presenter's image is not a per-value ramp of Native's")
+            known = table[c] >= 0
+            if np.any(np.abs(table[c][known & seen] - lo[known & seen]) > 1):
+                raise SceneError("the presenter's ramp differs between frames")
+            table[c][seen] = lo[seen]
+    xs = np.arange(256)
+    out = np.zeros((3, 256), np.uint8)
+    for c in range(3):
+        known = table[c] >= 0
+        if not known.any():
+            raise SceneError("no pixels to read the presenter's ramp from")
+        out[c] = np.round(np.interp(xs, xs[known], table[c][known])).astype(np.uint8)
+    return out
+
+
+def apply_ramp(image, ramp):
+    """HxWx3 uint8 through a fit_ramp table."""
+    return np.stack([ramp[c][image[..., c]] for c in range(3)], axis=-1)
+
+
 def native_failures(report):
     """What fails a Native run, from its session report's "renderer" object (src/native): Native
     not active (a renderer fallback), any draw skip, a Native debug cvar, an Enhancement on."""
@@ -291,26 +334,52 @@ def read_log(path):
     return path.read_text(encoding="utf-8", errors="replace") if path.exists() else None
 
 
-def run_scene(scene, out, exe, native_runs=0, shader_pack=None):
+def load_rgb8(path):
+    return np.asarray(Image.open(path).convert("RGB"), np.uint8)
+
+
+def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0):
     classic = [f"run-{i + 1}" for i in range(int(scene.check["runs"]))]
     native = [f"native-{i + 1}" for i in range(native_runs)]
+    dual = [f"dual-{i + 1}" for i in range(dual_runs)]
     native_flags = ["--ts4_renderer=native"]
     if shader_pack:
         native_flags.append(f"--ts4_shader_pack={shader_pack}")
+    frames = ",".join(map(str, scene.frames))
+
+    def own_dump_flags(label):  # Native's own image of each capture, before the ramp
+        return [f"--ts4_native_dump_frames={frames}",
+                f"--ts4_native_dump_dir={out / label / 'native-dumps'}"]
+
+    def own_image(label, frame):
+        return out / label / "native-dumps" / f"frame-{frame:06}.ppm"
+
     shots, runs = {}, {}
     with GameRunLock(LOCK):
-        for label in classic + native:
-            is_native = label in native
-            shots[label], report = run_game(label, scene, out, exe,
-                                            native_flags if is_native else ["--ts4_renderer=classic"])
+        for label in classic + native + dual:
+            if label in native:
+                flags = native_flags + (own_dump_flags(label) if dual else [])
+            elif label in dual:
+                flags = native_flags + ["--ts4_native_dual_compare=true"] + own_dump_flags(label)
+            else:
+                flags = ["--ts4_renderer=classic"]
+            shots[label], report = run_game(label, scene, out, exe, flags)
             failures = (run_failures(report, scene.frames) +
                         log_failures(read_log(out / label / "runtime.log"), scene.log))
-            if is_native:
+            if label in native or label in dual:
                 failures += native_failures(report)
             runs[label] = {"report": report, "failures": failures}
+    ramp = None
+    if dual:
+        pairs = [(load_rgb8(own_image(label, frame)), load_rgb8(shots[label][frame]))
+                 for label in native for frame in scene.frames
+                 if frame in shots[label] and own_image(label, frame).exists()]
+        ramp = fit_ramp(pairs)
     captures = []
     for frame in scene.frames:
-        missing = [label for label in classic + native if frame not in shots[label]]
+        missing = [label for label in classic + native + dual if frame not in shots[label]]
+        missing += [f"{label} (Native's own image)" for label in dual
+                    if not own_image(label, frame).exists()]
         if missing:
             captures.append({"frame": frame, "passed": False, "error": f"no capture from {missing}"})
             continue
@@ -319,10 +388,17 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None):
         for label in native:
             verdicts[label] = judge_capture(
                 envelope_error(references, load_image(shots[label][frame])), scene.check)
-        captures.append({"frame": frame, "passed": all(v["passed"] for v in verdicts.values()),
+        for label in dual:
+            native_image = apply_ramp(load_rgb8(own_image(label, frame)), ramp)
+            verdicts[label] = judge_capture(
+                flip_map(load_image(shots[label][frame]), native_image.astype(np.float32) / 255),
+                scene.check)
+        deciding = dual if dual else list(verdicts)
+        captures.append({"frame": frame,
+                         "passed": all(verdicts[label]["passed"] for label in deciding),
                          "runs": verdicts,
                          "images": {label: shots[label][frame].as_posix()
-                                    for label in classic + native}})
+                                    for label in classic + native + dual}})
     passed = all(c["passed"] for c in captures) and not any(r["failures"] for r in runs.values())
     result = {"scene": scene.name, "passed": passed, "check": scene.check, "runs": runs,
               "captures": captures}
@@ -338,6 +414,9 @@ def main(argv):
     parser.add_argument("--runs", type=int, help="override the scene's [check] runs (2 or more)")
     parser.add_argument("--native", type=int, default=0,
                         help="Native runs after the Classic ones, judged against them")
+    parser.add_argument("--dual", type=int, default=0,
+                        help="runs with both renderers at once, judged frame for frame "
+                             "(needs --native)")
     parser.add_argument("--shader-pack", type=Path,
                         help="the shader pack Native runs load (default: the one in cache/)")
     args = parser.parse_args(argv)
@@ -359,8 +438,10 @@ def main(argv):
           flush=True)
     try:
         shader_pack = args.shader_pack.resolve() if args.shader_pack else None
-        result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack)
-    except RunLockBusy as error:
+        if args.dual and not args.native:
+            raise SceneError("--dual needs --native, whose runs give the presenter's ramp")
+        result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack, args.dual)
+    except (RunLockBusy, SceneError) as error:
         print(f"scene error: {error}", file=sys.stderr)
         return 2
     for label, run in result["runs"].items():
@@ -371,7 +452,8 @@ def main(argv):
             print(f"  frame {c['frame']}: FAIL  {c['error']}")
             continue
         for label, v in c["runs"].items():
-            against = "Classic" if label.startswith("native") else "run-1"
+            against = ("Classic" if label.startswith("native") else
+                       "its own Classic frame" if label.startswith("dual") else "run-1")
             print(f"  frame {c['frame']} {label} vs {against}: {'PASS' if v['passed'] else 'FAIL'}  "
                   f"worst tile {v['worst_tile_hot']} hot px (K={scene.check['tile_hot_max']}), "
                   f"mean FLIP {v['mean_flip']:.4f}")

@@ -11,7 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, envelope_error, load_scene, log_failures,  # noqa: E402
+from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, apply_ramp, envelope_error, fit_ramp,  # noqa: E402
+                          load_scene, log_failures,
                           native_failures, repeatability, run_failures)
 
 GOOD = """
@@ -209,3 +210,19 @@ def test_native_is_judged_against_the_closest_classic_run_per_pixel():
         return np.abs(reference - image).mean(axis=2)
 
     assert envelope_error([a, b], test, error).max() == 0.0
+
+
+def test_the_presenter_ramp_is_read_off_pairs_and_fills_gaps():
+    own = np.array([[[0, 0, 0], [128, 128, 128], [255, 255, 255]]], np.uint8)
+    shown = np.array([[[0, 0, 0], [115, 115, 115], [255, 255, 255]]], np.uint8)
+    ramp = fit_ramp([(own, shown)])
+    assert ramp[0][128] == 115 and ramp[2][255] == 255
+    assert 0 < ramp[1][64] < 115  # interpolated between the values seen
+    assert (apply_ramp(own, ramp) == shown).all()
+
+
+def test_a_presenter_image_that_is_no_ramp_of_natives_is_refused():
+    own = np.array([[[10, 10, 10], [10, 10, 10]]], np.uint8)
+    shown = np.array([[[0, 0, 0], [200, 200, 200]]], np.uint8)
+    with pytest.raises(SceneError):
+        fit_ramp([(own, shown)])

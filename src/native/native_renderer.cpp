@@ -109,6 +109,11 @@ REXCVAR_DEFINE_UINT64(ts4_native_trace_ps, 0, "TopSpin4",
                       "using this pixel shader hash");
 REXCVAR_DEFINE_UINT64(ts4_native_debug_skip_ps, 0, "TopSpin4",
                       "Native renderer debugging: skip draws using this pixel shader hash");
+REXCVAR_DEFINE_BOOL(ts4_native_dual_compare, false, "TopSpin4",
+                    "Scene runs: Native draws every frame and writes its own dumps "
+                    "(--ts4_native_dump_frames), while Classic still draws and presents, so "
+                    "both renderers' images of the same frame can be compared "
+                    "(scripts/scene_runner.py --dual)");
 REXCVAR_DEFINE_BOOL(ts4_native_half_pixel_offset, true, "TopSpin4",
                     "Native renderer: shift geometry by half a pixel for D3D9-style pixel "
                     "centres, like the emulated path's half_pixel_offset");
@@ -1632,8 +1637,10 @@ void Configure(rex::Runtime* runtime) {
   if (!pipelines::PrepareMode()) {
     topup_converter::Configure(runtime->cache_root(), converter_id);
   }
-  rex::system::external_frame::SetEnabled(true);
-  REXLOG_INFO("native renderer: enabled, render size {}x{}", g.width, g.height);
+  // Under --ts4_native_dual_compare the GPU plugin keeps drawing and presenting (Classic).
+  rex::system::external_frame::SetEnabled(!REXCVAR_GET(ts4_native_dual_compare));
+  REXLOG_INFO("native renderer: enabled, render size {}x{}{}", g.width, g.height,
+              REXCVAR_GET(ts4_native_dual_compare) ? ", beside Classic (dual compare)" : "");
 }
 
 bool IsEnabled() { return g.device != nullptr; }
