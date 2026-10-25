@@ -11,6 +11,8 @@ include(cmake/rexglue.cmake)
 set(TOPSPIN4_SOURCES
     src/main.cpp
     src/crash_report.cpp
+    src/d3d/census.cpp
+    src/d3d/host.cpp
     src/fault_log.cpp
     src/frame_dumps.cpp
     src/remapped_input.cpp
@@ -27,6 +29,9 @@ else()
 endif()
 
 rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
+# D3D hooks in each Module's DLL, and the sink they reach the exe through (src/d3d/sink.h).
+include(cmake/d3d_hooks.cmake)
+target_link_libraries(topspin4 PRIVATE topspin4_d3d_sink)
 # Crash report (src/crash_report.cpp): the version and commit go in its manifest.
 execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     OUTPUT_VARIABLE TOPSPIN4_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)

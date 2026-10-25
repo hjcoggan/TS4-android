@@ -80,6 +80,7 @@ std::set<uint64_t> g_frames;
 std::filesystem::path g_dir;
 int64_t g_exit_after = -1;
 std::filesystem::path g_report;
+std::string (*g_session_end)() = nullptr;
 std::chrono::steady_clock::time_point g_start;
 FILE* g_frame_times = nullptr;  // --ts4_frame_times_csv
 std::vector<Dump> g_dumps;  // GPU thread only, as is every function below but Install
@@ -153,6 +154,7 @@ void SaveDump(uint64_t frame) {
 }
 
 void WriteReport(uint64_t frame) {
+  const std::string extra = g_session_end ? g_session_end() : std::string();
   if (g_report.empty()) {
     return;
   }
@@ -168,7 +170,11 @@ void WriteReport(uint64_t frame) {
                         "\"max_luma\": {}}}",
                         i ? "," : "", d.frame, JsonString(d.file), d.width, d.height, d.max_luma);
   }
-  json += "\n ]\n}\n";
+  json += "\n ]";
+  if (!extra.empty()) {
+    json += ",\n " + extra;
+  }
+  json += "\n}\n";
   FILE* file = OpenFile(g_report, "wb");
   const bool written = file && std::fwrite(json.data(), 1, json.size(), file) == json.size();
   if (!file || std::fclose(file) != 0 || !written) {
@@ -216,6 +222,8 @@ void OnFrameShown(uint64_t frame) {
 }
 
 }  // namespace
+
+void SetSessionEnd(std::string (*session_end)()) { g_session_end = session_end; }
 
 void Install(rex::Runtime* runtime) {
   g_runtime = runtime;

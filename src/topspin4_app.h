@@ -13,6 +13,7 @@
 #include <rex/ui/window.h>
 
 #include "crash_report.h"
+#include "d3d/host.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
 #include "online_unavailable.h"
@@ -138,6 +139,11 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
+    topspin4::d3d::InstallHost();
+    topspin4::frame_dumps::SetSessionEnd([]() -> std::string {
+      topspin4::d3d::OnSessionEnd();
+      return {};
+    });
     topspin4::frame_dumps::Install(runtime());
     // The crash report's facts known only now. Only the Vulkan backend is built, so the
     // provider is a VulkanProvider.
@@ -156,4 +162,6 @@ class TopSpin4App : public rex::ReXApp {
     }
     topspin4::crash::CrashIfAsked();
   }
+
+  void OnShutdown() override { topspin4::d3d::OnSessionEnd(); }
 };

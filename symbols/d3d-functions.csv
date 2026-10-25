@@ -17,8 +17,7 @@ Loader_DLL.xex,830e1140,BeginVertices,renderer,WWE 82DB1160 unique
 Swing_DLL.xex,88293000,BeginVertices,renderer,WWE 82DB1160 unique; Loader unique
 Loader_DLL.xex,830e1600,EndVertices,renderer,bytes equal WWE 82DB1150 (lwz 0x3554; stw 0x30; blr)
 Loader_DLL.xex,830e1b98,EndVertices,renderer,second copy of the same bytes; no direct callers
-Swing_DLL.xex,887cb428,EndsVerticesInline,renderer,game caller of BeginVertices; ends the draw inline (device+0x3554 to +0x30)
-Swing_DLL.xex,887caf80,EndsVerticesInline,renderer,game caller of BeginVertices; ends the draw inline (device+0x3554 to +0x30)
+Swing_DLL.xex,887ca798,FinishVertices,renderer,game code; BeginVertices' two callers (887CB428 and 887CAF80) end the draw inline then call it to restore device state; the pending draw is taken on entry
 Loader_DLL.xex,830e1610,DrawVerticesUP,renderer,WWE 82DB1620 unique
 Swing_DLL.xex,882934c0,DrawVerticesUP,renderer,WWE 82DB1620 unique; Loader unique
 Loader_DLL.xex,830e1658,BeginIndexedVertices,renderer,WWE 82DB1668 near:99
@@ -31,8 +30,8 @@ Loader_DLL.xex,830c1d78,RegisterVertexShader,renderer,WWE 82DADCF0 unique; objec
 Swing_DLL.xex,88290bf0,RegisterVertexShader,renderer,WWE 82DADCF0 unique; Loader unique
 Loader_DLL.xex,830c19d0,RegisterPixelShader,renderer,WWE 82DAC148 unique; object offsets 0x18 and 0x28 as WWE
 Swing_DLL.xex,88290908,RegisterPixelShader,renderer,WWE 82DAC148 unique; Loader unique
-Loader_DLL.xex,830d3d70,MirrorCommit,census,WWE 82DC1B50 unique
-Swing_DLL.xex,8829ce78,MirrorCommit,census,WWE 82DC1B50 unique; Loader unique
+Loader_DLL.xex,830d3d70,MirrorCommit,renderer,WWE 82DC1B50 unique
+Swing_DLL.xex,8829ce78,MirrorCommit,renderer,WWE 82DC1B50 unique; Loader unique
 Loader_DLL.xex,830b3700,SetIndices,census,WWE 82DB4D80 unique
 Swing_DLL.xex,8828e1a0,SetIndices,census,WWE 82DB4D80 unique; Loader unique
 Loader_DLL.xex,830b4d28,ClearRect,census,WWE 82DBC4B0 unique; builds DRAW_INDX_2

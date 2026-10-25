@@ -117,6 +117,11 @@ inline std::vector<uint8_t> EncodePngRgb(const uint8_t* rgb, uint32_t width, uin
   return out;
 }
 
+// Called on the --ts4_exit_after_frame exit, before the session report is written: the
+// session's last logs, and further members for the report's top-level object ("name": value,
+// comma separated, no trailing comma), or an empty string.
+void SetSessionEnd(std::string (*session_end)());
+
 // Reads the cvars and, if any is set, watches every shown frame. Call once the runtime is set
 // up (the app's OnPostSetup).
 void Install(rex::Runtime* runtime);
