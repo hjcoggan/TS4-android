@@ -435,6 +435,8 @@ struct State {
   uint32_t surface_height[4] = {720, 720, 720, 720};
 
   uint32_t stream_strides[kMaxStreams] = {};
+  // Draws whose vertices come from the XPS window (session report).
+  uint64_t xps_window_draws = 0;
   // Resolve destinations: frame of the last resolve and the start of the
   // current run of consecutive frames.
   struct ResolveRun {
@@ -1873,10 +1875,10 @@ std::string ReportJson() {
   }
   return fmt::format(R"({{"native_requested": {}, "native_active": {}, "fallback": "{}", )"
                      R"("frames": {}, "debug_cvars": [{}], "enhancements": [{}], )"
-                     R"("draw_skips": {}, "gpu_failure": "{}"}})",
+                     R"("draw_skips": {}, "xps_window_draws": {}, "gpu_failure": "{}"}})",
                      g_requested ? "true" : "false", g.device ? "true" : "false",
                      FallbackName(g.fallback), g.frame, debug_cvars, enhancements,
-                     g.skips.Json(),
+                     g.skips.Json(), g.xps_window_draws,
                      g.gpu_failure ? VkResultName(g.gpu_failure) : std::string());
 }
 
@@ -2380,6 +2382,16 @@ const VertexLayout* PrepareDraw(const uint8_t* base, const uint8_t* d3d,
     return nullptr;
   }
   const VertexLayout& layout = declaration->layout;
+  // Draws fetching vertices from the XPS window, which D3D maps for the GPU at 0xC0000000
+  // (virtual 0x7F000000, L2-locked; Swing's XPS setup 0x8829A4E8): CPU-generated geometry.
+  for (uint32_t stream = 0; stream < kMaxStreams; ++stream) {
+    const uint32_t address = LoadBE32(d3d + kDeviceStreamFetch - 8 * stream) & ~3u;
+    if ((layout.stream_mask & (1u << stream)) && address >= 0xC0000000u &&
+        address < 0xC0200000u) {
+      ++g.xps_window_draws;
+      break;
+    }
+  }
   if (widen_strides) {
     for (uint32_t stream = 0; stream < kMaxStreams; ++stream) {
       strides[stream] = guest::HostVertexStride(strides[stream], StreamExtent(layout, stream));
