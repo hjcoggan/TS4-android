@@ -134,11 +134,50 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_settings.cpp
         tests/host/test_crash_report.cpp
         tests/host/test_pad_bindings.cpp
+        tests/native/test_debug_labels.cpp
+        tests/native/test_draw_skips.cpp
+        tests/native/test_fault_finder.cpp
+        tests/native/test_frame_dumps.cpp
+        tests/native/test_gpu_failure.cpp
+        tests/native/test_gpu_timer.cpp
+        tests/native/test_guest_decode.cpp
+        tests/native/test_live_topup.cpp
+        tests/native/test_module_table.cpp
+        tests/native/test_pass_names.cpp
+        tests/native/test_pipeline_key.cpp
+        tests/native/test_pipeline_parts.cpp
+        tests/native/test_pipeline_store.cpp
+        tests/native/test_prebuild_plan.cpp
+        tests/native/test_prepare_output.cpp
+        tests/native/test_rect_list.cpp
+        tests/native/test_renderer_fallback.cpp
+        tests/native/test_sampler_choice.cpp
+        tests/native/test_shader_pack.cpp
+        tests/native/test_shader_topup.cpp
+        tests/native/test_texture_decode.cpp
+        tests/native/test_texture_formats.cpp
+        tests/native/test_texture_layout.cpp
+        tests/native/test_thread_budget.cpp
+        tests/native/test_write_watch.cpp
         src/settings/settings_file.cpp
+        # The Native renderer's pure code, as WWE All Stars' native tests build it.
+        src/native/live_topup.cpp
+        src/native/pipeline_parts.cpp
+        src/native/pipeline_store.cpp
+        src/native/prebuild_plan.cpp
+        src/native/prepare_output.cpp
+        src/native/shader_pack.cpp
+        src/native/shader_topup.cpp
+        src/native/texture_layout.cpp
+        src/native/write_watch.cpp
+        ${REXSDK_DIR}/src/graphics/pipeline/texture/util.cpp
         ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
     target_include_directories(topspin4_host_tests PRIVATE src
-        ${REXSDK_DIR}/thirdparty/catch2/extras)
-    target_link_libraries(topspin4_host_tests PRIVATE rex::runtime)
+        ${REXSDK_DIR}/thirdparty/catch2/extras ${REXSDK_DIR}/thirdparty/xxHash
+        ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
+    target_link_libraries(topspin4_host_tests PRIVATE rex::runtime topspin4_native_deps)
+    target_compile_definitions(topspin4_host_tests PRIVATE
+        TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull)
     add_test(NAME topspin4_host_tests COMMAND topspin4_host_tests)
 endif()
 

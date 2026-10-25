@@ -12,7 +12,7 @@ Swing_DLL.xex,8828e080,SetStreamSource,renderer,WWE 82DB4BD8 unique; Loader uniq
 Loader_DLL.xex,830e2060,DrawIndexedVertices,renderer,WWE 82DB2060 unique; no direct callers
 Swing_DLL.xex,88293920,DrawIndexedVertices,renderer,WWE 82DB2060 unique; Loader unique
 Loader_DLL.xex,830e1c48,DrawVertices,renderer,WWE 82DB1C48 unique
-Swing_DLL.xex,88293508,DrawVertices,renderer,WWE 82DB1C48 near:98; Loader near:98
+Swing_DLL.xex,88293508,DrawVerticesFromZero,renderer,WWE 82DB1C48 near:98; Loader near:98; LTCG-specialised: start vertex 0, r5 = vertex count (mr r24 r5; mr r23 r26 = 0)
 Loader_DLL.xex,830e1140,BeginVertices,renderer,WWE 82DB1160 unique
 Swing_DLL.xex,88293000,BeginVertices,renderer,WWE 82DB1160 unique; Loader unique
 Loader_DLL.xex,830e1600,EndVertices,renderer,bytes equal WWE 82DB1150 (lwz 0x3554; stw 0x30; blr)

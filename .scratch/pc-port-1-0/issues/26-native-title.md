@@ -4,12 +4,12 @@
 
 **Blocked by:** 09 (Scene runner and boot-to-main-menu scene), 10 (Settings system and renderer switch)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The WWE Native renderer and its XenosRecomp patches are copied and adapted
+- [x] The WWE Native renderer and its XenosRecomp patches are copied and adapted
 - [x] D3D hooks are generated for each Module's statically linked D3D9
-- [ ] The boot-to-title and main-menu scenes pass FLIP against Classic
-- [ ] The session report shows no draw skips or renderer fallbacks
+- [x] The boot-to-title and main-menu scenes pass FLIP against Classic
+- [x] The session report shows no draw skips or renderer fallbacks
 
 ## Comments
 
@@ -19,3 +19,4 @@
 - 2026-10-25 (Claude): Steps 3 and 4. `src/native` is copied from WWE (namespace `topspin4::native`, `ts4_` cvars, wide file opens). The image Enhancements default to the original look: no CAS, scale 1, original colour curve, the game's anisotropy. `ts4_renderer = "native"` now asks for it, and the session report carries a `"renderer"` object (requested, active, fallback, draw skips). XenosRecomp is a patch series (`patches/xenosrecomp`): `0001` is WWE's patch, and `0002-topspin4-inputs` adds Top Spin 4's morph-target vertex inputs (POSITION2-4, NORMAL1-4) and 1D texture fetches. A Classic dump run gave 245 unique shader containers; all convert. The register hook had dumped corrupt containers from inside Create*Shader and now skips those calls. Top Spin 4's XDK passes Resolve's destination in r6, not WWE's r8; Clear and Present arguments checked against call sites. First Native run (`analysis/smoke-20261025-143745`): the title screen draws, 0 black screenshots.
 - 2026-10-25 (Claude): `scripts/scene_runner.py --native N` judges Native runs per pixel against the envelope of the Classic runs and fails a Native run on any renderer fallback, draw skip, debug cvar or Enhancement in its report. First run: the title (frame 480) is pixel-identical to Classic (worst tile 0, mean FLIP 0.0000). The main menu (frame 1400) failed on skips: `k_CTX1` textures (normal maps, now decoded to R8G8 on upload, `src/native/texture_decode.h`) and rect lists from Swing's mip-chain pass (now expanded to triangles, `src/native/rect_list.h`). Resolve now passes its mip level, and a resolve into a level > 0 no longer overwrites level 0. With those, 0 draw skips, but the menu labels and button prompts are still missing (worst tile 496): open. Draw-count study, with a temporary GPU-side log of one frame's draws: every GPU draw comes through a hook. The extra GPU draws are predicated tiling with 2 tiles (GPU/Native counts 2/1, 4/2, 6/3, 5/3), not unhooked paths.
 - 2026-10-25 (Claude), at the owner's request: runs are unattended. Patch `0038-window-hidden` (`--window_hidden`) never shows or raises the window. Smoke (now hidden by default; `-Visible` to watch), scene and RenderDoc runs pass it, and smoke screenshots come from frame dumps. Checked with a window probe during a 25 s run: 229 polls, the window never visible and never in the foreground; 4 non-black frame-dump screenshots of the Native title.
+- 2026-10-25 (Claude): The missing menu text was Swing's DrawVertices. LTCG specialised it to start at vertex 0 with the count in r5 (WWE's copy takes the start in r5 and the count in r6), so the label quad lists were read as 4-vertex draws. A RenderDoc capture of a Classic main-menu frame (`analysis/rdoc-menu-classic`) showed the labels as 28- to 216-vertex quad lists, and Native's trace had the same numbers as start vertices. Swing's row is now `DrawVerticesFromZero`. Scene run (`python scripts/scene_runner.py tests/scenes/boot-main-menu.toml --native 1`, `analysis/scenes/boot-main-menu`): PASS. Title frame 480: Native against Classic worst tile 0, mean FLIP 0.0000. Main menu frame 1400: worst tile 0, mean FLIP 0.0018. Both Classic runs repeat (worst tile 0). Native's session report: `native_active` true, fallback `none`, `draw_skips` {}, no debug cvars, every Enhancement off. Boxes 1, 3 and 4 ticked on that run; box 2 was ticked at step 2. WWE's native unit tests are copied (`tests/native`, all pass with the host tests: 244 test cases), plus tests for the CTX1 decoder and rect lists.

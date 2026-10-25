@@ -167,6 +167,18 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
     sink.draw_non_indexed(module, base, device, primitive, start_vertex, vertex_count);  \
   TS4_D3D_END
 
+// Swing's DrawVertices, specialised by LTCG to start at vertex 0: r4 = primitive, r5 = vertex
+// count.
+#define TS4_D3D_HOOK_DrawVerticesFromZero(name, address)                              \
+  TS4_D3D_BEGIN(name, address)                                                        \
+  const uint32_t device = ctx.r3.u32;                                                 \
+  const uint32_t primitive = ctx.r4.u32;                                              \
+  const uint32_t vertex_count = ctx.r5.u32;                                           \
+  TS4_D3D_CALL(address);                                                              \
+  if (sink.draw_non_indexed)                                                          \
+    sink.draw_non_indexed(module, base, device, primitive, 0, vertex_count);          \
+  TS4_D3D_END
+
 // D3DDevice_BeginVertices: r4 = primitive, r5 = vertex count, r6 = stride; returns the guest
 // pointer the game copies the vertices into. A draw still pending was ended inline.
 #define TS4_D3D_HOOK_BeginVertices(name, address)                                     \

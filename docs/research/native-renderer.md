@@ -23,7 +23,10 @@ functions WWE named.
 - **Present** is the only caller of `VdSwap` in each Module: Loader `0x830B8C60`, Swing
   `0x88295D80`. The matcher agrees.
 - **Resolve** is only a near match (about 70%), but its prologue saves the same arguments:
-  device in r3, flags in r4 (bit 17 tested first), f1, and the destination in r8.
+  device in r3, flags in r4 (bit 17 tested first) and f1. The arguments differ from WWE,
+  though: the callers in both Modules pass the XDK's order, destination texture in **r6**,
+  destination point in r7 and mip level in r8. WWE's older XDK took the destination in r8.
+  Read from r8, every destination was 0 and Native never found its front buffer.
 
 ## Device layout: same as WWE All Stars
 
@@ -47,6 +50,11 @@ The register-mirror groups match too (see the draw census below).
   and then call `0x887CA798`, which restores device state (textures, fetch constants). The
   pending draw is taken on entry to `0x887CA798`, before that restore. DrawVerticesUP
   (`0x882934C0`) still ends its own draws.
+- **Swing's DrawVertices always starts at vertex 0.** LTCG specialised it: it keeps r5 as the
+  vertex count (`mr r24,r5`) and a zero as the start (`mr r23,r26`), where Loader's and WWE's
+  copies take the start in r5 and the count in r6. Read the WWE way, the menu labels (quad
+  lists of 28 to 216 vertices) became 4-vertex draws from vertex 28 to 216, and the main
+  menu lost all its text. Its row is `DrawVerticesFromZero`.
 - **Swing has no BeginIndexedVertices or DrawIndexedVerticesUP** (Loader does). Swing's
   SetVertexDeclaration is inlined too. That is harmless, because the renderer reads the
   declaration from the device at draw time.
@@ -71,16 +79,41 @@ per 60-swap window:
 - **Swing's DRAW_INDX_2 gap is D3D's 48 point-list draws per frame**, all from one IB
   (`1147C980`, prim 1). WWE found the same pattern: a D3D-internal sync buffer with no visible
   content. Without them, 3960 - 2880 = 1080 = ClearRect + Resolve.
-- **Swing's DRAW_INDX gap (110 per frame) is predicated tiling.** The GPU's IB history shows
-  the changing IBs each executed 3 times (`2/3x6466w`, `5/6x9904w`): D3D replays the tiled
-  pass once per EDRAM tile. With 3 tiles, 181 hooked draws, x of them in the pass, give
-  181 + 2x = 291 for x = 55. That also accounts for the 6 extra IBs per frame. A sweep build
+- **Swing's DRAW_INDX gap (about 110 per frame) is predicated tiling with 2 tiles.** A
+  temporary GPU-side log of one main-menu frame's draws (284 DRAW_INDX) was set against
+  Native's trace of the same screen (175 draws), counting how often each index count occurs.
+  Every difference is a draw inside the tiled pass executed once more: GPU/Native 2/1 (25
+  index counts), 4/2, 6/3, 10/5, and 5/3 (one draw outside the pass, two inside). So
+  175 + 109 = 284. Every GPU draw comes through a hook. Tile replays run from changing ring
+  segments, not static command buffers (no unchanging IB held a draw). A sweep build
   (`scripts/gen_d3d_sweep.py`, `-DTOPSPIN4_D3D_SWEEP=ON`: 627 counted functions in
-  `0x88286000`-`0x882AF000`, `analysis/smoke-20261025-141244`) found no other D3D function
-  near 110 calls per frame. The Native renderer has no EDRAM limit and draws each call once.
-  Native-against-Classic frame comparison is the check.
+  `0x88286000`-`0x882AF000`, `analysis/smoke-20261025-141244`) found no other draw entry
+  point. Native has no EDRAM limit and draws each call once, and the main menu matches Classic.
+  The cursor-based draw attribution (`--ts4_d3d_census`, census.h) was not conclusive here:
+  D3D moves to a new ring segment several times a frame, and spans across a move are not
+  counted.
 - **Register-mirror groups** logged by both copies are exactly WWE's `kMirrorGroups`, plus
   the booleans group (`0x4900` at `0x2780`, WWE's `kDeviceBooleans`).
+
+## Native against Classic (2026-10-25)
+
+`python scripts/scene_runner.py tests/scenes/boot-main-menu.toml --native 1`: two Classic
+runs and one Native run. Each Native capture is judged per pixel against the lowest FLIP
+error over the Classic runs, with the same tile rule. What it took past the title:
+
+- **`k_CTX1` textures** (Swing's normal maps) have no Vulkan format. They are decoded to R8G8
+  on upload (`src/native/texture_decode.h`, the SDK's `ConvertTexelCTX1ToR8G8` layout).
+- **Rectangle lists** (primitive 8, Swing's mip-chain pass `0x88756788`) are drawn as triangle
+  lists, the fourth corner made as v1 + v2 - v0 (`src/native/rect_list.h`). That pass also
+  resolves into mip levels above 0. Resolve targets hold level 0 only, so such a resolve no
+  longer overwrites level 0. Full mip resolve targets are not built yet.
+- **1D textures** are bound as width x 1 2D textures, and the shaders fetch them that way
+  (`patches/xenosrecomp/0002-topspin4-inputs`).
+- **Swing's DrawVertices** arguments (above).
+
+Result (`analysis/scenes/boot-main-menu`): title frame 480 worst tile 0, mean FLIP 0.0000;
+main menu frame 1400 worst tile 0, mean FLIP 0.0018. The session report shows Native active,
+fallback `none`, no draw skips, no debug cvars and no Enhancements.
 
 ## Open
 
