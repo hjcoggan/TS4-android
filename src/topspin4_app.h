@@ -74,6 +74,14 @@ class TopSpin4App : public rex::ReXApp {
   // and the GPU plugin read them. A setting also given on the command line or as a REX_<NAME>
   // environment variable keeps that value.
   void OnPostInitLogging() override {
+    // Top Spin 4 presents its cutaways at 30 fps. Repeating the held frame on each guest vblank
+    // between them made the 360 Hz variable-refresh panel show 10 ms / 28 ms pairs through
+    // every cutaway; skipping that present showed an even 33 ms, with play unchanged (PresentMon,
+    // ticket 16). So off here, unless the command line, environment or config set it.
+    if (const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo("present_repeat_held_vblanks");
+        flag && flag->source == rex::cvar::Source::kDefault) {
+      rex::cvar::SetFlagByName("present_repeat_held_vblanks", "false");
+    }
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
     topspin4::crash::SetSettingsFile(path);
