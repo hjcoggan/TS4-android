@@ -1,0 +1,66 @@
+module,address,name,role,evidence
+Loader_DLL.xex,830b8c60,Present,renderer,only VdSwap caller; WWE 82DBDFF8 near:95
+Swing_DLL.xex,88295d80,Present,renderer,only VdSwap caller; WWE 82DBDFF8 near:70; Loader near:74
+Loader_DLL.xex,830b37d0,SetRenderTarget,renderer,WWE 82DB5548 unique
+Swing_DLL.xex,8828e230,SetRenderTarget,renderer,WWE 82DB5548 unique; Loader unique
+Loader_DLL.xex,830b5238,Clear,renderer,WWE 82DBC9D0 near:93
+Swing_DLL.xex,8828ef08,Clear,renderer,WWE 82DBC9D0 near:84; Loader near:91
+Loader_DLL.xex,830b7268,Resolve,renderer,WWE 82DBF120 near:74; same prologue and argument use
+Swing_DLL.xex,882944d0,Resolve,renderer,WWE 82DBF120 near:69; Loader near:72; same prologue and argument use
+Loader_DLL.xex,830b3558,SetStreamSource,renderer,WWE 82DB4BD8 unique
+Swing_DLL.xex,8828e080,SetStreamSource,renderer,WWE 82DB4BD8 unique; Loader unique
+Loader_DLL.xex,830e2060,DrawIndexedVertices,renderer,WWE 82DB2060 unique; no direct callers
+Swing_DLL.xex,88293920,DrawIndexedVertices,renderer,WWE 82DB2060 unique; Loader unique
+Loader_DLL.xex,830e1c48,DrawVertices,renderer,WWE 82DB1C48 unique
+Swing_DLL.xex,88293508,DrawVertices,renderer,WWE 82DB1C48 near:98; Loader near:98
+Loader_DLL.xex,830e1140,BeginVertices,renderer,WWE 82DB1160 unique
+Swing_DLL.xex,88293000,BeginVertices,renderer,WWE 82DB1160 unique; Loader unique
+Loader_DLL.xex,830e1600,EndVertices,renderer,bytes equal WWE 82DB1150 (lwz 0x3554; stw 0x30; blr)
+Loader_DLL.xex,830e1b98,EndVertices,renderer,second copy of the same bytes; no direct callers
+Swing_DLL.xex,887cb428,EndsVerticesInline,renderer,game caller of BeginVertices; ends the draw inline (device+0x3554 to +0x30)
+Swing_DLL.xex,887caf80,EndsVerticesInline,renderer,game caller of BeginVertices; ends the draw inline (device+0x3554 to +0x30)
+Loader_DLL.xex,830e1610,DrawVerticesUP,renderer,WWE 82DB1620 unique
+Swing_DLL.xex,882934c0,DrawVerticesUP,renderer,WWE 82DB1620 unique; Loader unique
+Loader_DLL.xex,830e1658,BeginIndexedVertices,renderer,WWE 82DB1668 near:99
+Loader_DLL.xex,830e1ba8,DrawIndexedVerticesUP,renderer,WWE 82DB1BA8 unique
+Loader_DLL.xex,830c1e70,CreateVertexShader,renderer,WWE 82DADDE8 unique
+Swing_DLL.xex,88290ce8,CreateVertexShader,renderer,WWE 82DADDE8 unique; Loader unique
+Loader_DLL.xex,830c1a08,CreatePixelShader,renderer,WWE 82DADBC0 unique
+Swing_DLL.xex,88290940,CreatePixelShader,renderer,WWE 82DADBC0 unique; Loader unique
+Loader_DLL.xex,830c1d78,RegisterVertexShader,renderer,WWE 82DADCF0 unique; object offsets 0x20 and 0x368 as WWE
+Swing_DLL.xex,88290bf0,RegisterVertexShader,renderer,WWE 82DADCF0 unique; Loader unique
+Loader_DLL.xex,830c19d0,RegisterPixelShader,renderer,WWE 82DAC148 unique; object offsets 0x18 and 0x28 as WWE
+Swing_DLL.xex,88290908,RegisterPixelShader,renderer,WWE 82DAC148 unique; Loader unique
+Loader_DLL.xex,830d3d70,MirrorCommit,census,WWE 82DC1B50 unique
+Swing_DLL.xex,8829ce78,MirrorCommit,census,WWE 82DC1B50 unique; Loader unique
+Loader_DLL.xex,830b3700,SetIndices,census,WWE 82DB4D80 unique
+Swing_DLL.xex,8828e1a0,SetIndices,census,WWE 82DB4D80 unique; Loader unique
+Loader_DLL.xex,830b4d28,ClearRect,census,WWE 82DBC4B0 unique; builds DRAW_INDX_2
+Swing_DLL.xex,8828e9f8,ClearRect,census,WWE 82DBC4B0 unique; Loader unique; builds DRAW_INDX_2
+Loader_DLL.xex,830e24d8,Draw_830E24D8,census,builds DRAW_INDX; no direct callers
+Loader_DLL.xex,830e2978,Draw_830E2978,census,builds DRAW_INDX; no direct callers
+Loader_DLL.xex,830aa5b0,Draw_830AA5B0,census,builds DRAW_INDX; WWE 82DB9828 unique
+Swing_DLL.xex,88296a60,Draw_88296A60,census,builds DRAW_INDX; WWE 82DB9828 unique
+Loader_DLL.xex,830bcb00,Draw_830BCB00,census,builds DRAW_INDX
+Loader_DLL.xex,830bf0b8,Draw_830BF0B8,census,builds DRAW_INDX
+Swing_DLL.xex,8829aa18,Draw_8829AA18,census,builds DRAW_INDX
+Loader_DLL.xex,830af8a8,Draw_830AF8A8,census,builds DRAW_INDX_2; WWE 82DB6118 unique
+Swing_DLL.xex,882888f0,Draw_882888F0,census,builds DRAW_INDX_2; WWE 82DB6118 unique
+Loader_DLL.xex,830afa08,Draw_830AFA08,census,builds DRAW_INDX_2; WWE 82DB6270 near:99
+Swing_DLL.xex,88288a48,Draw_88288A48,census,builds DRAW_INDX_2; WWE 82DB6270 near:99
+Loader_DLL.xex,830bc9a8,Draw_830BC9A8,census,builds DRAW_INDX_2
+Loader_DLL.xex,830bef40,Draw_830BEF40,census,builds DRAW_INDX_2
+Swing_DLL.xex,8829a8a0,Draw_8829A8A0,census,builds DRAW_INDX_2
+Loader_DLL.xex,830c0e90,Draw_830C0E90,census,builds DRAW_INDX_2
+Loader_DLL.xex,830c0ec8,Draw_830C0EC8,census,builds DRAW_INDX_2; WWE 82DADA00 near:62
+Swing_DLL.xex,8828ff28,Draw_8828FF28,census,builds DRAW_INDX_2
+Loader_DLL.xex,830d9428,Draw_830D9428,census,builds DRAW_INDX_2; WWE 82DCE1A8 near:99
+Swing_DLL.xex,882a1870,Draw_882A1870,census,builds DRAW_INDX_2; WWE 82DCE1A8 near:94
+Loader_DLL.xex,830da400,Draw_830DA400,census,builds DRAW_INDX_2; WWE 82DC7F88 unique
+Swing_DLL.xex,882a3398,Draw_882A3398,census,builds DRAW_INDX_2; WWE 82DC90E0 near:66
+Loader_DLL.xex,830de268,Draw_830DE268,census,builds DRAW_INDX_2
+Loader_DLL.xex,830de2d0,Draw_830DE2D0,census,builds DRAW_INDX_2
+Swing_DLL.xex,882a3c60,Draw_882A3C60,census,builds DRAW_INDX_2
+Loader_DLL.xex,830ba770,IndirectBuffer,census,builds INDIRECT_BUFFER and INDIRECT_BUFFER_PFD
+Swing_DLL.xex,88291d68,IndirectBuffer,census,builds INDIRECT_BUFFER and INDIRECT_BUFFER_PFD
+Loader_DLL.xex,830aafd0,IndirectBufferWait,census,builds INDIRECT_BUFFER and WAIT_REG_MEM
