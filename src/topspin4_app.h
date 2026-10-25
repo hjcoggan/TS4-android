@@ -19,13 +19,20 @@ class TopSpin4App : public rex::ReXApp {
 
  protected:
   bool SetupEnvironment() override {
-    // The Classic renderer is the FSI render-target path, as in WWE All Stars (its ADR-0003).
-    // On the host render-target path Swing's frames (2x MSAA in two predicated tiles) come
-    // out black. The cvar belongs to the GPU plugin, which registers it after this runs, so
-    // it is set the way a late registration reads it: from REX_<NAME>, which a
-    // --render_target_path_vulkan on the command line still overrides.
+    // The Classic renderer uses host render targets (fbo), the Oracle's "performance" path:
+    // FSI is correct too but GPU-bound, about 40 fps in rallies on an RX 7900 XT (ticket 13).
+    // Host render targets need draw extents found by running unclipped draws' vertex shaders
+    // on the CPU, as Edge does. Estimated at full height instead, Swing's depth-only
+    // occlusion-query pass (EDRAM base 720, 4x MSAA) wraps around the EDRAM and takes the
+    // front buffer's tiles from the colour target, so every Swing frame resolves black.
+    // These cvars belong to the GPU plugin, which registers them after this runs, so they are
+    // set the way a late registration reads them: from REX_<NAME>, which the same option on
+    // the command line still overrides.
     if (!rex::platform::env::get("REX_RENDER_TARGET_PATH_VULKAN")) {
-      rex::platform::env::set("REX_RENDER_TARGET_PATH_VULKAN", "fsi");
+      rex::platform::env::set("REX_RENDER_TARGET_PATH_VULKAN", "fbo");
+    }
+    if (!rex::platform::env::get("REX_EXECUTE_UNCLIPPED_DRAW_VS_ON_CPU")) {
+      rex::platform::env::set("REX_EXECUTE_UNCLIPPED_DRAW_VS_ON_CPU", "true");
     }
     return rex::ReXApp::SetupEnvironment();
   }

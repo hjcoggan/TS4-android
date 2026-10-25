@@ -62,6 +62,17 @@ fetch exponent adjust read from the wrong fetch-constant dword (patch 0032). A t
 needs no cache reset: `cache/shaders/shareable` holds guest ucode (`.xsh`) and pipeline
 descriptions (`.xpso`), and shaders are translated again on every run.
 
+**The whole frame is black, but the render targets hold the picture.** On host render targets
+(the default; `--render_target_path_vulkan=fsi` is the other path), a resolve dumps whichever
+render target owns the EDRAM tiles to the EDRAM buffer first, and copies that out to guest
+memory. If a later pass's target is believed to cover those tiles, the resolve copies the wrong
+image. Follow the chain in a capture with `actions <eid> <eid>`, which shows each dispatch's source
+texture: the dump should read the colour target you saw with `rt`. This is how every Swing frame
+resolved black: a depth-only occlusion-query pass at EDRAM base 720 (4x MSAA) was estimated at
+full height, wrapped around the EDRAM and took the colour target's tiles. Running unclipped draws'
+vertex shaders on the CPU for their real extent (`execute_unclipped_draw_vs_on_cpu`, set in
+`src/topspin4_app.h`, as Edge does) fixed it.
+
 **A runtime change seems to have no effect.** `topspin4_stage_dlls` (CMakeLists.txt) copies the
 runtime and GPU plugin DLLs next to the exe on every build; check their timestamps there.
 

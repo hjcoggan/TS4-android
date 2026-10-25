@@ -13,6 +13,11 @@ Commands:
   texture ID [--all-mips]     texel samples per mip and face, and PNGs of them
   rt EID                      the colour targets as they are after the draw, as PNGs
   pixel ID X Y [MIP] [SLICE]  one texel's value
+  actions FROM TO             every action between two events (passes, copies, dispatches with
+                              the compute stage's textures and buffer ranges): follows a resolve
+                              from render target through the EDRAM buffer to guest memory
+  buffer ID OFFSET LEN EID    a buffer range (hex offset and length) after an event: how many
+                              bytes are nonzero, and the first dwords
 """
 import json
 import math
@@ -181,8 +186,55 @@ def cmd_pixel(ctrl, textures, args):
         + " ".join(f"{c:.5g}" for c in v.floatValue[:4]) + f"  bits {bits}")
 
 
+def all_actions(actions, out):
+    for a in actions:
+        out.append(a)
+        if a.children:
+            all_actions(a.children, out)
+    return out
+
+
+def cmd_actions(ctrl, textures, args):
+    first, last = int(args[0]), int(args[1])
+    buffers = {b.resourceId: b for b in ctrl.GetBuffers()}
+    sdfile = ctrl.GetStructuredFile()
+    for a in all_actions(ctrl.GetRootActions(), []):
+        if not first <= a.eventId <= last:
+            continue
+        line = f"eid {a.eventId} {a.GetName(sdfile)}"
+        if a.flags & rd.ActionFlags.Dispatch:
+            ctrl.SetFrameEvent(a.eventId, False)
+            pipe = ctrl.GetPipelineState()
+            res = []
+            for kind, used in (("ro", pipe.GetReadOnlyResources(rd.ShaderStage.Compute, False)),
+                               ("rw", pipe.GetReadWriteResources(rd.ShaderStage.Compute, False))):
+                for u in used:
+                    d = u.descriptor
+                    t = textures.get(d.resource)
+                    b = buffers.get(d.resource)
+                    if t:
+                        res.append(f"{kind}{u.access.index}={fmt_tex(t)}")
+                    elif b:
+                        res.append(f"{kind}{u.access.index}=buf{int(d.resource)}"
+                                   f"@{d.byteOffset:X}+{d.byteSize:X}")
+            line += f" cs {int(pipe.GetShader(rd.ShaderStage.Compute))} " + " ".join(res)
+        say(line)
+
+
+def cmd_buffer(ctrl, textures, args):
+    """buffer ID OFFSET LENGTH EID: nonzero bytes and the first dwords, as of after EID."""
+    rid = next(b.resourceId for b in ctrl.GetBuffers() if int(b.resourceId) == int(args[0]))
+    offset, length, eid = int(args[1], 16), int(args[2], 16), int(args[3])
+    ctrl.SetFrameEvent(eid, True)
+    data = bytes(ctrl.GetBufferData(rid, offset, length))
+    nonzero = sum(1 for x in data if x)
+    words = " ".join(data[i:i + 4].hex() for i in range(0, min(len(data), 32), 4))
+    say(f"buffer {args[0]} @{offset:X}+{length:X} after eid {eid}: {nonzero} of {len(data)} "
+        f"bytes nonzero; first {words}")
+
+
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
-            "pixel": cmd_pixel}
+            "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
 
 def succeeded(result):
     return getattr(result, "code", result) == rd.ResultCode.Succeeded
