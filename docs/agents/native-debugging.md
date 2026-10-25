@@ -40,6 +40,10 @@ from Classic. The renderer, its hooks and every finding so far are in
 - **Vertex formats the shader decodes itself:** DEC3N normals (`0x2A2187`), 16-bit halves that
   stay swapped after the 32-bit vertex swap (texcoords, positions, blend weights). See
   `kDeclTypes` and `HalfSwapBit` in `src/native/guest_decode.h` and `patches/xenosrecomp/`.
+- **Input locations out of step with the converter.** `kInputLocations` must give every
+  semantic the location XenosRecomp does (POSITION1 shares 15 with TEXCOORD7). List the
+  converter's with `grep -ho "vk::location([0-9]*)\]\] in [a-z0-9]* i[A-Za-z0-9]* : [A-Z0-9]*"
+  cache/shader-native/hlsl/vs_*.hlsl | sort -u`; a semantic Native lacks reads zeros.
 - **Texture formats Vulkan lacks** (`k_CTX1`): `src/native/texture_decode.h`. A skipped
   `no_texture` with "format N not supported" in the log names the format.
 - **State the device mirror doesn't hold:** constants set from a buffer

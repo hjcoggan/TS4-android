@@ -191,7 +191,18 @@ What the Academy's trees took, found the same way (same-frame capture, `analysis
   blurred mips and lost most of their alpha. The leaf textures, samplers and constants
   otherwise matched Classic's.
 
+What King of the Court took (`analysis/rdoc-kotc-6400`):
+
+- **POSITION1 had no input location.** XenosRecomp gives POSITION1 location 15, shared with
+  TEXCOORD7; Native's `kInputLocations` knew only TEXCOORD7 there, so the first morph target of
+  Top Spin 4's morph meshes (four extra POSITIONn/NORMALn streams) read zeros. The TV cameramen
+  came out posed differently: 41% of their post-VS vertices up to 0.02 NDC off Classic's.
+
 ## Open
+
+- King of the Court frame 4300 (worst tile 42, passing): Classic draws a dark blob on the
+  court by the serving player's foot, likely the ball's shadow during the toss, and Native does
+  not. Not reproduced in a capture yet, because the serve's timing differs between runs.
 
 - Of the `census` rows, only Swing's `Draw_88296A60` and `Draw_8828FF28` ran, once each, at
   boot. They need a renderer path only if a later scene uses them per frame.

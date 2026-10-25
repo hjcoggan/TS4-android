@@ -109,6 +109,9 @@ constexpr InputLocation kInputLocations[] = {
     {5, 6, 14, false},  // TEXCOORD6
     {5, 7, 15, false},  // TEXCOORD7
     // Top Spin 4's morph-target streams, as patches/xenosrecomp/0002-topspin4-inputs places them.
+    // POSITION1 shares location 15 with TEXCOORD7, as in XenosRecomp's own table: no shader
+    // reads both. Without it the first morph target read zeros (the KotC cameramen).
+    {0, 1, 15, false},  // POSITION1
     {0, 2, 16, false},  // POSITION2
     {0, 3, 17, false},  // POSITION3
     {0, 4, 18, false},  // POSITION4
