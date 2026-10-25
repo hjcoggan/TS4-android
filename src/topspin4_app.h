@@ -1,5 +1,7 @@
 #pragma once
 
+#include <rex/cvar.h>
+#include <rex/logging.h>
 #include <rex/platform/env.h>
 #include <rex/rex_app.h>
 #include <rex/system/guest_swaps.h>
@@ -7,6 +9,14 @@
 #include "fault_log.h"
 #include "frame_dumps.h"
 #include "script_input.h"
+#include "settings/config_file.h"
+#include "settings/renderer_choice.h"
+#include "settings/settings_file.h"
+#include "user_paths.h"
+
+REXCVAR_DECLARE(std::string, user_data_root);
+REXCVAR_DECLARE(std::string, cache_root);
+REXCVAR_DECLARE(std::string, ts4_renderer);
 
 class TopSpin4App : public rex::ReXApp {
  public:
@@ -35,6 +45,44 @@ class TopSpin4App : public rex::ReXApp {
       rex::platform::env::set("REX_EXECUTE_UNCLIPPED_DRAW_VS_ON_CPU", "true");
     }
     return rex::ReXApp::SetupEnvironment();
+  }
+
+  // Saves and settings go to the per-user folder and the shader cache beside the launcher's
+  // prepared data (src/user_paths.h), instead of the SDK's Documents/topspin4. The developer
+  // scripts pass both folders on the command line, which wins.
+  void OnConfigurePaths(rex::PathConfig& paths) override {
+    if (REXCVAR_GET(user_data_root).empty()) {
+      paths.user_data_root = topspin4::user_paths::DefaultUserDataRoot();
+    }
+    if (REXCVAR_GET(cache_root).empty()) {
+      paths.cache_root = topspin4::user_paths::DefaultCacheRoot();
+    }
+  }
+
+  // The player's settings (ticket 10), once logging can report on them and before the runtime
+  // and the GPU plugin read them. A setting also given on the command line keeps that value.
+  void OnPostInitLogging() override {
+    namespace settings = topspin4::settings;
+    const auto path = settings::SettingsPath(user_data_root());
+    const settings::LoadReport report =
+        settings::LoadSettingsFile(path, [](std::string_view key, std::string_view value) {
+          const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
+          if (flag && flag->source == rex::cvar::Source::kCommandLine) {
+            return true;
+          }
+          return rex::cvar::SetFlagByName(key, value);
+        });
+    for (const std::string& warning : report.warnings) {
+      REXLOG_WARN("{}", warning);
+    }
+    if (report.file == settings::LoadReport::File::kLoaded) {
+      REXLOG_INFO("Settings: {}", path.string());
+    }
+    const settings::RendererChoice renderer =
+        settings::ChooseRenderer(REXCVAR_GET(ts4_renderer), false);
+    if (!renderer.note.empty()) {
+      REXLOG_WARN("{}", renderer.note);
+    }
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {

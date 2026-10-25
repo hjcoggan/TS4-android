@@ -13,6 +13,9 @@ set(TOPSPIN4_SOURCES
     src/fault_log.cpp
     src/frame_dumps.cpp
     src/script_input.cpp
+    src/settings/settings_cvars.cpp
+    src/settings/settings_file.cpp
+    src/user_paths.cpp
 )
 
 if(WIN32)
@@ -50,6 +53,9 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
     enable_testing()
     add_executable(topspin4_host_tests EXCLUDE_FROM_ALL
         tests/host/test_frame_dumps.cpp
+        tests/host/test_user_paths.cpp
+        tests/host/test_settings.cpp
+        src/settings/settings_file.cpp
         ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
     target_include_directories(topspin4_host_tests PRIVATE src
         ${REXSDK_DIR}/thirdparty/catch2/extras)
