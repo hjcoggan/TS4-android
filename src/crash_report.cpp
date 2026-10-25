@@ -1,4 +1,5 @@
 #include "crash_report.h"
+#include "native/native_renderer.h"
 
 #include <atomic>
 #include <csignal>
@@ -222,12 +223,10 @@ CrashFacts Facts(uint32_t code, const std::tm& now) {
   CrashFacts facts;
   facts.version = TOPSPIN4_VERSION;
   facts.commit = TOPSPIN4_COMMIT;
-  // No Native renderer is built yet (ticket 26).
-  const settings::RendererChoice choice =
-      settings::ChooseRenderer(rex::cvar::GetFlagByName("ts4_renderer"), false);
-  facts.renderer = choice.renderer == settings::Renderer::kNative ? "native"
-                   : choice.note.empty()                          ? "classic"
-                                                                  : "classic (Native asked for, not built)";
+  // What drew: Native once its setup succeeded, else Classic, also after a renderer fallback.
+  facts.renderer = native::IsEnabled()   ? "native"
+                   : native::Requested() ? "classic (renderer fallback from Native)"
+                                         : "classic";
   facts.exception_status = code;
   facts.stamp = Stamp(now);
   const std::string log = rex::cvar::GetFlagByName("log_file");

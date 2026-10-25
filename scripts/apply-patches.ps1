@@ -35,7 +35,8 @@ function Invoke-TreeGit([string]$Tree, [string[]]$Arguments) {
 }
 
 $series = @(
-    @{ Patches = 'patches/rexglue'; Tree = '.tools/rexglue-source' }
+    @{ Patches = 'patches/rexglue'; Tree = '.tools/rexglue-source' },
+    @{ Patches = 'patches/xenosrecomp'; Tree = '.tools/xenosrecomp' }
 )
 foreach ($entry in $series) {
     $tree = "$projectRoot/$($entry.Tree)"

@@ -7,8 +7,10 @@ tree records the series it carries. A patch that fails resets the tree and stops
 | Folder | Applied to | Upstream revision |
 |---|---|---|
 | `rexglue/` | `.tools/rexglue-source` | `f5337cd` (v0.10.0) |
+| `xenosrecomp/` | `.tools/xenosrecomp` | `339af41` (re:Blue fork) |
 
-To add one, edit `.tools/rexglue-source` and run `pwsh scripts/new-patch.ps1 <name>`: it writes
+To add one, edit `.tools/rexglue-source` and run `pwsh scripts/new-patch.ps1 <name>` (for
+XenosRecomp, edit `.tools/xenosrecomp` and add `-Tool xenosrecomp`): it writes
 the next-numbered patch from your edits and reapplies the series to prove it. A patch is never
 renumbered once committed, so a fix to an earlier patch is a new patch on top.
 `pwsh scripts/apply-patches.ps1 -Reset` discards the tree's edits and reapplies the series.
@@ -39,8 +41,17 @@ these left out. All of them apply cleanly to `f5337cd` without the three below.
 | `rexglue-online.patch` | WWE's revived online play (its game server, relay and UPnP). Top Spin 4's online is stubbed in 1.0, so nothing would use it, and it pulls in libcurl, rapidjson and miniupnpc. |
 | `rexglue-net-waits.patch` | Wakes guest socket waits for WWE's online sessions. Belongs with the online patch; offline modes make no socket waits that need it. |
 | `rexglue-vibration.patch` | WWE's host-side rumble mixer (WWE ADR-0017). Its rules are tuned to WWE's game state. Top Spin 4's rumble goes through the SDK's own `XamInputSetState` path; revisit if rumble turns out wrong. |
-| `xenosrecomp-wweallstars.patch` | The shader converter changes for the Native renderer. Deferred to ticket 26, where they are adapted to Top Spin 4's shaders. |
 
 Kept despite being WWE-flavoured: `0020-tu2-update` loads a Title Update's `.xexp` from `update:\`
 for every Module (TU1 here), `0021-content` keeps the save root name alive across an overlapped
 `XamContentCreate`, and `0026-headless-keyboard` answers Player Creator name prompts in scene runs.
+
+## XenosRecomp (ticket 26)
+
+The shader pack's converter id is the hash of this series (`CMakeLists.txt`,
+`scripts/convert-shaders.ps1`), so a change here makes existing packs stale.
+
+| Patch | What |
+|---|---|
+| `0001-wweallstars-native` | WWE All Stars' `xenosrecomp-wweallstars.patch` at `36f5bfd`, unchanged: SvR 2011's mode (`SVR2011_RECOMP`: 32 sampler slots, COLOR0-7 interpolators, the Xenos boolean file) plus WWE's fixes for the Native renderer. |
+| `0002-topspin4-inputs` | Vertex inputs POSITION2-4 and NORMAL1-4 (Top Spin 4's morph-target streams) get locations 16-22, which the Native renderer's `kInputLocations` matches; without them DXC rejected 28 vertex shaders for partial explicit locations. A 1D texture fetch becomes a 2D fetch at v = 0.5 of a width x 1 texture; `tfetch1D` and its descriptor index did not exist, so 36 pixel shaders failed. |

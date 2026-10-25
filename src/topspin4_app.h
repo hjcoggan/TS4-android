@@ -9,6 +9,7 @@
 #include <rex/rex_app.h>
 #include <rex/runtime.h>
 #include <rex/system/guest_swaps.h>
+#include <rex/system/host_gpu_loss.h>
 #include <rex/ui/vulkan/provider.h>
 #include <rex/ui/window.h>
 
@@ -16,6 +17,7 @@
 #include "d3d/host.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
+#include "native/native_renderer.h"
 #include "online_unavailable.h"
 #include "remapped_input.h"
 #include "script_input.h"
@@ -116,10 +118,11 @@ class TopSpin4App : public rex::ReXApp {
       REXLOG_INFO("Settings: {}", settings::Utf8(path));
     }
     const settings::RendererChoice renderer =
-        settings::ChooseRenderer(REXCVAR_GET(ts4_renderer), false);
+        settings::ChooseRenderer(REXCVAR_GET(ts4_renderer), true);
     if (!renderer.note.empty()) {
       REXLOG_WARN("{}", renderer.note);
     }
+    topspin4::native::Request(renderer.renderer == settings::Renderer::kNative);
   }
 
   // A cvar's value for Top Spin 4, unless the command line, environment or config set it.
@@ -131,6 +134,7 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    topspin4::native::ApplyPresenterSettings();
     rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
     // input system, so no binding can steer it.
@@ -139,10 +143,13 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
-    topspin4::d3d::InstallHost();
+    // A device loss the SDK sees is a GPU failure under Native.
+    rex::system::host_gpu_loss::SetHandler(&topspin4::native::OnHostGpuLoss);
+    topspin4::native::Configure(runtime());
+    topspin4::d3d::InstallHost(runtime()->cache_root());
     topspin4::frame_dumps::SetSessionEnd([]() -> std::string {
       topspin4::d3d::OnSessionEnd();
-      return {};
+      return "\"renderer\": " + topspin4::native::ReportJson();
     });
     topspin4::frame_dumps::Install(runtime());
     // The crash report's facts known only now. Only the Vulkan backend is built, so the
@@ -163,5 +170,21 @@ class TopSpin4App : public rex::ReXApp {
     topspin4::crash::CrashIfAsked();
   }
 
-  void OnShutdown() override { topspin4::d3d::OnSessionEnd(); }
+  // Closing the window hard-exits the process without OnShutdown, so the session's last
+  // lines are written here; OnShutdown covers the guest exiting.
+  bool OnWindowCloseRequested() override {
+    topspin4::d3d::OnSessionEnd();
+    return true;
+  }
+
+  void OnShutdown() override {
+    topspin4::d3d::OnSessionEnd();
+    topspin4::native::Shutdown();
+  }
+
+  // Native fits its output to the window; the render thread reads the size handed over here.
+  void OnWindowPixelSizeChanged(uint32_t pixel_width, uint32_t pixel_height) override {
+    rex::ReXApp::OnWindowPixelSizeChanged(pixel_width, pixel_height);
+    topspin4::native::SetWindowSize(pixel_width, pixel_height);
+  }
 };

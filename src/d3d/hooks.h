@@ -34,6 +34,11 @@ struct PendingVertices {
 };
 inline PendingVertices g_pending_vertices;
 
+// Inside a Create*Shader call on this thread. It registers the object it builds before the
+// object holds the shader's microcode (WWE ticket 29), so the register hook leaves those calls
+// to the Create hook, which reads the caller's container instead.
+inline thread_local bool g_creating_shader = false;
+
 inline void FinishPendingVertices(Module module, const uint8_t* base) {
   const PendingVertices pending = g_pending_vertices;
   g_pending_vertices = {};
@@ -107,12 +112,14 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
   if (sink.clear) sink.clear(module, base, device, flags, rect, color, depth, stencil); \
   TS4_D3D_END
 
-// D3DDevice_Resolve: r4 = flags, r8 = destination texture.
+// D3DDevice_Resolve: r4 = flags, r5 = source rect, r6 = destination texture, r7 = destination
+// point, r8 = level (the XDK's order; Loader's callers pass it so). WWE All Stars' older XDK
+// took the destination in r8.
 #define TS4_D3D_HOOK_Resolve(name, address)                                      \
   TS4_D3D_BEGIN(name, address)                                                   \
   const uint32_t device = ctx.r3.u32;                                            \
   const uint32_t flags = ctx.r4.u32;                                             \
-  const uint32_t destination = ctx.r8.u32;                                       \
+  const uint32_t destination = ctx.r6.u32;                                       \
   TS4_D3D_CALL(address);                                                         \
   if (sink.resolve) sink.resolve(module, base, device, flags, destination);      \
   TS4_D3D_END
@@ -209,7 +216,9 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
 #define TS4_D3D_HOOK_CREATE_SHADER(name, address, is_pixel)                             \
   TS4_D3D_BEGIN(name, address)                                                          \
   const uint32_t container = ctx.r3.u32;                                                \
+  ::topspin4::d3d::hooks::g_creating_shader = true;                                     \
   TS4_D3D_CALL(address);                                                                \
+  ::topspin4::d3d::hooks::g_creating_shader = false;                                    \
   if (sink.shader_created) sink.shader_created(module, base, container, ctx.r3.u32, is_pixel); \
   TS4_D3D_END
 #define TS4_D3D_HOOK_CreateVertexShader(name, address) \
@@ -222,7 +231,8 @@ inline void FinishPendingVertices(Module module, const uint8_t* base) {
   TS4_D3D_BEGIN(name, address)                                                            \
   const uint32_t object = ctx.r3.u32;                                                     \
   TS4_D3D_CALL(address);                                                                  \
-  if (sink.shader_registered) sink.shader_registered(module, base, object, is_pixel);     \
+  if (sink.shader_registered && !::topspin4::d3d::hooks::g_creating_shader)               \
+    sink.shader_registered(module, base, object, is_pixel);                               \
   TS4_D3D_END
 #define TS4_D3D_HOOK_RegisterVertexShader(name, address) \
   TS4_D3D_HOOK_REGISTER_SHADER(name, address, false)

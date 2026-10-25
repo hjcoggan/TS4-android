@@ -15,6 +15,22 @@ set(TOPSPIN4_SOURCES
     src/d3d/host.cpp
     src/fault_log.cpp
     src/frame_dumps.cpp
+    src/native/geometry_cache.cpp
+    src/native/live_topup.cpp
+    src/native/native_renderer.cpp
+    src/native/pipelines.cpp
+    src/native/pipeline_parts.cpp
+    src/native/pipeline_store.cpp
+    src/native/prebuild_plan.cpp
+    src/native/prepare_output.cpp
+    src/native/shader_library.cpp
+    src/native/shader_pack.cpp
+    src/native/shader_topup.cpp
+    src/native/texture_layout.cpp
+    src/native/textures.cpp
+    src/native/topup_converter.cpp
+    src/native/vk_context.cpp
+    src/native/write_watch.cpp
     src/remapped_input.cpp
     src/script_input.cpp
     src/settings/settings_cvars.cpp
@@ -32,6 +48,52 @@ rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
 # D3D hooks in each Module's DLL, and the sink they reach the exe through (src/d3d/sink.h).
 include(cmake/d3d_hooks.cmake)
 target_link_libraries(topspin4 PRIVATE topspin4_d3d_sink)
+
+# The Native renderer (src/native, from WWE All Stars, ADR-0004). A shader pack converted with
+# another XenosRecomp patch series is stale: the converter id is the series' hash.
+file(GLOB TOPSPIN4_XENOSRECOMP_PATCHES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/xenosrecomp/*.patch")
+list(SORT TOPSPIN4_XENOSRECOMP_PATCHES)
+set(TOPSPIN4_XENOSRECOMP_SERIES "")
+foreach(topspin4_patch IN LISTS TOPSPIN4_XENOSRECOMP_PATCHES)
+    file(READ "${topspin4_patch}" topspin4_patch_text HEX)
+    string(APPEND TOPSPIN4_XENOSRECOMP_SERIES "${topspin4_patch_text}")
+endforeach()
+string(SHA256 TOPSPIN4_XENOSRECOMP_SHA256 "${TOPSPIN4_XENOSRECOMP_SERIES}")
+string(SUBSTRING "${TOPSPIN4_XENOSRECOMP_SHA256}" 0 16 TOPSPIN4_EXPECTED_CONVERTER_ID)
+target_compile_definitions(topspin4 PRIVATE
+    TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull
+    # Live shader top-ups (src/native/topup_converter.h) in a dev build: the XenosRecomp
+    # scripts/build-xenosrecomp.ps1 builds.
+    TOPSPIN4_DEV_XENOSRECOMP="${CMAKE_CURRENT_SOURCE_DIR}/out/build/xenosrecomp/XenosRecomp/XenosRecomp.exe"
+    TOPSPIN4_DEV_XENOSRECOMP_INCLUDE="${CMAKE_CURRENT_SOURCE_DIR}/.tools/xenosrecomp/XenosRecomp/shader_common.h")
+# zstd (decompression only) and smol-v unpack the shader pack; both come with XenosRecomp in
+# .tools/xenosrecomp (BSD-3 and MIT).
+set(TOPSPIN4_XENOSRECOMP_THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/.tools/xenosrecomp/thirdparty")
+set(TOPSPIN4_ZSTD "${TOPSPIN4_XENOSRECOMP_THIRDPARTY}/zstd/lib")
+add_library(topspin4_native_deps STATIC
+    ${TOPSPIN4_ZSTD}/common/debug.c
+    ${TOPSPIN4_ZSTD}/common/entropy_common.c
+    ${TOPSPIN4_ZSTD}/common/error_private.c
+    ${TOPSPIN4_ZSTD}/common/fse_decompress.c
+    ${TOPSPIN4_ZSTD}/common/xxhash.c
+    ${TOPSPIN4_ZSTD}/common/zstd_common.c
+    ${TOPSPIN4_ZSTD}/decompress/huf_decompress.c
+    ${TOPSPIN4_ZSTD}/decompress/zstd_ddict.c
+    ${TOPSPIN4_ZSTD}/decompress/zstd_decompress.c
+    ${TOPSPIN4_ZSTD}/decompress/zstd_decompress_block.c
+    ${TOPSPIN4_XENOSRECOMP_THIRDPARTY}/smol-v/source/smolv.cpp)
+target_compile_definitions(topspin4_native_deps PRIVATE ZSTD_DISABLE_ASM)
+target_compile_options(topspin4_native_deps PRIVATE -w)
+target_include_directories(topspin4_native_deps PUBLIC
+    ${TOPSPIN4_ZSTD} ${TOPSPIN4_XENOSRECOMP_THIRDPARTY}/smol-v/source)
+target_link_libraries(topspin4 PRIVATE topspin4_native_deps)
+# The renderer un-tiles textures with the SDK's Xenos texture layout code (BSD-3), which lives
+# in the GPU plugin rather than the host runtime.
+if(REXSDK_DIR)
+    target_sources(topspin4 PRIVATE ${REXSDK_DIR}/src/graphics/pipeline/texture/util.cpp)
+    target_include_directories(topspin4 PRIVATE ${REXSDK_DIR}/thirdparty/xxHash)
+endif()
 # Crash report (src/crash_report.cpp): the version and commit go in its manifest.
 execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     OUTPUT_VARIABLE TOPSPIN4_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)

@@ -1,19 +1,21 @@
-# Turns your edits in .tools/rexglue-source into the next numbered patch in patches/rexglue/.
+# Turns your edits in .tools/rexglue-source into the next numbered patch in patches/rexglue/
+# (or, with -Tool xenosrecomp, edits in .tools/xenosrecomp into patches/xenosrecomp/).
 #
-#   1. Edit files in .tools/rexglue-source (it carries the current series; scripts/apply-patches.ps1).
+#   1. Edit files in the tool tree (it carries the current series; scripts/apply-patches.ps1).
 #   2. pwsh scripts/new-patch.ps1 <name>     e.g. guest-swap-count -> 0030-guest-swap-count.patch
 #
 # The patch is the difference between the tree as the series leaves it and the tree as it is now,
 # new files included, so it applies on top of the series. The script then resets the tree and
 # reapplies the whole series with the new patch, which proves it applies (and rebuilds will pick
 # it up). Add a line for it to patches/README.md.
-param([Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Name)
+param([Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Name,
+      [ValidateSet('rexglue', 'xenosrecomp')][string]$Tool = 'rexglue')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $git = (Get-Command git).Source
 $env:GIT_OPTIONAL_LOCKS = '0'
-$tree = "$projectRoot/.tools/rexglue-source"
-$folder = "$projectRoot/patches/rexglue"
+$tree = "$projectRoot/.tools/$(if ($Tool -eq 'rexglue') { 'rexglue-source' } else { 'xenosrecomp' })"
+$folder = "$projectRoot/patches/$Tool"
 $patches = @(Get-ChildItem $folder -Filter '*.patch' | Sort-Object Name)
 $stamp = "$tree/.topspin4-patches"
 $expected = ($patches | ForEach-Object { "$($_.Name) $((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }) -join "`n"
@@ -49,5 +51,5 @@ $number = if ($patches) { [int]$patches[-1].Name.Substring(0, 4) + 1 } else { 1 
 $path = "$folder/{0:D4}-$Name.patch" -f $number
 # --output writes git's bytes as they are (no console re-encoding).
 $null = Invoke-Git @('diff', '--binary', "--output=$path", $seriesTree, $workTree)
-Write-Output "Wrote patches/rexglue/$(Split-Path $path -Leaf)"
+Write-Output "Wrote patches/$Tool/$(Split-Path $path -Leaf)"
 & "$PSScriptRoot/apply-patches.ps1" -Reset
