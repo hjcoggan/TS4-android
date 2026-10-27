@@ -9,7 +9,7 @@
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
 - [x] At Original, neither Classic nor Native forces anisotropy
 - [x] Default frames on both renderers are compared with the Oracle once and match within the dual-run tolerance
-- [ ] At 16x, a court crop (far baseline; banners dropped by the owner on 2026-10-27, since Edge reaches no match view reliably) is compared with Edge at `anisotropic_override = 5`
+- [x] At 16x, a court crop (far baseline; banners dropped by the owner on 2026-10-27, since Edge reaches no match view reliably) is compared with Edge at `anisotropic_override = 5`
 - [x] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
 - [x] Unit tests cover the plan's anisotropy level and its clamp
 - [x] A change of the setting during a run reaches both renderers (observed in a run's log)
@@ -49,3 +49,13 @@
 - 2026-10-27 (Claude), QA re-review (box 3 and 4):
   - Box 3 now has a verdict. The scene runner's tile rule (`judge_capture`, hot FLIP 0.5, 32 px tiles, at most 50 hot pixels) was applied to each renderer's presented frame 1300 at the defaults against Edge's `edge-practice-original/shot-040s.png` (client area). It passes for both renderers in both court crops: Classic floor 0 and baseline 0 worst-tile hot pixels; Native floor 0 and baseline 22. The full frame fails only in the tiles around x 544-640, y 608-672, where the player and the HUD prompt differ between the two runs. Script and output: `analysis/scenes/iq02/crop_verdict.py`, `crop_verdict.txt`.
   - Box 4 is unticked again. No banners were in view, Native at 16x was not compared with Edge, and there is no saved config proving `anisotropic_override = 5` for `edge-practice-af16`. To close it: rerun Edge at 16x on the practice route (`edge.ps1` now saves `edge-config.toml`), and compare Native's presented 16x frame as well. Banners need a match view that Edge reaches reliably, or the owner agreeing to the baseline crop alone.
+- 2026-10-27 (Claude), box 4 closed, on the far-baseline crop as the owner allowed. Edge at `-Set anisotropic_override=5` on the practice route: `analysis/scenes/iq09/edge-practice-af16/` (its `edge-config.toml` has `anisotropic_override = 5`, the rest as the standing config). Native's presented 16x frame from a fresh Native-only run on 70a727b (`analysis/scenes/iq09/native-practice-af16/dumps/frame-001300.png`, `--ts4_renderer=native --ts4_anisotropic_filtering=16`, log `anisotropic filtering 16x`; `analysis/scenes/iq09/native_runs.py`); Classic's presented 16x frame from `practice-ground-af16/dual-1`. Edge's window came up smaller in this evening's runs (shot 1044x788, game view 1028x578 at (8, 147); the earlier `edge-practice-af16-smallwindow/` run, same config, has the same size), so all images were brought to 1028x578 (port frames and ticket 02's Edge default downscaled, antialiased bilinear) and the crops scaled by 1028/1280. Tile rule (`judge_capture`), `analysis/scenes/iq09/af16_crop_verdict.py` and `.txt`:
+
+  | Against Edge at 5 | floor: worst tile / mean FLIP | baseline | full frame |
+  |---|---|---|---|
+  | Classic 16x | 0 / 0.024 | 0 / 0.036 | PASS, 1 / 0.029 |
+  | Native 16x | 0 / 0.027 | 0 / 0.044 | PASS, 0 / 0.032 |
+  | Classic default | 0 / 0.021 | 2 / 0.039 | FAIL, 67 / 0.029 |
+  | Native default | 0 / 0.028 | 3 / 0.049 | PASS, 9 / 0.035 |
+
+  Both renderers at 16x pass in both crops. In the far-baseline crop, where filtering shows, 16x is closer to Edge at 5 than the default is (Classic 0.036 against 0.039, Native 0.044 against 0.049), and against Edge's default the port at 16x is further off (Classic 0.042, Native 0.049) than the port's default (0.027, 0.041). Edge's downscaled view is sharper than the port's frames after PIL's downscale (Laplacian variance on the baseline: Edge 5 763, Classic 16x 557, Native 16x 492), so the absolute sharpness is not compared, only the direction of the change: 16x raises it on both (Classic 487 to 557, Native 425 to 492). Native stays a little softer than Classic at both settings, as noted above.

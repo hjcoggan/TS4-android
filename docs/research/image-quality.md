@@ -635,10 +635,36 @@ the 16:9 crop of an ultrawide frame equals the 16:9 frame.
 4. **Per-pass checks** use the RenderDoc tools in `docs/agents/native-debugging.md`: `history`
    on a pixel of the bloom or shadow, `texture ID` on a resolve target, at scale 1 and 2.
 
+## Measured: GPU frame cost at the maximum settings (desktop)
+
+Measured 2026-10-27 (image-quality ticket 09) on the desktop: AMD Radeon RX 7900 XT, Vulkan
+1.4, the hidden-window headless run at a 1280x720 output. Source: the Native renderer's GPU
+timer (`--ts4_native_gpu_timer_csv`, timestamp queries around each frame's work), the `frame`
+rows of one Native-only run of `tests/scenes/exhibition-match.toml` to frame 4800 per setting
+(`analysis/scenes/iq09/native_runs.py`, `cost.py`, `cost.txt`). Maximum = Resolution scale 4
+(render 5120x2880, not clamped), MSAA 8x, 16x anisotropic filtering, High CAS.
+
+| Part (frames) | Defaults: GPU ms median / p95 / p99 / max | Maximum: GPU ms median / p95 / p99 / max |
+|---|---|---|
+| Menus (600-2399) | 0.93 / 1.65 / 1.71 / 2.03 | 5.52 / 8.44 / 9.66 / 13.47 |
+| Match (3000-4800) | 1.56 / 8.54 / 9.78 / 10.20 | 7.32 / 13.42 / 16.86 / 19.66 |
+
+- The maximum costs about 5 to 6 ms more GPU time per frame (median), roughly 4 to 6 times the
+  default. The median stays well inside the 16.7 ms of a 60 fps frame; in the match about 1% of
+  frames take longer than 16.7 ms on the GPU. Both runs took the same wall time (86.8 s and
+  87.1 s for 4802 guest swaps), so the game kept its 60 fps tick; whether those frames show as
+  stutter on a visible swapchain was not measured (the runs present to a hidden window).
+- The renderer's CPU time per frame does not grow (median 0.98 ms in the match at both).
+- Not split by Enhancement: one run per setting set, maximum against defaults only. The per-pass
+  rows in the same CSVs (`analysis/scenes/iq09/cost-*/gpu.csv`) are there for a split.
+
 ## Unverified and open
 
-- Whether Edge `4d07204` survives `draw_resolution_scale` 2 in Top Spin 4. Canary crashes
-  (#358).
+- ~~Whether Edge `4d07204` survives `draw_resolution_scale` 2 in Top Spin 4.~~ It does (ticket
+  09, `analysis/scenes/iq09/edge-practice-scale2/`): Edge `4d07204` on D3D12 with
+  `draw_resolution_scale_x = 2` and `_y = 2` boots to the practice ground; its title bar says
+  `RTV/DSV 2x2`. Its frame sits about 2 px (of a 1028-wide view) right of Edge at 1x and of the
+  port, and is sharper than Native at scale 2 after the same downscale. Canary crashes (#358).
 - Which target is the shadow map (1040x1024 is the candidate), and what 560x512, 560x128,
   320x256 and 160x128 are.
 - Where the HUD starts in a match frame (the pre-UI point for SMAA or any host pass).
