@@ -164,6 +164,9 @@ TEST_CASE("texel offsets into a resolved texture are measured in guest texels") 
   CHECK(TextureOffsetScale(2, true) == 2);
   // A texture the game loaded from memory is its guest size at any scale.
   CHECK(TextureOffsetScale(1, false) == 1);
+  CHECK(TextureOffsetScale(3, false) == 1);
+  // 4x, the most the descriptor index's two bits carry (XR_OFFSET_SCALE).
+  CHECK(TextureOffsetScale(4, true) == 4);
   // A resolve target made before a scale change keeps its own scale.
   CHECK(TextureOffsetScale(3, true) == 3);
   // At 1x, offsets are as before.

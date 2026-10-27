@@ -24,7 +24,8 @@ from Classic. The renderer, its hooks and every finding so far are in
 3. **Compare the draw's inputs, one class at a time.** `query … 'draw EID'` on both sides, then
    `'texture ID'` for each bound texture. For constants, `--ts4_native_trace_frame=N
    --ts4_native_trace_ps=<decimal hash>` dumps Native's vertex and pixel constants for draws
-   with that pixel shader. `python scripts/shader_lookup.py <hash>` gives the shader's HLSL and
+   with that pixel shader; on a Native capture, `query … 'constants EID ps FIRST COUNT'` reads
+   them without a new run. `python scripts/shader_lookup.py <hash>` gives the shader's HLSL and
    the register of every constant it reads. Line those up with Classic's `xe_uniform_float_constants`,
    which pack only the used registers in ascending order.
 4. **When every input matches,** the difference is in how a vertex or texture is decoded. Read

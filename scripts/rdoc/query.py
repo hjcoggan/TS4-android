@@ -21,6 +21,9 @@ Commands:
                               from render target through the EDRAM buffer to guest memory
   buffer ID OFFSET LEN EID    a buffer range (hex offset and length) after an event: how many
                               bytes are nonzero, and the first dwords
+  constants EID vs|ps FIRST [COUNT]
+                              float4 registers FIRST.. of a draw's guest constants, read
+                              through Native's constant pointers (Native captures only)
 """
 import json
 import math
@@ -266,6 +269,39 @@ def cmd_buffer(ctrl, textures, args):
         f"bytes nonzero; first {words}")
 
 
+def cmd_constants(ctrl, textures, args):
+    """constants EID vs|ps FIRST [COUNT]: float4 registers FIRST.. of a draw's guest constants.
+    Native's push constants hold buffer addresses (vertex, pixel, shared), which a draw's block
+    shows as raw pointers; this follows the stage's pointer to the buffer that holds it."""
+    import struct
+    eid, stage = int(args[0]), args[1]
+    first, count = int(args[2]), int(args[3]) if len(args) > 3 else 1
+    ctrl.SetFrameEvent(eid, True)
+    pipe = ctrl.GetPipelineState()
+    refl = pipe.GetShaderReflection(rd.ShaderStage.Pixel)
+    pointers = None
+    for i, cb in enumerate(refl.constantBlocks):
+        d = pipe.GetConstantBlock(rd.ShaderStage.Pixel, i, 0).descriptor
+        variables = ctrl.GetCBufferVariableContents(
+            pipe.GetGraphicsPipelineObject(), refl.resourceId, rd.ShaderStage.Pixel,
+            pipe.GetShaderEntryPoint(rd.ShaderStage.Pixel), i, d.resource, d.byteOffset,
+            d.byteSize)
+        if len(variables) >= 2 and variables[0].name == "_child0":
+            pointers = [v.value.u64v[0] for v in variables]
+    if pointers is None:
+        say(f"draw {eid}: no constant pointers in the pixel shader's blocks")
+        return
+    address = pointers[0 if stage == "vs" else 1] + first * 16
+    for b in ctrl.GetBuffers():
+        if b.gpuAddress and b.gpuAddress <= address < b.gpuAddress + b.length:
+            data = bytes(ctrl.GetBufferData(b.resourceId, address - b.gpuAddress, count * 16))
+            for r in range(len(data) // 16):
+                v = struct.unpack_from("<4f", data, r * 16)
+                say(f"  {stage} c{first + r} = " + " ".join(f"{x:.7g}" for x in v))
+            return
+    say(f"draw {eid}: no buffer holds address {address:X}")
+
+
 def cmd_mesh(ctrl, textures, args):
     """mesh EID [N]: the first N (8) vertices' clip position after the vertex shader, and its
     screen x, y and depth (viewport 0."""
@@ -310,7 +346,8 @@ def cmd_present(ctrl, textures, args):
 
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
             "history": cmd_history, "mesh": cmd_mesh, "present": cmd_present,
-            "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
+            "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer,
+            "constants": cmd_constants}
 
 def succeeded(result):
     return getattr(result, "code", result) == rd.ResultCode.Succeeded

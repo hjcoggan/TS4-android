@@ -101,7 +101,7 @@ The Deck numbers are **[unverified]**: no Deck measurement exists yet (ticket 30
 | Why two tiles: EDRAM is 2048 tiles of 80x16 samples x 4 bytes = 10 MiB (Edge `xenos.h:481-485`). 1280x720 at 2x with 32-bit colour plus 32-bit depth needs 1280·720·2·8 B ≈ 14.1 MiB **[inferred arithmetic]** | — |
 | Native has no EDRAM. It draws each tiled call once into a target sized to the viewport | `native_renderer.cpp:1223-1232`; native-renderer.md "Draw census" |
 | Render targets the game creates (all colour RGBA8, `format 37`; all depth D32S8, `130`), unioned over the six scene runs: 1280x720 (1x and 2x), 1280x384 2x, 1040x1024, 640x360, 560x512, 560x128, 320x256, 320x64, 160x128 | `analysis/scenes/*/*/runtime.log`, lines "native renderer: colour/depth render target" (local, not committed) |
-| The 1040x1024 target is probably the shadow map (Native-vs-Classic captures name a "shadow depth map" input) | native-renderer.md "In the match". **[unverified]**: which target it is; check with `rdoc.ps1 query … 'texture ID'` |
+| The 1040x1024 target is the shadow map: one 512x1024 half per player, resolved to the 1024x1024 `ShadowDepthMapPlayer` | native-renderer.md "Shadow map and texel offsets at scale" (verified in ticket 05) |
 | The 256x64 radar-gun display is rendered and resolved one mip level at a time | native-renderer.md "Same-frame differences" |
 | The game uses Xenos alpha to mask (Academy trees) and per-fetch LOD bias (-1, -2 on foliage) | native-renderer.md "Other modes"; `patches/xenosrecomp/0006-alpha-to-mask.patch` |
 | Drops to 30 fps in its cutaways; 60 in rallies and menus | oracle-baseline.md "Frame rate" |
@@ -500,6 +500,11 @@ inputs" (`SDK:src/ui/presenter.cpp:283-284`). In practice it is a spatial upscal
 
 **Verify.** Same-frame captures at scale 1 and 2: the shadow penumbra width, measured in guest
 pixels, should match after the offset fix.
+
+**Found (ticket 05).** Top Spin 4's shaders use no fetch-instruction offsets. Bloom and shadow
+taps are UV offsets from constants and shader literals, so they already cover the same guest area
+at any scale. The offset fix (`0007`) is in place but changes no sample. Evidence:
+native-renderer.md, "Shadow map and texel offsets at scale".
 
 ## 9. Half-pixel offset at scale
 
