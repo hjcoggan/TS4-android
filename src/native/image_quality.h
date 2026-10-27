@@ -41,6 +41,12 @@ struct SettingValues {
   std::string_view sharpening = "off";                  // off, low, medium, high
 };
 
+// The values each setting allows, as settings/registry.h lists them (a test ties the two).
+inline constexpr std::string_view kResolutionScaleChoices[] = {"1", "auto", "2", "3", "4"};
+inline constexpr std::string_view kMsaaChoices[] = {"original", "4", "8"};
+inline constexpr std::string_view kAnisotropicFilteringChoices[] = {"original", "4", "8", "16"};
+inline constexpr std::string_view kSharpeningChoices[] = {"off", "low", "medium", "high"};
+
 // "N" for a level of N (1..16), by bit_width(N) - 1.
 inline constexpr std::string_view kLevelNames[] = {"1", "2", "4", "8", "16"};
 
@@ -61,9 +67,8 @@ constexpr Settings ParseSettings(const SettingValues& values) {
       settings.anisotropic_filtering = level;
     }
   }
-  constexpr std::string_view kSharpening[] = {"off", "low", "medium", "high"};
   for (uint32_t i = 0; i < 4; ++i) {
-    if (values.sharpening == kSharpening[i]) settings.sharpening = Sharpening(i);
+    if (values.sharpening == kSharpeningChoices[i]) settings.sharpening = Sharpening(i);
   }
   return settings;
 }
@@ -71,21 +76,16 @@ constexpr Settings ParseSettings(const SettingValues& values) {
 // The settings whose value is none the setting allows (a typo on the command line or in a
 // `set`), by cvar name: ParseSettings gives them their default, and the log says so.
 inline std::vector<std::string_view> IgnoredSettings(const SettingValues& values) {
-  // As settings/registry.h lists them.
-  static constexpr std::string_view kScale[] = {"1", "auto", "2", "3", "4"};
-  static constexpr std::string_view kMsaa[] = {"original", "4", "8"};
-  static constexpr std::string_view kFiltering[] = {"original", "4", "8", "16"};
-  static constexpr std::string_view kSharpening[] = {"off", "low", "medium", "high"};
   struct Allowed {
     std::string_view name;
     std::string_view value;
     std::span<const std::string_view> choices;
   };
   const Allowed settings[] = {
-      {"ts4_resolution_scale", values.resolution_scale, kScale},
-      {"ts4_msaa", values.msaa, kMsaa},
-      {"ts4_anisotropic_filtering", values.anisotropic_filtering, kFiltering},
-      {"ts4_sharpening", values.sharpening, kSharpening},
+      {"ts4_resolution_scale", values.resolution_scale, kResolutionScaleChoices},
+      {"ts4_msaa", values.msaa, kMsaaChoices},
+      {"ts4_anisotropic_filtering", values.anisotropic_filtering, kAnisotropicFilteringChoices},
+      {"ts4_sharpening", values.sharpening, kSharpeningChoices},
   };
   std::vector<std::string_view> ignored;
   for (const Allowed& setting : settings) {

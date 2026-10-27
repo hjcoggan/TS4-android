@@ -388,6 +388,7 @@ struct State {
   // the window is smaller (guest::PlanOutput).
   uint32_t scale = 1;
   bool scale_clamped = false;
+  bool clamped_once = false;  // clamped at some point this session (session report)
   bool scaled = false;  // drawn above 1x at some point this session (Enhancement report)
   bool msaa_raised = false;  // a target got more samples than the game asked for
   // This frame's image-quality plan (MakeImagePlan), made again as each frame begins.
@@ -1071,6 +1072,7 @@ void ApplyResolutionScale() {
   }
   g.scale = g.plan.scale;
   g.scale_clamped = g.plan.clamped;
+  g.clamped_once = g.clamped_once || g.scale_clamped;
   g.scaled = g.scaled || g.scale != 1;
   g.width = 1280 * g.scale;
   g.height = 720 * g.scale;
@@ -1767,7 +1769,8 @@ void ApplyLiveSharpening() {
 }
 
 // Records whether the setting or a direct --anisotropic_override forces filtering now; called
-// where filtering is set (startup and each change, on the thread that sets the cvars).
+// where filtering is set (startup, each change of the setting or of anisotropic_override, on
+// the thread that sets the cvars).
 void NoteFiltering() {
   if (image_quality::FilteringForced(
           image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering,
@@ -1868,6 +1871,9 @@ void Configure(rex::Runtime* runtime) {
                                     [](std::string_view, std::string_view) {
                                       ApplyClassicFiltering(true);
                                     });
+  // A developer's `set anisotropic_override N` while playing forces Classic's filtering too.
+  rex::cvar::RegisterChangeCallback("anisotropic_override",
+                                    [](std::string_view, std::string_view) { NoteFiltering(); });
   // Guest memory access works without the renderer too (Emulated frame dumps).
   if (runtime) {
     g_vk.memory = runtime->memory();
@@ -2057,7 +2063,7 @@ std::string ReportJson() {
                      R"("draw_skips": {}, "xps_window_draws": {}, "gpu_failure": "{}"}})",
                      g_requested ? "true" : "false", g.device ? "true" : "false",
                      FallbackName(g.fallback), g.frame, g.scale,
-                     g.scale_clamped ? "true" : "false", debug_cvars, enhancements,
+                     g.clamped_once ? "true" : "false", debug_cvars, enhancements,
                      g.skips.Json(), g.xps_window_draws,
                      g.gpu_failure ? VkResultName(g.gpu_failure) : std::string());
 }

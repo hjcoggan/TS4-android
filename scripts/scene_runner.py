@@ -29,9 +29,12 @@ dual verdicts decide; the Classic-against-Classic and envelope verdicts are repo
 the ramp (plan_runs): a long scene costs one full run and a short one instead of four full ones.
 
 With --enhance KEY=VALUE (needs --dual), the dual runs set that image setting (image-quality
-spec) while the Classic and Native runs keep the defaults. Each dual Native frame is box-shrunk to
-Classic's size. With anisotropic filtering or sharpening alone, which both renderers apply (or,
-for sharpening, neither before the dumps), the frame is judged as strictly as without an
+spec) while the Classic and Native runs keep the defaults. A headless window is 1280x720, so a
+dual Native frame drawn at a Resolution scale is already Classic's size: Native filters its own
+frame down to the window (guest::PlanOutput: 2:1 box steps, then a bilinear step for what is
+left, e.g. 1.5:1 at 3x). shrink_to box-filters only a frame still larger than Classic's. With
+anisotropic filtering or sharpening alone, which both renderers apply (or, for sharpening,
+neither before the dumps), the frame is judged as strictly as without an
 Enhancement; with a Native-only one (Resolution scale, MSAA) it may differ from Classic's 1x frame
 of the same run only along edges (judge_enhanced). The report must show each such Enhancement on
 and no other. Every run, Classic's too, fails on an Enhancement on that it did not ask for.
@@ -541,7 +544,7 @@ def main(argv):
                         help="the shader pack Native runs load (default: the one in cache/)")
     parser.add_argument("--enhance", action="append", metavar="KEY=VALUE",
                         help="dual runs set this image setting (e.g. ts4_resolution_scale=2); "
-                             "their Native frames, shrunk to Classic's size, may then differ "
+                             "their Native frames, at Classic's size, may then differ "
                              "from Classic's 1x frame only along edges (needs --dual)")
     args = parser.parse_args(argv)
     try:

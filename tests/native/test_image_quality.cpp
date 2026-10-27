@@ -4,6 +4,7 @@
 #include <catch_amalgamated.hpp>
 
 #include "native/image_quality.h"
+#include "settings/registry.h"
 
 using namespace topspin4::native::image_quality;
 
@@ -240,4 +241,20 @@ TEST_CASE("Auto on a small window, or before the window has a size, stays at 1x"
 
 TEST_CASE("Auto parses") {
   CHECK(ParseSettings({.resolution_scale = "auto"}).resolution_scale == kAutoScale);
+}
+
+TEST_CASE("the values the plan allows are the settings registry's") {
+  using topspin4::settings::FindSetting;
+  const auto choices = [](std::string_view key) {
+    const topspin4::settings::Setting* setting = FindSetting(key);
+    REQUIRE(setting);
+    return setting->choices;
+  };
+  const auto list = [](std::span<const std::string_view> values) {
+    return std::vector<std::string_view>(values.begin(), values.end());
+  };
+  CHECK(list(kResolutionScaleChoices) == choices("ts4_resolution_scale"));
+  CHECK(list(kMsaaChoices) == choices("ts4_msaa"));
+  CHECK(list(kAnisotropicFilteringChoices) == choices("ts4_anisotropic_filtering"));
+  CHECK(list(kSharpeningChoices) == choices("ts4_sharpening"));
 }
