@@ -6,9 +6,17 @@
 
 **Status:** ready-for-agent
 
-- [ ] The setting loads from the settings file and the command line, and an invalid value falls back to Original
-- [ ] At Original, neither Classic nor Native forces anisotropy
-- [ ] Default frames on both renderers are compared with the Oracle once and match within the dual-run tolerance
-- [ ] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
-- [ ] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
-- [ ] Unit tests cover the plan's anisotropy level and its clamp
+- [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
+- [x] At Original, neither Classic nor Native forces anisotropy
+- [x] Default frames on both renderers are compared with the Oracle once and match within the dual-run tolerance
+- [x] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
+- [x] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
+- [x] Unit tests cover the plan's anisotropy level and its clamp
+
+## Comments
+
+- 2026-10-27 (Claude): Verification of the code from af95d5b; no source change was needed. `pwsh scripts/build.ps1 -Action Check` passes (264 test cases, 23325 assertions; launcher 53; `tests/test_scene_runner.py` 38). Ticked from tests: `test_image_quality.cpp` (Original plan = 0.0 anisotropy, 16x/8x/4x forced, clamp to the device maximum, none on a device without it, parse and invalid -> Original), `test_sampler_choice.cpp` (point/single-mip fetches skipped, device cap), `test_settings.cpp` (registry default, file round trip, typo keeps default), `test_scene_runner.py` (anisotropy on in the report fails a parity run). In the runs, `runtime.log` says "anisotropic filtering original (the game's own)" at defaults and "16x" with `--ts4_anisotropic_filtering=16`; the session report lists the enhancement off at defaults and on at 16x.
+- Default dual runs (Classic against Native, `--runs 0 --native 1 --dual 1`, `analysis/scenes/iq02/<scene>/result.json`): boot-main-menu, xbox-live-offline, exhibition-match, career-start passed earlier; this pass added academy-lesson (worst tile 0 at all five frames, mean FLIP 0.0047 to 0.0199) and king-of-the-court (worst tile 0, 40 at 4300; mean FLIP 0.0020 to 0.0094). All six pass. These compare Classic with Native; the Oracle comparison is the practice-ground crops below.
+- 16x, Native and Classic: exhibition-match with `--enhance ts4_anisotropic_filtering=16` passes (`analysis/scenes/iq02/exhibition-match-af16/`, worst tile 0 at all four frames).
+- Edge boxes, closed on the practice ground (`tests/scenes/practice-ground.toml`, new: boot, START on the title, rest on the court; the same point as `scripts/input/edge-boot-to-practice.txt`, which `scripts/edge.ps1` plays by default). The exhibition route drifts on Edge, so it was dropped, and so were my earlier exploratory runs. Port, dual mode at the defaults (`analysis/scenes/iq02/practice-ground/`) and with `--enhance ts4_anisotropic_filtering=16` (`practice-ground-af16/`): both pass, worst tile 0 at frames 1300 and 1600. Edge at the default (`edge-practice-original/`) and `-Set anisotropic_override=5` (`edge-practice-af16/`), screenshot `shot-040s.png` of each (the default run's window was gone by 50 s; the 40 s shot is the court). The Edge crops are the client area of the window screenshot, 1280x720 at an offset of (8, 93).
+- This is a judged crop comparison, not a pixel diff: Edge's image is a window screenshot (resampled, a little more contrast), the port's a guest-frame dump, and the player and HUD prompt differ. The same camera and court show in both. Crops (2x, top row Original, bottom 16x; left port, right Edge): `analysis/scenes/iq02/practice-crop-floor.png` (near floor and sideline, x 0-500, y 350-720) and `practice-crop-baseline.png` (far baseline and ball machine, x 350-950, y 110-260). Findings: at Original the port and Edge show the same lines, glow and floor dot pattern; at 16x both keep the far baseline lines and the dot pattern crisper. High-pass energy (Laplacian variance) in the baseline crop rises about 19% on the port (624 to 744) and 14% on Edge (891 to 1012), and in the floor crop about 1% on each (335 to 340, 435 to 440), so the setting acts alike on both. Banners are not in the practice ground's view, so the crops are floor and court lines only; a banner crop would need a match view.

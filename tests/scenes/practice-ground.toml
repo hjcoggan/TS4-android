@@ -1,0 +1,32 @@
+# Boot -> intro skipped -> Loader's title screen -> START (Swing loads the practice ground), then
+# rests there: the court from the broadcast camera with no player input, the same point as
+# scripts/input/edge-boot-to-practice.txt on the Oracle. Used for the image-quality court crops.
+# Run: python scripts/scene_runner.py tests/scenes/practice-ground.toml --runs 0 --native 1 --dual 1
+
+name = "practice-ground"
+from = "boot"
+
+# Scripted pad (src/script_input.h grammar); `at` anchors to guest frames, +-1.
+input = """
+# The intro videos and the 2K logos skip on START (keystrokes).
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+# The title screen is up from about frame 350.
+at 500
+press START
+"""
+
+[[capture]]  # practice ground, the ball machine prompt
+frame = 1300
+[[capture]]
+frame = 1600
