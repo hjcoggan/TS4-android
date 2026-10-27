@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 (MSAA 4x)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 8x is accepted in the settings file and on the command line
 - [x] At 8x, the match pass renders at 8 samples on a device that supports it, and falls back on one that doesn't

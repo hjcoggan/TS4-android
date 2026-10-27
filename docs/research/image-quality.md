@@ -642,19 +642,21 @@ Measured 2026-10-27 (image-quality ticket 09) on the desktop: AMD Radeon RX 7900
 timer (`--ts4_native_gpu_timer_csv`, timestamp queries around each frame's work), the `frame`
 rows of one Native-only run of `tests/scenes/exhibition-match.toml` to frame 4800 per setting
 (`analysis/scenes/iq09/native_runs.py`, `cost.py`, `cost.txt`). Maximum = Resolution scale 4
-(render 5120x2880, not clamped), MSAA 8x, 16x anisotropic filtering, High CAS.
+(render 5120x2880, not clamped), MSAA 8x, 16x anisotropic filtering, High CAS. CAS is not in
+these numbers: it runs in the presenter, after the timer's `present` span (Native's own copy).
 
 | Part (frames) | Defaults: GPU ms median / p95 / p99 / max | Maximum: GPU ms median / p95 / p99 / max |
 |---|---|---|
 | Menus (600-2399) | 0.93 / 1.65 / 1.71 / 2.03 | 5.52 / 8.44 / 9.66 / 13.47 |
 | Match (3000-4800) | 1.56 / 8.54 / 9.78 / 10.20 | 7.32 / 13.42 / 16.86 / 19.66 |
 
-- The maximum costs about 5 to 6 ms more GPU time per frame (median), roughly 4 to 6 times the
+- The maximum costs about 4.6 ms (menus) to 5.8 ms (match) more GPU time per frame (median), roughly 4 to 6 times the
   default. The median stays well inside the 16.7 ms of a 60 fps frame; in the match about 1% of
   frames take longer than 16.7 ms on the GPU. Both runs took the same wall time (86.8 s and
   87.1 s for 4802 guest swaps), so the game kept its 60 fps tick; whether those frames show as
   stutter on a visible swapchain was not measured (the runs present to a hidden window).
-- The renderer's CPU time per frame does not grow (median 0.98 ms in the match at both).
+- The renderer's CPU time per frame does not grow (match median 1.04 ms at defaults, 0.98 ms at
+  the maximum).
 - Not split by Enhancement: one run per setting set, maximum against defaults only. The per-pass
   rows in the same CSVs (`analysis/scenes/iq09/cost-*/gpu.csv`) are there for a split.
 

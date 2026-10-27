@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Image-quality plan prefactor)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
 - [x] At Original, neither Classic nor Native forces anisotropy

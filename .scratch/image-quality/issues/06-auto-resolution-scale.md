@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 (Resolution scale setting)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Auto is accepted in the settings file and on the command line
 - [x] Unit tests cover Auto at 720p, 1080p, 1440p, 4K and ultrawide outputs, and after a resize

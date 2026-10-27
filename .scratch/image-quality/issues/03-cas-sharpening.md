@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Off
 - [x] Each level visibly sharpens on both Classic and Native, and Off leaves the frame unchanged

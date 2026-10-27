@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Image-quality plan prefactor)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to 1x
 - [x] Scales 2 and 3 run each scene stably, with no device loss

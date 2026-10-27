@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Image-quality plan prefactor)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] At 1x, converted shaders sample exactly as before (dual-mode scenes still pass against the Oracle)
 - [x] At 2x, a RenderDoc `history` on a bloom pixel and a shadow-edge pixel shows the same footprint in guest texels as at 1x
