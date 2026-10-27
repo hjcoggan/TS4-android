@@ -9,7 +9,7 @@
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
 - [x] At Original, neither Classic nor Native forces anisotropy
 - [x] Default frames on both renderers are compared with the Oracle once and match within the dual-run tolerance
-- [ ] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
+- [ ] At 16x, a court crop (far baseline; banners dropped by the owner on 2026-10-27, since Edge reaches no match view reliably) is compared with Edge at `anisotropic_override = 5`
 - [x] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
 - [x] Unit tests cover the plan's anisotropy level and its clamp
 - [x] A change of the setting during a run reaches both renderers (observed in a run's log)

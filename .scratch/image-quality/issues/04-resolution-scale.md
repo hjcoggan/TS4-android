@@ -12,7 +12,7 @@
 - [x] The bias rule is unit-tested when supersampling, at equal size and when upscaling; at 1x on a 720p output the bias is 0
 - [x] A live change of scale mid-match works, or the setting is marked next-start with a log line
 - [x] On Classic the setting does nothing and the log says it is unavailable
-- [x] Frames at 2x, shrunk to 1280x720, are compared with the 1x frame of the same run: only edge differences, no area differences except those ticket 05 fixes
+- [x] Frames at 2x, shrunk to 1280x720, are compared with the 1x frame of the same run: only edge differences, no area differences except those ticket 05 fixes and the added texture detail supersampling resolves (owner accepted, 2026-10-27)
 - [x] The setting is listed in the session report's enhancements and in the scene runner's list
 
 ## Comments

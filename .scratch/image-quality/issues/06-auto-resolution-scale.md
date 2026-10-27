@@ -1,6 +1,6 @@
 # 06: Auto Resolution scale
 
-**What to build:** An Auto choice for Resolution scale. It picks the smallest whole multiple of 1280x720 that covers the window (capped at 4, then clamped to the device). It is recomputed whenever the output size changes: on resize, when switching to fullscreen, or after moving the window to another monitor. It uses the live rebuild from ticket 04. Spec: `../spec.md`.
+**What to build:** An Auto choice for Resolution scale. It picks the smallest whole multiple of 1280x720 that covers the 16:9 area of the window the frame is shown in (capped at 4, then clamped to the device). It is recomputed whenever the output size changes: on resize, when switching to fullscreen, or after moving the window to another monitor. It uses the live rebuild from ticket 04. Spec: `../spec.md`.
 
 **Blocked by:** 04 (Resolution scale setting)
 
