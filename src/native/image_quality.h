@@ -21,7 +21,7 @@ namespace topspin4::native::image_quality {
 
 enum class Sharpening : uint8_t { kOff, kLow, kMedium, kHigh };
 
-// Resolution scale Auto: the smallest multiple of 1280x720 that covers the window.
+// Resolution scale Auto: the smallest multiple of 1280x720 that covers the window's 16:9 area.
 inline constexpr uint32_t kAutoScale = 0;
 
 // The image settings.
@@ -156,11 +156,16 @@ struct Plan {
   uint32_t msaa = 0;  // as Settings::msaa
   uint32_t sample_counts = 1 | 2 | 4 | 8;
 
-  // The sample count a target the game creates with guest_samples (1, 2 or 4) gets: the MSAA
-  // setting's for a target the game multisamples, never more for one it does not, then the
-  // highest count at or below that the device supports.
+  // The sample count asked for a target the game creates with guest_samples (1, 2 or 4): the
+  // MSAA setting's for a target the game multisamples, never more for one it does not.
+  constexpr uint32_t AskedSamples(uint32_t guest_samples) const {
+    return guest_samples > 1 && msaa > guest_samples ? msaa : guest_samples;
+  }
+
+  // The sample count the target gets: AskedSamples, then the highest count at or below it the
+  // device supports.
   constexpr uint32_t SamplesFor(uint32_t guest_samples) const {
-    uint32_t samples = guest_samples > 1 && msaa > guest_samples ? msaa : guest_samples;
+    uint32_t samples = AskedSamples(guest_samples);
     while (samples > 1 && !(sample_counts & samples)) samples >>= 1;
     return std::max(samples, 1u);
   }
@@ -206,11 +211,12 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
                         const DeviceLimits& device) {
   Plan plan;
   uint32_t requested = settings.resolution_scale;
+  const uint32_t shown_height = FitHeight(window_width, window_height);
   if (requested == kAutoScale) {
+    // The 16:9 area is shown_height tall and at most 16/9 of it wide, so covering its height
+    // covers its width; bars beside or above it don't count.
     requested = 1;
-    while (requested < 4 && (1280 * requested < window_width || 720 * requested < window_height)) {
-      ++requested;
-    }
+    while (requested < 4 && 720 * requested < shown_height) ++requested;
   }
   requested = std::clamp(requested, 1u, 4u);
   const uint32_t fits = std::max(device.max_image_size / kLargestTargetSide, 1u);
@@ -221,7 +227,6 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
   // upscaler rule without its temporal term); a frame drawn at or above the window is
   // supersampled, which sharpens them already.
   const uint32_t render_height = 720 * plan.scale;
-  const uint32_t shown_height = FitHeight(window_width, window_height);
   if (shown_height > render_height) {
     plan.lod_bias = std::max(std::log2(float(render_height) / float(shown_height)),
                              -device.max_lod_bias);

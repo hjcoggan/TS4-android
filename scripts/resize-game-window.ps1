@@ -4,13 +4,19 @@
 # WM_SIZE, as for a player's resize, without showing it or taking focus.
 #
 #   pwsh scripts/resize-game-window.ps1 -Sizes 2560x1440,1280x720 [-After 15] [-Every 10]
+#                                       [-ProcessId <the run's topspin4>]
+#
+# Without -ProcessId it takes the newest topspin4 process started no earlier than 10 s before
+# this script, so a game left over from another run is never resized. Start it with the run.
 param(
     [Parameter(Mandatory)][string[]]$Sizes,
     [int]$After = 15,
     [int]$Every = 10,
-    [int]$WaitSeconds = 60
+    [int]$WaitSeconds = 60,
+    [int]$ProcessId = 0
 )
 $ErrorActionPreference = 'Stop'
+$startedAfter = (Get-Date).AddSeconds(-10)
 Add-Type @'
 using System; using System.Runtime.InteropServices; using System.Collections.Generic;
 public static class GameWindow {
@@ -35,14 +41,20 @@ public static class GameWindow {
 '@
 $deadline = (Get-Date).AddSeconds($WaitSeconds)
 $window = [IntPtr]::Zero
+$game = $null
 while ($window -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {
-    foreach ($game in @(Get-Process topspin4 -ErrorAction SilentlyContinue)) {
-        $window = [GameWindow]::Find([uint32]$game.Id)
-        if ($window -ne [IntPtr]::Zero) { break }
+    $game = if ($ProcessId) {
+        Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    } else {
+        Get-Process topspin4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.StartTime -ge $startedAfter } |
+            Sort-Object StartTime -Descending | Select-Object -First 1
     }
-    Start-Sleep -Milliseconds 250
+    if ($game) { $window = [GameWindow]::Find([uint32]$game.Id) }
+    if ($window -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 250 }
 }
 if ($window -eq [IntPtr]::Zero) { throw 'No game window appeared' }
+Write-Output ("{0:HH:mm:ss.fff} window of topspin4 process {1}" -f (Get-Date), $game.Id)
 Start-Sleep -Seconds $After
 # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
 $flags = 0x2 -bor 0x4 -bor 0x10

@@ -197,6 +197,25 @@ TEST_CASE("an MSAA count the device lacks falls back to the highest it has below
   CHECK(MakePlan(settings, 1280, 720, required_only).SamplesFor(2) == 4);
 }
 
+TEST_CASE("the samples asked for are the setting's or the game's, before the device's limit") {
+  // Original on a device without 2x: the game's 2x was asked for and 1x given, a fallback the
+  // renderer reports as it does a setting's.
+  DeviceLimits required_only = kDesktop;
+  required_only.sample_counts = 1 | 4;
+  const Plan original = MakePlan({}, 1280, 720, required_only);
+  CHECK(original.AskedSamples(2) == 2);
+  CHECK(original.SamplesFor(2) < original.AskedSamples(2));
+  CHECK(original.AskedSamples(1) == 1);
+  Settings settings;
+  settings.msaa = 8;
+  DeviceLimits no_eight = kDesktop;
+  no_eight.sample_counts = 1 | 2 | 4;
+  const Plan eight = MakePlan(settings, 1280, 720, no_eight);
+  CHECK(eight.AskedSamples(2) == 8);
+  CHECK(eight.AskedSamples(1) == 1);  // a single-sampled target is never raised
+  CHECK(eight.SamplesFor(2) == 4);
+}
+
 TEST_CASE("a target's sample counts are those it can be both drawn to and sampled at") {
   // Render targets are colour or depth-stencil attachments and are also sampled (resolves).
   constexpr uint32_t kAll = 1 | 2 | 4 | 8;
@@ -242,7 +261,7 @@ TEST_CASE("the MSAA setting parses, and an invalid one is Original") {
   CHECK(ParseSettings({.msaa = "2"}).msaa == 0);
 }
 
-TEST_CASE("Auto picks the smallest multiple of 1280x720 that covers the window") {
+TEST_CASE("Auto picks the smallest multiple of 1280x720 that covers the window's 16:9 area") {
   Settings settings;
   settings.resolution_scale = kAutoScale;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).scale == 1);
@@ -250,8 +269,11 @@ TEST_CASE("Auto picks the smallest multiple of 1280x720 that covers the window")
   CHECK(MakePlan(settings, 2560, 1440, kDesktop).scale == 2);
   CHECK(MakePlan(settings, 3840, 2160, kDesktop).scale == 3);
   CHECK(MakePlan(settings, 5120, 2880, kDesktop).scale == 4);
-  // Ultrawide: its width needs three times 1280.
-  CHECK(MakePlan(settings, 3440, 1440, kDesktop).scale == 3);
+  // The frame is shown in the window's 16:9 area, so the bars beside or above it don't count.
+  CHECK(MakePlan(settings, 3440, 1440, kDesktop).scale == 2);  // ultrawide: 2560x1440 shown
+  CHECK(MakePlan(settings, 2560, 1600, kDesktop).scale == 2);  // 16:10: 2560x1440 shown
+  CHECK(MakePlan(settings, 2564, 1421, kDesktop).scale == 2);  // a capped window: ~2526x1421
+  CHECK(MakePlan(settings, 1280, 1024, kDesktop).scale == 1);  // 5:4: 1280x720 shown
   // Capped at 4, then clamped to the device.
   CHECK(MakePlan(settings, 7680, 4320, kDesktop).scale == 4);
   DeviceLimits small = kDesktop;

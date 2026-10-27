@@ -27,6 +27,7 @@
 #include <rex/logging.h>
 #include <rex/runtime.h>
 #include <rex/system/external_frame.h>
+#include <rex/system/guest_swaps.h>
 #include <rex/thread.h>
 #include <rex/ui/present_pacing.h>
 #include <rex/ui/vulkan/provider.h>
@@ -394,7 +395,7 @@ struct State {
   bool clamped_once = false;  // clamped at some point this session (session report)
   bool scaled = false;  // drawn above 1x at some point this session (Enhancement report)
   bool msaa_raised = false;  // a target got more samples than the game asked for
-  // The MSAA setting's count last logged as falling back to fewer samples (0 = none).
+  // The sample count last logged as asked for and not given (0 = none since the setting changed).
   uint32_t msaa_fallback_logged = 0;
   // This frame's image-quality plan (MakeImagePlan), made again as each frame begins.
   image_quality::Plan plan;
@@ -571,6 +572,12 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
               SampleCountsText(limits.sample_counts),
               REXCVAR_GET(ts4_native_debug_max_samples) ? " (capped by ts4_native_debug_max_samples)"
                                                         : "");
+  if (!p.standardSampleLocations) {
+    // XenosRecomp's alpha to mask (patches 0006, 0009) maps guest samples to Vulkan's standard
+    // positions; elsewhere alpha-masked surfaces such as foliage may dither differently.
+    REXLOG_WARN("native renderer: this GPU does not use the standard sample positions; "
+                "alpha-to-mask coverage at 2x, 4x and 8x may look different");
+  }
   return limits;
 }
 
@@ -585,11 +592,13 @@ VkSampleCountFlagBits TargetSamples(uint32_t surface_info) {
   const uint32_t guest = uint32_t(GuestSamples(surface_info));
   const uint32_t samples = g.plan.SamplesFor(guest);
   g.msaa_raised = g.msaa_raised || samples > guest;
-  if (guest > 1 && g.plan.msaa > samples && g.msaa_fallback_logged != g.plan.msaa) {
+  // Any target given fewer samples than asked, the game's own 2x under Original included.
+  const uint32_t asked = g.plan.AskedSamples(guest);
+  if (samples < asked && g.msaa_fallback_logged != asked) {
     REXLOG_WARN("native renderer: MSAA {}x is not supported for render targets on this GPU; "
                 "using {}x",
-                g.plan.msaa, samples);
-    g.msaa_fallback_logged = g.plan.msaa;
+                asked, samples);
+    g.msaa_fallback_logged = asked;
   }
   return VkSampleCountFlagBits(samples);
 }
@@ -1114,6 +1123,7 @@ void TakeImagePlan() {
   const uint32_t msaa_before = g.plan.msaa;
   g.plan = MakeImagePlan();
   if (g.plan.msaa != msaa_before) {
+    g.msaa_fallback_logged = 0;  // a new setting's fallback is logged again (8x -> 4x -> 8x)
     REXLOG_INFO("native renderer: MSAA {} -> {} at frame {}",
                 msaa_before ? fmt::format("{}x", msaa_before) : std::string("original"),
                 g.plan.msaa ? fmt::format("{}x", g.plan.msaa) : std::string("original"), g.frame);
@@ -2087,6 +2097,9 @@ std::string ReportJson() {
                                 enhancements.empty() ? "" : ", ", e.name,
                                 e.on() ? "true" : "false");
   }
+  // On purpose, resolution_scale is the session's last scale while resolution_scale_clamped is
+  // sticky (clamped at any point), so a run that clamped and then left the clamp is still
+  // reported as clamped: the two need not describe the same moment.
   return fmt::format(R"({{"native_requested": {}, "native_active": {}, "fallback": "{}", )"
                      R"("frames": {}, "resolution_scale": {}, "resolution_scale_clamped": {}, )"
                      R"("debug_cvars": [{}], "enhancements": [{}], )"
@@ -3227,7 +3240,7 @@ void WriteRgbImage(const std::string& path, const uint8_t* rgb, uint32_t width, 
 
 // Waits for the frame and writes the copied image as a binary PPM (RGB),
 // logging its channel ranges so a black frame shows in the log too.
-void WriteFrameDump(VkBuffer buffer, VkDeviceMemory memory, VkFence fence,
+void WriteFrameDump(VkBuffer buffer, VkDeviceMemory memory, VkFence fence, uint64_t frame,
                     const std::string& path, uint32_t width, uint32_t height) {
   const VulkanDevice::Functions& dfn = *g_vk.dfn;
   const VkResult waited = dfn.vkWaitForFences(g_vk.vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
@@ -3251,7 +3264,7 @@ void WriteFrameDump(VkBuffer buffer, VkDeviceMemory memory, VkFence fence,
       }
     }
     WriteRgbImage(path, rgb.data(), width, height);
-    REXLOG_INFO("native renderer: dumped frame {} to {} (max rgb {} {} {})", g.frame, path,
+    REXLOG_INFO("native renderer: dumped frame {} to {} (max rgb {} {} {})", frame, path,
                 max_rgb[0], max_rgb[1], max_rgb[2]);
     dfn.vkUnmapMemory(g_vk.vk_device, memory);
   }
@@ -3413,6 +3426,10 @@ void OnPresent(const uint8_t* base, uint32_t device, uint32_t front_buffer) {
   const VulkanDevice::Functions& dfn = *g_vk.dfn;
   FrameSlot& slot = *g.slot;
   const VkCommandBuffer cb = slot.main_cb;
+  // This Present's number on the guest swap clock (the hook runs before VdSwap), which the
+  // swap that shows the frame, the scripted pad and the presenter's frame dumps count by.
+  // g.frame counts only the Presents Native saw.
+  const uint64_t swap = rex::system::GuestSwapCount();
 
   if (g.frame % 300 == 0) {
     const Stats& s = g.stats;
@@ -3486,7 +3503,7 @@ void OnPresent(const uint8_t* base, uint32_t device, uint32_t front_buffer) {
   VkBuffer dump_buffer = VK_NULL_HANDLE;
   VkDeviceMemory dump_memory = VK_NULL_HANDLE;
   VkImageLayout output_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  const std::string dump_path = DumpTarget(g.frame);
+  const std::string dump_path = DumpTarget(swap);
   if (!dump_path.empty() &&
       vk_util::CreateDedicatedAllocationBuffer(g.device, VkDeviceSize(slot.width) * slot.height * 4,
                                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -3511,14 +3528,15 @@ void OnPresent(const uint8_t* base, uint32_t device, uint32_t front_buffer) {
   SubmitCommandBuffers(slot);
 
   if (dump_buffer) {
-    WriteFrameDump(dump_buffer, dump_memory, slot.fence, dump_path, slot.width, slot.height);
+    WriteFrameDump(dump_buffer, dump_memory, slot.fence, swap, dump_path, slot.width,
+                   slot.height);
   }
 
   rex::system::external_frame::Frame frame;
   frame.image_view = uint64_t(reinterpret_cast<uintptr_t>(slot.view));
   frame.width = slot.width;
   frame.height = slot.height;
-  frame.sequence = g.frame;
+  frame.sequence = swap;  // the GPU shows it at the swap with this number (swap_choice.h)
   rex::system::external_frame::Publish(frame);
   LogHitch();
   ++g.frame;

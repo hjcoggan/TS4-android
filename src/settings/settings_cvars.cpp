@@ -15,7 +15,7 @@ REXCVAR_DEFINE_STRING(ts4_renderer, topspin4::settings::kRendererClassic.data(),
 // has too set its filtering and the presenter's CAS (native_renderer.cpp, ApplyImageSettings).
 REXCVAR_DEFINE_STRING(ts4_resolution_scale, "1", "TopSpin4",
                       "Resolution scale (Native renderer): 1, 2, 3 or 4 times 1280x720, or auto "
-                      "(the smallest that covers the window)")
+                      "(the smallest that covers the window's 16:9 area)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_msaa, "original", "TopSpin4",
                       "MSAA (Native renderer): original (the game's own), 4 or 8")

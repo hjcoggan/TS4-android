@@ -13,6 +13,7 @@
 #include <rex/cvar.h>
 #include <rex/logging.h>
 #include <rex/runtime.h>
+#include <rex/system/external_frame.h>
 #include <rex/system/guest_swaps.h>
 #include <rex/ui/presenter.h>
 
@@ -125,6 +126,14 @@ void SaveDump(uint64_t frame) {
   if (!presenter || !presenter->CaptureGuestOutput(image)) {
     REXLOG_WARN("frame dumps: frame {} not saved: no presenter output", frame);
     return;
+  }
+  if (rex::system::external_frame::IsEnabled()) {
+    // The swap shows the Native frame with its own number unless the GPU ran too far behind
+    // (rex/system/swap_choice.h); then this image is of another frame than Native's own dump.
+    const uint64_t shown = rex::system::external_frame::LastSwappedSequence();
+    if (shown != frame) {
+      REXLOG_WARN("frame dumps: frame {} shows Native's frame {}, not its own", frame, shown);
+    }
   }
   std::vector<uint8_t> rgb(size_t(image.width) * image.height * 3);
   uint8_t max_luma = 0;

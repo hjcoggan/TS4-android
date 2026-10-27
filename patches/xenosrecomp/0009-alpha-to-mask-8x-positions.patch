@@ -1,0 +1,32 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 8e7cd44..fdbf523 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -190,11 +190,22 @@ uint alphaToMask(float alpha, uint2 pixel)
+     if (samples == 8)
+     {
+         // Xenos has no 8x: a target the host raised to 8 samples (the MSAA setting) covers
+-        // alpha in eighths, the thresholds spread over Vulkan's standard positions as the 4x
+-        // pattern spreads its quarters, less the dither offset in 32nds.
+-        const uint order[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
+-        [unroll] for (uint i = 0; i < 8; ++i)
+-            mask |= alpha >= float(order[i] + 1) / 8.0 - offset / 32.0 ? (1u << i) : 0u;
++        // alpha in eighths, less the dither offset in 32nds. Vulkan's standard 8x positions
++        // (in 16ths) put two samples in each quarter of the pixel: top left 3 (5,3) and
++        // 5 (1,7), top right 7 (15,1) and 0 (9,5), bottom left 1 (7,11) and 4 (3,13), bottom
++        // right 2 (13,9) and 6 (11,15). Two interleaved 4x patterns fill them: the quarters in
++        // the 4x order (bottom left, top right, top left, bottom right) with samples 1, 7, 3,
++        // 2 at 1/8 to 4/8, then 4, 0, 5, 6 at 5/8 to 8/8. Each half alpha covers every quarter
++        // once, and sample 0 (which depth resolves read) needs 3/4, as at 4x.
++        float a = alpha + offset / 32.0;
++        mask |= a >= 0.125 ? 2u : 0u;
++        mask |= a >= 0.25 ? 128u : 0u;
++        mask |= a >= 0.375 ? 8u : 0u;
++        mask |= a >= 0.5 ? 4u : 0u;
++        mask |= a >= 0.625 ? 16u : 0u;
++        mask |= a >= 0.75 ? 1u : 0u;
++        mask |= a >= 0.875 ? 32u : 0u;
++        mask |= a >= 1.0 ? 64u : 0u;
+     }
+     else if (samples == 4)
+     {

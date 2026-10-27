@@ -68,7 +68,7 @@ inline const std::vector<Setting>& PlayerSettings() {
       {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3", "4"},
        "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
        "filtered down to the window when larger; auto picks the smallest that covers the "
-       "window, and follows it. The GPU's limit may clamp it"},
+       "16:9 area of the window, and follows it. The GPU's limit may clamp it"},
       {"ts4_msaa", Setting::Kind::kChoice, "original", {"original", "4", "8"},
        "MSAA (Native renderer): original (the game's own 2x on its match pass) or more "
        "samples where the game multisamples, for smoother edges; the GPU's limit may lower it"},
