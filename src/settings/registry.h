@@ -64,6 +64,22 @@ inline const std::vector<Setting>& PlayerSettings() {
        {kRendererClassic, kRendererNative},
        "Renderer: classic (Xenos GPU emulation, the reference) or native (Vulkan; not built "
        "yet, so Classic draws until it is). Takes effect at the next start"},
+      // Image Enhancements (.scratch/image-quality/spec.md). Native only:
+      {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3", "4"},
+       "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
+       "filtered down to the window when larger; auto picks the smallest that covers the "
+       "window, and follows it. The GPU's limit may clamp it"},
+      {"ts4_msaa", Setting::Kind::kChoice, "original", {"original", "4", "8"},
+       "MSAA (Native renderer): original (the game's own 2x on its match pass) or more "
+       "samples where the game multisamples, for smoother edges; the GPU's limit may lower it"},
+      // On both renderers:
+      {"ts4_anisotropic_filtering", Setting::Kind::kChoice, "original",
+       {"original", "4", "8", "16"},
+       "Anisotropic filtering: original (the game's own texture filtering) or a level forced on "
+       "textures seen at an angle (court lines, banners)"},
+      {"ts4_sharpening", Setting::Kind::kChoice, "off", {"off", "low", "medium", "high"},
+       "Sharpening: off, or CAS (contrast-adaptive sharpening) of the final image at low, "
+       "medium or high strength"},
       {"mnk_mode", Setting::Kind::kBool, "false", {},
        "Play with keyboard and mouse, as a controller of their own"},
       {"mnk_mouse", Setting::Kind::kBool, "false", {},

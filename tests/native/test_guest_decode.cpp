@@ -321,15 +321,6 @@ TEST_CASE("720p is never filtered, even into a smaller window: the presenter fit
   CHECK(plan.output_height == 720);
 }
 
-TEST_CASE("texture LOD bias follows the render resolution") {
-  CHECK(LodBiasFor(1) == 0.0f);
-  CHECK(LodBiasFor(4) == -1.0f);
-  CHECK(PlanOutput(1, 1920, 1080).lod_bias == 0.0f);
-  CHECK(PlanOutput(2, 1920, 1080).lod_bias == -0.5f);
-  CHECK(PlanOutput(3, 1920, 1080).lod_bias == -1.0f);
-  CHECK(PlanOutput(4, 1920, 1080).lod_bias == -1.0f);
-}
-
 TEST_CASE("CAS strength 0 leaves the presenter as it is; others sharpen, clamped to 1") {
   CHECK_FALSE(CasEffect(0.0).enabled);
   CHECK_FALSE(CasEffect(-1.0).enabled);

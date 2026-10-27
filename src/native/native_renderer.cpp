@@ -37,6 +37,7 @@
 #include "native/geometry_cache.h"
 #include "native/gpu_timer.h"
 #include "native/guest_decode.h"
+#include "native/image_quality.h"
 #include "native/pass_names.h"
 #include "native/pipeline_parts.h"
 #include "native/pipelines.h"
@@ -123,26 +124,16 @@ REXCVAR_DEFINE_BOOL(ts4_native_reuse_constants, true, "TopSpin4",
 REXCVAR_DEFINE_BOOL(ts4_native_bind_used_slots, true, "TopSpin4",
                     "Native renderer: bind textures only in the fetch slots the draw's shaders "
                     "read (from the shader pack)");
-// Image Enhancements (ADR-0001: each defaults to the original look). They become player
-// settings with resolution scaling and MSAA (ticket 28).
-REXCVAR_DEFINE_DOUBLE(ts4_native_cas, 0.0, "TopSpin4",
-                      "Enhancement: CAS sharpening strength in [0, 1] applied to Native's "
-                      "output through the presenter; 0 = off")
-    .lifecycle(rex::cvar::Lifecycle::kHotReload);
-REXCVAR_DEFINE_INT32(ts4_native_resolution_scale, 1, "TopSpin4",
-                     "Native renderer: render at this multiple of the game's 720p (1-4); a "
-                     "frame larger than the window is filtered down to it, a smaller one is "
-                     "scaled up by the presenter")
-    .range(1, 4);
+// Image Enhancements (ADR-0001: each defaults to the original look): the player settings
+// (settings_cvars.cpp).
+REXCVAR_DECLARE(std::string, ts4_resolution_scale);
+REXCVAR_DECLARE(std::string, ts4_msaa);
+REXCVAR_DECLARE(std::string, ts4_anisotropic_filtering);
+REXCVAR_DECLARE(std::string, ts4_sharpening);
 REXCVAR_DEFINE_INT32(ts4_native_color_mode, 0, "TopSpin4",
                      "Native's colour curve for Xenos gamma: 0 = Original (the Xbox 360's "
                      "piecewise-linear curve, as Xenia), 1 = Natural (sRGB; an Enhancement)")
     .range(0, 1);
-REXCVAR_DEFINE_INT32(ts4_native_anisotropy, -2, "TopSpin4",
-                     "Native renderer: anisotropic filtering for linear, mipmapped textures, as "
-                     "anisotropic_override (-2 = the Classic renderer's anisotropic_override, "
-                     "-1 = the game's setting, 0 = off, 1..5 = 1x..16x)")
-    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_shader_pack, "", "TopSpin4",
                       "Native renderer: the shader pack to load (empty: topspin4.shaderpack in "
                       "the cache_root folder)");
@@ -158,6 +149,9 @@ namespace topspin4::native {
 
 // Defined below; any Vulkan call whose failure means the device is gone ends here.
 [[noreturn]] void EndSessionWithGpuFailure(VkResult result, const char* call);
+
+// The window size SetWindowSize last gave, width in the high half; 0 before the first.
+std::atomic<uint64_t> g_window_size{0};
 
 namespace {
 
@@ -390,6 +384,12 @@ struct State {
   // The output (each slot's image) is that, or the window's 16:9 area when
   // the window is smaller (guest::PlanOutput).
   uint32_t scale = 1;
+  bool scale_clamped = false;
+  bool scaled = false;  // drawn above 1x at some point this session (Enhancement report)
+  bool msaa_raised = false;  // a target got more samples than the game asked for
+  // This frame's image-quality plan (MakeImagePlan), made again as each frame begins.
+  image_quality::Plan plan;
+  image_quality::DeviceLimits limits;
   ColourMode colour = ColourMode::kNatural;  // --ts4_native_color_mode, an Enhancement
   uint32_t width = 1280;
   uint32_t height = 720;
@@ -499,6 +499,42 @@ struct State {
   uint64_t logged_modules = 0;
   uint64_t logged_waits = 0;
 } g;
+
+// The image settings as the cvars hold them now.
+image_quality::Settings ImageSettings() {
+  const std::string scale = REXCVAR_GET(ts4_resolution_scale);
+  const std::string msaa = REXCVAR_GET(ts4_msaa);
+  const std::string filtering = REXCVAR_GET(ts4_anisotropic_filtering);
+  const std::string sharpening = REXCVAR_GET(ts4_sharpening);
+  return image_quality::ParseSettings({scale, msaa, filtering, sharpening});
+}
+
+image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
+  const auto& p = device.properties();
+  image_quality::DeviceLimits limits;
+  limits.max_image_size =
+      std::min({p.maxImageDimension2D, p.maxFramebufferWidth, p.maxFramebufferHeight});
+  limits.max_anisotropy = p.samplerAnisotropy ? p.maxSamplerAnisotropy : 0.0f;
+  // Every device allows a bias of 2 (VkPhysicalDeviceLimits' required minimum).
+  limits.max_lod_bias = 2.0f;
+  limits.sample_counts = p.framebufferColorSampleCounts & p.framebufferDepthSampleCounts &
+                         p.framebufferStencilSampleCounts;
+  return limits;
+}
+
+// The plan for the settings and window as they are now.
+image_quality::Plan MakeImagePlan() {
+  const uint64_t size = g_window_size.load(std::memory_order_relaxed);
+  return image_quality::MakePlan(ImageSettings(), uint32_t(size >> 32), uint32_t(size), g.limits);
+}
+
+// The samples a target the game creates on this surface gets.
+VkSampleCountFlagBits TargetSamples(uint32_t surface_info) {
+  const uint32_t guest = uint32_t(GuestSamples(surface_info));
+  const uint32_t samples = g.plan.SamplesFor(guest);
+  g.msaa_raised = g.msaa_raised || samples > guest;
+  return VkSampleCountFlagBits(samples);
+}
 
 // The GPU timer (--ts4_native_gpu_timer_csv): a timestamp query pool per frame
 // slot, read once the slot's fence has signalled, where the renderer waits
@@ -990,6 +1026,29 @@ void SubmitCommandBuffers(FrameSlot& slot) {
   }
 }
 
+// A new Resolution scale from the plan, taken between frames: render targets are made again
+// at the new size as draws use them (GetRenderTarget), resolve targets as they are resolved
+// into, and the output image as the frame is published.
+void ApplyResolutionScale() {
+  if (g.plan.scale == g.scale && g.plan.clamped == g.scale_clamped) {
+    return;
+  }
+  if (g.plan.clamped) {
+    REXLOG_WARN("native renderer: Resolution scale clamped to {}x: larger targets do not fit "
+                "the GPU's {}-pixel image limit",
+                g.plan.scale, g.limits.max_image_size);
+  }
+  if (g.plan.scale != g.scale) {
+    REXLOG_INFO("native renderer: Resolution scale {}x -> {}x at frame {}, render size {}x{}",
+                g.scale, g.plan.scale, g.frame, 1280 * g.plan.scale, 720 * g.plan.scale);
+  }
+  g.scale = g.plan.scale;
+  g.scale_clamped = g.plan.clamped;
+  g.scaled = g.scaled || g.scale != 1;
+  g.width = 1280 * g.scale;
+  g.height = 720 * g.scale;
+}
+
 void BeginFrameIfNeeded() {
   if (g.recording) {
     return;
@@ -1011,7 +1070,9 @@ void BeginFrameIfNeeded() {
   if (g.frame >= kFramesInFlight) {
     DestroyRetired(g.frame - kFramesInFlight);
   }
-  textures::BeginFrame(g.frame);
+  g.plan = MakeImagePlan();
+  ApplyResolutionScale();
+  textures::BeginFrame(g.frame, g.plan.texture_filtering, g.plan.lod_bias);
   if (g.frame % 300 == 0) {
     textures::EvictUnused(g.frame);
   }
@@ -1103,8 +1164,10 @@ RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_widt
   const uint32_t width = guest_width * scale;
   const uint32_t height = guest_height * scale;
   std::unique_ptr<RenderTarget>& slot = g.render_targets[key];
-  // A surface reused at another scale is a new image.
-  if (slot && (slot->width < width || slot->height < height || slot->scale != scale)) {
+  // A surface reused at another scale or sample count (the image settings changed) is a new
+  // image.
+  if (slot && (slot->width < width || slot->height < height || slot->scale != scale ||
+               slot->samples != samples)) {
     // Grows in place of the old one, which frames in flight may still use.
     if (g.active_color == slot.get() || g.active_depth == slot.get()) {
       EndRendering();
@@ -1235,12 +1298,12 @@ RenderTarget* CurrentColorTarget(const uint8_t* d3d, bool create) {
     return it != g.render_targets.end() ? it->second.get() : nullptr;
   }
   return GetRenderTarget(key, ColorTargetFormat((color_info >> 16) & 0xF), width, height, false,
-                         GuestSamples(surface_info));
+                         TargetSamples(surface_info));
 }
 
 RenderTarget* CurrentDepthTarget(const uint8_t* d3d, uint32_t width, uint32_t height) {
   return GetRenderTarget(DepthTargetKey(d3d), kDepthFormat, width, height, true,
-                         GuestSamples(ReadReg(d3d, RB_SURFACE_INFO)));
+                         TargetSamples(ReadReg(d3d, RB_SURFACE_INFO)));
 }
 
 // A target to copy from: the target itself at 1x; for an MSAA target, its single-sample twin
@@ -1633,37 +1696,12 @@ rex::Runtime* g_runtime = nullptr;
 // The ts4_renderer setting chose Native (Request).
 bool g_requested = false;
 
+// Whether CAS sharpening ran this session (Enhancement report).
 bool g_cas_applied = false;
-// Whether Native owns the presenter's effect: Native is requested and the user
-// chose no present_effect of their own (theirs always wins).
-bool g_cas_owns_effect = false;
 
 void Request(bool native) { g_requested = native; }
 
 bool Requested() { return g_requested; }
-
-void ApplyPresenterSettings() {
-  if (!g_requested) {
-    return;
-  }
-  const CasSetting cas = CasEffect(REXCVAR_GET(ts4_native_cas));
-  if (rex::cvar::GetFlagByName("present_effect") != "bilinear") {
-    if (cas.enabled) {
-      REXLOG_INFO("native renderer: --present_effect is set; --ts4_native_cas is not applied");
-    }
-    return;
-  }
-  g_cas_owns_effect = true;
-  if (!cas.enabled) {
-    return;
-  }
-  // The presenter reads these when it is created; later changes go through
-  // ApplyLiveSharpening.
-  rex::cvar::SetFlagByName("present_effect", "cas");
-  rex::cvar::SetFlagByName("present_cas_additional_sharpness", fmt::format("{}", cas.sharpness));
-  g_cas_applied = true;
-  REXLOG_INFO("native renderer: CAS sharpening {}", cas.sharpness);
-}
 
 namespace {
 
@@ -1677,28 +1715,82 @@ void ApplyLiveSharpening() {
   if (!presenter) {
     return;
   }
-  const CasSetting cas = CasEffect(REXCVAR_GET(ts4_native_cas));
+  const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
   // The game is built without REX_HAS_FIDELITYFX_SDK, so it never touches the
   // presenter's paint config itself (its layout differs here): the SDK switches it.
   presenter->SetCasFromUIThread(cas.enabled, float(cas.sharpness));
   g_cas_applied = g_cas_applied || cas.enabled;
-  REXLOG_INFO("native renderer: CAS sharpening {} (live)", cas.enabled ? cas.sharpness : 0.0);
+  REXLOG_INFO("image quality: CAS sharpening {} (live)", cas.enabled ? cas.sharpness : 0.0);
+}
+
+// Classic's texture filtering follows the setting, unless --anisotropic_override was given on
+// the command line or as an environment variable (a developer's choice wins).
+bool g_classic_filtering_owned = false;
+void ApplyClassicFiltering(bool live) {
+  if (!g_classic_filtering_owned) {
+    return;
+  }
+  const int32_t filtering = image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering;
+  rex::cvar::SetFlagByName("anisotropic_override", fmt::format("{}", filtering));
+  REXLOG_INFO("image quality: anisotropic filtering {}{}",
+              filtering < 0 ? std::string("original (the game's own)")
+                            : fmt::format("{}x", 1u << (filtering - 1)),
+              live ? " (live)" : "");
 }
 
 }  // namespace
 
+void ApplyImageSettings() {
+  if (!g_requested && REXCVAR_GET(ts4_resolution_scale) != "1") {
+    REXLOG_WARN("image quality: Resolution scale {} is unavailable on the Classic renderer "
+                "(Native only); drawing at 1x",
+                REXCVAR_GET(ts4_resolution_scale));
+  }
+  if (!g_requested && REXCVAR_GET(ts4_msaa) != "original") {
+    REXLOG_WARN("image quality: MSAA {} is unavailable on the Classic renderer (Native only); "
+                "drawing the game's own",
+                REXCVAR_GET(ts4_msaa));
+  }
+  const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
+  if (rex::cvar::GetFlagByName("present_effect") != "bilinear") {
+    if (cas.enabled) {
+      REXLOG_INFO("image quality: --present_effect is set; --ts4_sharpening is not applied");
+    }
+    return;
+  }
+  rex::cvar::RegisterChangeCallback(
+      "ts4_sharpening", [](std::string_view, std::string_view) { ApplyLiveSharpening(); });
+  if (!cas.enabled) {
+    return;
+  }
+  // The presenter reads these when it is created; later changes go through
+  // ApplyLiveSharpening.
+  rex::cvar::SetFlagByName("present_effect", "cas");
+  rex::cvar::SetFlagByName("present_cas_additional_sharpness", fmt::format("{}", cas.sharpness));
+  g_cas_applied = true;
+  REXLOG_INFO("image quality: CAS sharpening {}", cas.sharpness);
+}
+
 void Configure(rex::Runtime* runtime) {
   g_runtime = runtime;
+  // The GPU plugin, loaded after OnPreSetup, defines anisotropic_override.
+  const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo("anisotropic_override");
+  g_classic_filtering_owned = flag && flag->source != rex::cvar::Source::kCommandLine &&
+                              flag->source != rex::cvar::Source::kEnvironment;
+  if (!flag) {
+    REXLOG_WARN("image quality: no anisotropic_override; Classic keeps its own filtering");
+  }
+  ApplyClassicFiltering(false);
+  rex::cvar::RegisterChangeCallback("ts4_anisotropic_filtering",
+                                    [](std::string_view, std::string_view) {
+                                      ApplyClassicFiltering(true);
+                                    });
   // Guest memory access works without the renderer too (Emulated frame dumps).
   if (runtime) {
     g_vk.memory = runtime->memory();
   }
   if (!g_requested) {
     return;
-  }
-  if (g_cas_owns_effect) {
-    rex::cvar::RegisterChangeCallback(
-        "ts4_native_cas", [](std::string_view, std::string_view) { ApplyLiveSharpening(); });
   }
   auto* graphics_system = runtime ? runtime->graphics_system() : nullptr;
   // This build only has the Vulkan backend, so the provider is a VulkanProvider.
@@ -1734,14 +1826,16 @@ void Configure(rex::Runtime* runtime) {
     }
   }
   g.device = provider ? provider->vulkan_device() : nullptr;
-  g.scale = uint32_t(std::clamp(REXCVAR_GET(ts4_native_resolution_scale), 1, 4));
+  if (g.device) {
+    g.limits = LimitsOf(*g.device);
+  }
+  g.plan = MakeImagePlan();
+  ApplyResolutionScale();
   g.colour = REXCVAR_GET(ts4_native_color_mode) == 0 ? ColourMode::kOriginal
                                                       : ColourMode::kNatural;
-  g.width = 1280 * g.scale;
-  g.height = 720 * g.scale;
   bool ok = g.device && InitializeContext(g.device, runtime->memory()) &&
             CreateUploadRings(kFramesInFlight, kUploadRingSize) &&
-            textures::Initialize(g.scale, g.colour, LodBiasFor(g.scale)) &&
+            textures::Initialize(g.scale, g.colour, g.plan.lod_bias, g.plan.texture_filtering) &&
             geometry::Initialize() &&
             write_watch::Initialize(runtime->memory());
   for (FrameSlot& slot : g.slots) {
@@ -1773,9 +1867,6 @@ void Configure(rex::Runtime* runtime) {
 }
 
 bool IsEnabled() { return g.device != nullptr; }
-
-// The window size SetWindowSize last gave, width in the high half; 0 before the first.
-std::atomic<uint64_t> g_window_size{0};
 
 void SetWindowSize(uint32_t width, uint32_t height) {
   // A minimised window has no area: the last plan's size stays.
@@ -1843,8 +1934,7 @@ void Shutdown() {
   }
 }
 
-// Enhancements (ADR-0001): Native image options beyond the original frame (scene runs keep
-// them off).
+// Enhancements (ADR-0001): image options beyond the original frame (scene runs keep them off).
 // Each one is listed here, so the session report shows whether it actually
 // ran and the scene runner fails a run that had one on (its ENHANCEMENTS list
 // in scripts/scene_runner.py names the same cvars).
@@ -1852,12 +1942,15 @@ struct Enhancement {
   const char* name;
   bool (*on)();
 };
-constexpr std::array<Enhancement, 3> kEnhancements = {{
-    {"ts4_native_cas", [] { return g.device != nullptr && g_cas_applied; }},
+constexpr std::array<Enhancement, 5> kEnhancements = {{
+    // Both renderers' (ApplyImageSettings).
+    {"ts4_anisotropic_filtering",
+     [] { return image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering >= 0; }},
+    {"ts4_sharpening", [] { return g_cas_applied; }},
     {"ts4_native_color_mode",
      [] { return g.device != nullptr && g.colour == ColourMode::kNatural; }},
-    {"ts4_native_resolution_scale",
-     [] { return g.device != nullptr && REXCVAR_GET(ts4_native_resolution_scale) != 1; }},
+    {"ts4_resolution_scale", [] { return g.device != nullptr && g.scaled; }},
+    {"ts4_msaa", [] { return g.device != nullptr && g.msaa_raised; }},
 }};
 
 std::string ReportJson() {
@@ -1876,10 +1969,12 @@ std::string ReportJson() {
                                 e.on() ? "true" : "false");
   }
   return fmt::format(R"({{"native_requested": {}, "native_active": {}, "fallback": "{}", )"
-                     R"("frames": {}, "debug_cvars": [{}], "enhancements": [{}], )"
+                     R"("frames": {}, "resolution_scale": {}, "resolution_scale_clamped": {}, )"
+                     R"("debug_cvars": [{}], "enhancements": [{}], )"
                      R"("draw_skips": {}, "xps_window_draws": {}, "gpu_failure": "{}"}})",
                      g_requested ? "true" : "false", g.device ? "true" : "false",
-                     FallbackName(g.fallback), g.frame, debug_cvars, enhancements,
+                     FallbackName(g.fallback), g.frame, g.scale,
+                     g.scale_clamped ? "true" : "false", debug_cvars, enhancements,
                      g.skips.Json(), g.xps_window_draws,
                      g.gpu_failure ? VkResultName(g.gpu_failure) : std::string());
 }
@@ -3121,11 +3216,9 @@ static void RaiseRenderThreadPriority() {
               pacing::ThreadPriorityChoiceName(choice));
 }
 
-// The output plan for the window as it is now, so a resize shows on the next frame.
-OutputPlan PlanForWindow() {
-  const uint64_t size = g_window_size.load(std::memory_order_relaxed);
-  return PlanOutput(g.scale, uint32_t(size >> 32), uint32_t(size));
-}
+// The output plan for the window as it was when this frame began, so a resize shows on the
+// next frame.
+OutputPlan PlanForWindow() { return g.plan.output; }
 
 void BlitImage(VkCommandBuffer cb, VkImage from, uint32_t from_width, uint32_t from_height,
                VkImage to, uint32_t to_width, uint32_t to_height) {

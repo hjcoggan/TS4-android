@@ -1,0 +1,31 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 9a58079..8e7cd44 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -69,7 +69,7 @@ struct PushConstants
+ // The alpha test's Xenos compare function (RB_COLORCONTROL bits 0-2): 1 less, 2 equal, 4 greater.
+ #define g_AlphaFunc                vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 568)
+ // Alpha to mask: RB_COLORCONTROL bits 24-31 (a 2-bit dither offset per pixel of a 2x2 quad)
+-// in bits 0-7, the target's sample count (1, 2 or 4) in bits 8-15.
++// in bits 0-7, the target's sample count (1, 2, 4 or 8) in bits 8-15.
+ #define g_AlphaToMask              vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 572)
+ #elif defined(REBLUE_RECOMP)
+ // 256-bit boolean register file (BD bool addresses reach ~158), then per-usage 16-bit-pair swap masks.
+@@ -187,7 +187,16 @@ uint alphaToMask(float alpha, uint2 pixel)
+     float offset = float((control >> (((pixel.x & 1) | ((pixel.y & 1) << 1)) << 1)) & 3);
+     uint samples = (control >> 8) & 0xFF;
+     uint mask = 0;
+-    if (samples == 4)
++    if (samples == 8)
++    {
++        // Xenos has no 8x: a target the host raised to 8 samples (the MSAA setting) covers
++        // alpha in eighths, the thresholds spread over Vulkan's standard positions as the 4x
++        // pattern spreads its quarters, less the dither offset in 32nds.
++        const uint order[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
++        [unroll] for (uint i = 0; i < 8; ++i)
++            mask |= alpha >= float(order[i] + 1) / 8.0 - offset / 32.0 ? (1u << i) : 0u;
++    }
++    else if (samples == 4)
+     {
+         // Guest top left, bottom left, top right, bottom right: Vulkan 0, 2, 1, 3.
+         mask |= alpha >= 0.75 - offset / 16.0 ? 1u : 0u;

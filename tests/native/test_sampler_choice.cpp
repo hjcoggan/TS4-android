@@ -53,3 +53,16 @@ TEST_CASE("the device caps anisotropy, and a device without it gets none") {
   CHECK(ChooseSampler(LinearMipmapped(), 0, 5, 5, 8.0f).anisotropy == 8.0f);
   CHECK(ChooseSampler(LinearMipmapped(), 0, 5, 5, /*device_max=*/0.0f).anisotropy == 1.0f);
 }
+
+TEST_CASE("the global sharpness bias adds to the fetch's own, within the device's limit") {
+  xe_gpu_texture_fetch_t fetch = LinearMipmapped();
+  fetch.lod_bias = -32;  // -1 mip in the fetch constant (5 fractional bits)
+  const auto own = ChooseSampler(fetch, 0, 5, -1, kDeviceMax, 0.0f, 2.0f);
+  CHECK(own.lod_bias == -1.0f);
+  const auto sharper = ChooseSampler(fetch, 0, 5, -1, kDeviceMax, -0.5f, 2.0f);
+  CHECK(sharper.lod_bias == -1.5f);
+  CHECK(sharper.key != own.key);
+  CHECK(ChooseSampler(fetch, 0, 5, -1, kDeviceMax, -1.5f, 2.0f).lod_bias == -2.0f);
+  // A single level has no mips to bias.
+  CHECK(ChooseSampler(fetch, 0, 0, -1, kDeviceMax, -0.5f, 2.0f).lod_bias == 0.0f);
+}

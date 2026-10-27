@@ -141,6 +141,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/native/test_gpu_failure.cpp
         tests/native/test_gpu_timer.cpp
         tests/native/test_guest_decode.cpp
+        tests/native/test_image_quality.cpp
         tests/native/test_live_topup.cpp
         tests/native/test_module_table.cpp
         tests/native/test_pass_names.cpp

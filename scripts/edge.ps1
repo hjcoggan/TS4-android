@@ -2,7 +2,7 @@
 #
 #   pwsh scripts/edge.ps1 [-InputScript scripts/input/edge-boot-to-practice.txt] [-Seconds 45]
 #       [-ShotsAt 20,30,40 | -ShotEvery 2] [-Renderer d3d12|vulkan] [-RenderDocAt 35] [-PresentMon]
-#       [-NoPad] [-FrameLog]
+#       [-NoPad] [-FrameLog] [-Set anisotropic_override=5,draw_resolution_scale_x=2]
 #
 # Edge ignores posted and injected keys, so the input script plays on a virtual Xbox 360 pad
 # (scripts/edge_pad.py; needs the ViGEmBus driver: winget install ViGEm.ViGEmBus, and
@@ -18,6 +18,8 @@
 # frames.tsv (seconds, VdSwap calls so far, newest log line), and scripts/edge_fps.py writes
 # fps.csv with the fps for each second. The run stops unless Edge's title bar shows the
 # Reference build, v0.0.1.3: TU1 installed in Edge through its Tools > Install Content.
+# -Set changes Edge config keys for this run only (name=value, the value as the config writes it,
+# e.g. postprocess_scaling_and_sharpening="cas"); like -Renderer, the config is put back after.
 param(
     [string]$InputScript = "$PSScriptRoot/input/edge-boot-to-practice.txt",
     [ValidateRange(5, 1800)][int]$Seconds = 45,
@@ -29,6 +31,7 @@ param(
     [int]$RenderDocAt = -1,
     [switch]$PresentMon,
     [switch]$FrameLog,
+    [string[]]$Set = @(),
     [string]$Out
 )
 $ErrorActionPreference = 'Stop'
@@ -82,6 +85,13 @@ try {
     if ($FrameLog) {
         if ($runConfig -notmatch '(?m)^log_lr_at_instruction = ') { throw "$config has no log_lr_at_instruction; -FrameLog needs an Edge that has it" }
         $runConfig = $runConfig -replace '(?m)^log_lr_at_instruction = "[^"]*"', "log_lr_at_instruction = `"$vdSwapThunks`""
+    }
+    foreach ($pair in @($Set | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+        $name, $value = $pair -split '=', 2
+        if (!$value) { throw "-Set $pair is not name=value" }
+        $pattern = "(?m)^$([regex]::Escape($name)) = (`"[^`"]*`"|\S+)"
+        if ($runConfig -notmatch $pattern) { throw "$config has no $name" }
+        $runConfig = [regex]::Replace($runConfig, $pattern, { "$name = $value" }.GetNewClosure())
     }
     if ($runConfig -ne $originalConfig) { $runConfig | Set-Content -LiteralPath $config -NoNewline }
     $edgeArgs = @("`"$($iso.FullName)`"")

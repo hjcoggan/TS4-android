@@ -28,3 +28,4 @@ __pycache__/
 # Agent worktrees and local settings; the shared project settings are versioned
 /.claude/*
 !/.claude/settings.json
+!/.claude/agents/

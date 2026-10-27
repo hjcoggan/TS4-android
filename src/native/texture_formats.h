@@ -118,6 +118,9 @@ inline constexpr uint32_t kSpecPwlGammaOutput = 1u << 3;
 // constants): the shader samples the texture as is and PWL-decodes the colour
 // components.
 inline constexpr uint32_t kPwlFetchFlag = 1u << 31;
+// XenosRecomp's XR_OFFSET_SCALE_SHIFT (patch 0007): a resolved texture's offset scale minus 1
+// in bits 29-30 of its descriptor index (image_quality::TextureOffsetScale).
+inline constexpr uint32_t kOffsetScaleShift = 29;
 
 struct GammaFetchPath {
   bool srgb_view = false;      // sample through the format's sRGB twin

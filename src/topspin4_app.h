@@ -134,7 +134,7 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
-    topspin4::native::ApplyPresenterSettings();
+    topspin4::native::ApplyImageSettings();
     rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
     // input system, so no binding can steer it.

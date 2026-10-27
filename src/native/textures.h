@@ -16,9 +16,10 @@ namespace topspin4::native::textures {
 // scale: the native resolution scale; resolve targets are that much larger
 // than their guest textures.
 // colour: how gamma fetches are decoded (texture_formats.h, GammaFetch).
-// lod_bias: the render resolution's texture LOD bias (guest::PlanOutput);
+// lod_bias: the global texture sharpness bias (image_quality::Plan);
 // --ts4_native_lod_bias, when set, replaces it.
-bool Initialize(uint32_t scale, ColourMode colour, float lod_bias);
+// texture_filtering: as image_quality::Plan's, until BeginFrame gives another.
+bool Initialize(uint32_t scale, ColourMode colour, float lod_bias, int32_t texture_filtering);
 
 // A texture fetch constant as the guest stores it (six big-endian dwords).
 struct FetchConstant {
@@ -83,10 +84,10 @@ struct UploadStats {
 };
 void TakeUploadStats(UploadStats& stats);
 
-// At each frame's start, before any Bind: takes this frame's Texture filtering
-// (ts4_native_anisotropy). A change reaches the samplers draws look up from
+// At each frame's start, before any Bind: takes this frame's texture filtering
+// (image_quality::Plan, in anisotropic_override's form) and texture sharpness bias. A change reaches the samplers draws look up from
 // this frame on; the old ones stay for frames still in flight.
-void BeginFrame(uint64_t frame);
+void BeginFrame(uint64_t frame, int32_t texture_filtering, float lod_bias);
 
 // Destroys guest-memory textures no draw has used for a while, so memory does
 // not grow with every arena and attire the session loads.

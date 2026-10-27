@@ -10,6 +10,23 @@ REXCVAR_DEFINE_STRING(ts4_renderer, topspin4::settings::kRendererClassic.data(),
                       "draws until it is)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
+// Image Enhancements (image-quality spec; src/native/image_quality.h). Each changes while the game
+// runs: Native reads them as each frame begins, and the change callbacks of the two that Classic
+// has too set its filtering and the presenter's CAS (native_renderer.cpp, ApplyImageSettings).
+REXCVAR_DEFINE_STRING(ts4_resolution_scale, "1", "TopSpin4",
+                      "Resolution scale (Native renderer): 1, 2, 3 or 4 times 1280x720, or auto "
+                      "(the smallest that covers the window)")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_STRING(ts4_msaa, "original", "TopSpin4",
+                      "MSAA (Native renderer): original (the game's own), 4 or 8")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_STRING(ts4_anisotropic_filtering, "original", "TopSpin4",
+                      "Anisotropic filtering: original (the game's own), 4, 8 or 16")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_STRING(ts4_sharpening, "off", "TopSpin4",
+                      "Sharpening (CAS): off, low, medium or high")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+
 // Controller remapping (ticket 24, pad_bindings.h): the physical input that drives each input
 // the game sees. Read when the input system is built (remapped_input.cpp).
 #define TS4_PAD_BINDING(input)                                                                 \

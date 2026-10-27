@@ -24,7 +24,15 @@ image of the same frame. Each such pair is judged with the tile rule, so a scene
 differs between runs (a match: AI, load times) is still judged frame for frame. Native's own
 images come before the presenter's gamma ramp; the ramp is read off the Native runs, where both
 the presenter's and Native's own images of the same frames exist (fit_ramp). In this mode the
-dual verdicts decide; the Classic-against-Classic and envelope verdicts are reported only.
+dual verdicts decide; the Classic-against-Classic and envelope verdicts are reported only. So
+--runs 0 drops the Classic runs, and the Native runs then stop at the first capture, which gives
+the ramp (plan_runs): a long scene costs one full run and a short one instead of four full ones.
+
+With --enhance KEY=VALUE (needs --dual), the dual runs set that image setting (image-quality
+spec) while the Classic and Native runs keep the defaults. Each dual Native frame is box-shrunk to
+Classic's size and may differ from Classic's 1x frame of the same run only along edges
+(judge_enhanced); the report must show each such Enhancement on and no other. Every run, Classic's
+too, fails on an Enhancement on that it did not ask for.
 
 Runs never overlap: the game animates by elapsed time, so a run slowed by another reaches a
 different state at the same frame number. A lock (analysis/game-run.lock, shared with
@@ -32,6 +40,7 @@ scripts/smoke.ps1) refuses a second run while one is going.
 
     python scripts/scene_runner.py tests/scenes/boot-main-menu.toml [--out DIR] [--runs N]
                                    [--native N [--dual N]] [--shader-pack FILE]
+    python scripts/scene_runner.py tests/scenes/king-of-the-court.toml --runs 0 --native 1 --dual 1
 
 Results and captures go to analysis/scenes/<name>/ (not committed).
 Exit code: 0 pass, 1 fail, 2 the scene could not run.
@@ -217,9 +226,27 @@ def apply_ramp(image, ramp):
     return np.stack([ramp[c][image[..., c]] for c in range(3)], axis=-1)
 
 
-def native_failures(report):
+def enhancement_failures(report, asked=None):
+    """What fails any run, from its session report's Enhancements list (src/native,
+    kEnhancements): an Enhancement on that the run did not ask for (--enhance), or one it asked for
+    that is not on. Anisotropic filtering and sharpening work on Classic too."""
+    asked = asked or {}
+    renderer = (report or {}).get("renderer") or {}
+    failures = []
+    on = {e["name"] for e in renderer.get("enhancements", []) if e.get("on")}
+    for enhancement in renderer.get("enhancements", []):
+        name = enhancement["name"]
+        if name in asked and name not in on:
+            failures.append(f"Enhancement {name} was asked for ({asked[name]}) but is not on")
+        elif name in on and name not in asked:
+            failures.append(f"Enhancement {name} is on")
+    return failures
+
+
+def native_failures(report, asked=None):
     """What fails a Native run, from its session report's "renderer" object (src/native): Native
-    not active (a renderer fallback), any draw skip, a Native debug cvar, an Enhancement on."""
+    not active (a renderer fallback), any draw skip, a Native debug cvar, an Enhancement on that
+    was not asked for."""
     if report is None:
         return []  # run_failures already says there is no report
     renderer = report.get("renderer")
@@ -233,12 +260,72 @@ def native_failures(report):
                         f"(key {record['first_key']})")
     for name in renderer.get("debug_cvars", []):
         failures.append(f"debug cvar {name} is set")
-    for enhancement in renderer.get("enhancements", []):
-        if enhancement.get("on"):
-            failures.append(f"Enhancement {enhancement['name']} is on")
+    failures += enhancement_failures(report, asked)
     if renderer.get("gpu_failure"):
         failures.append(f"GPU failure {renderer['gpu_failure']}")
     return failures
+
+
+def parse_enhancements(pairs):
+    """--enhance KEY=VALUE pairs as {key: value}."""
+    asked = {}
+    for pair in pairs or []:
+        key, sep, value = pair.partition("=")
+        if not sep or not key or not value:
+            raise SceneError(f"--enhance {pair!r} is not KEY=VALUE")
+        asked[key] = value
+    return asked
+
+
+def shrink_to(image, shape):
+    """HxWx3 uint8 box-filtered down to shape (h, w), a whole fraction of its size: a frame drawn
+    at a Resolution scale, as the 1x frame it is compared with."""
+    h, w = shape
+    if image.shape[:2] == (h, w):
+        return image
+    fy, fx = image.shape[0] // h, image.shape[1] // w
+    if fy * h != image.shape[0] or fx * w != image.shape[1]:
+        raise SceneError(f"a {image.shape[1]}x{image.shape[0]} frame is no whole multiple of "
+                         f"{w}x{h}")
+    blocks = image.reshape(h, fy, w, fx, 3).astype(np.float32).mean(axis=(1, 3))
+    return np.round(blocks).astype(np.uint8)
+
+
+# An enhanced frame's pixels this close to an edge of the 1x frame may differ: anti-aliasing and
+# supersampling move edges, not areas.
+EDGE_BAND = 2
+EDGE_STEP = 0.1  # a luminance step (0..1) between neighbours that makes an edge
+
+
+def edge_band(reference):
+    """Pixels within EDGE_BAND of an edge in reference (HxWx3, 0..1)."""
+    luma = reference @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    edges = np.zeros(luma.shape, bool)
+    dy = np.abs(np.diff(luma, axis=0)) > EDGE_STEP
+    dx = np.abs(np.diff(luma, axis=1)) > EDGE_STEP
+    edges[1:] |= dy
+    edges[:-1] |= dy
+    edges[:, 1:] |= dx
+    edges[:, :-1] |= dx
+    band = edges.copy()
+    for _ in range(EDGE_BAND):
+        grown = band.copy()
+        grown[1:] |= band[:-1]
+        grown[:-1] |= band[1:]
+        grown[:, 1:] |= band[:, :-1]
+        grown[:, :-1] |= band[:, 1:]
+        band = grown
+    return band
+
+
+def judge_enhanced(error, reference, check):
+    """The tile rule over the error away from reference's edges: a frame with an Enhancement on
+    passes when it differs from the 1x frame only along edges. A difference over an area (a
+    missing glow, a shifted layer, a hard shadow) fails."""
+    area = np.where(edge_band(reference), 0.0, error)
+    verdict = judge_capture(area, check)
+    verdict["mean_flip_all"] = float(error.mean())
+    return verdict
 
 
 def envelope_error(references, test, error_map=None):
@@ -280,9 +367,20 @@ def repeatability(images, check, error_map=flip_map):
             for i, image in enumerate(images[1:], start=1)}
 
 
-def run_game(label, scene, out, exe, extra_flags=()):
-    """One run that dumps every capture frame and exits after the last one; returns
-    ({frame: png path}, session report or None)."""
+def plan_runs(frames, classic_runs, native_runs, dual_runs):
+    """Each run in order, as (label, the capture frames it dumps; it exits after the last).
+    Without Classic runs only the dual runs are judged, and the Native runs are there for the
+    presenter's ramp alone, which the first capture gives."""
+    native_frames = frames if classic_runs else frames[:1]
+    return ([(f"run-{i + 1}", frames) for i in range(classic_runs)] +
+            [(f"native-{i + 1}", native_frames) for i in range(native_runs)] +
+            [(f"dual-{i + 1}", frames) for i in range(dual_runs)])
+
+
+def run_game(label, scene, out, exe, extra_flags=(), frames=None):
+    """One run that dumps each of frames (default: every capture frame) and exits after the
+    last one; returns ({frame: png path}, session report or None)."""
+    frames = frames or scene.frames
     run_dir = out / label
     shutil.rmtree(run_dir, ignore_errors=True)
     run_dir.mkdir(parents=True)
@@ -300,8 +398,8 @@ def run_game(label, scene, out, exe, extra_flags=()):
              f"--log_file={run_dir / 'runtime.log'}", "--log_level=info",
              "--log_flush_interval=1", "--headless", "--window_hidden=true", "--audio_mute=true",
              f"--ts4_input_script={script}",
-             f"--ts4_dump_frames={','.join(map(str, scene.frames))}",
-             f"--ts4_dump_dir={dumps}", f"--ts4_exit_after_frame={max(scene.frames)}",
+             f"--ts4_dump_frames={','.join(map(str, frames))}",
+             f"--ts4_dump_dir={dumps}", f"--ts4_exit_after_frame={max(frames)}",
              f"--ts4_session_report={report_path}", *extra_flags]
     # Unattended: the window is never shown (--window_hidden, patch 0038), and the process starts
     # hidden too, so a run never takes the desktop's focus.
@@ -312,7 +410,7 @@ def run_game(label, scene, out, exe, extra_flags=()):
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # The game presents 60 frames a second when it keeps up; allow half that, plus start-up.
     try:
-        proc.wait(timeout=max(scene.frames) / 30 + 60)
+        proc.wait(timeout=max(frames) / 30 + 60)
     except subprocess.TimeoutExpired:
         print(f"  {label}: still running past the deadline, killed", flush=True)
         proc.kill()
@@ -321,7 +419,7 @@ def run_game(label, scene, out, exe, extra_flags=()):
     # The report names each dump's file; a run without one left nothing to judge.
     shots = {dump["frame"]: dumps / dump["file"] for dump in (report or {}).get("dumps", [])
              if (dumps / dump["file"]).exists()}
-    print(f"  {label}: {len(shots)}/{len(scene.frames)} captures, exit code {proc.returncode}",
+    print(f"  {label}: {len(shots)}/{len(frames)} captures, exit code {proc.returncode}",
           flush=True)
     return shots, report
 
@@ -338,17 +436,16 @@ def load_rgb8(path):
     return np.asarray(Image.open(path).convert("RGB"), np.uint8)
 
 
-def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0):
-    classic = [f"run-{i + 1}" for i in range(int(scene.check["runs"]))]
-    native = [f"native-{i + 1}" for i in range(native_runs)]
-    dual = [f"dual-{i + 1}" for i in range(dual_runs)]
+def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enhance=None):
+    plan = dict(plan_runs(scene.frames, int(scene.check["runs"]), native_runs, dual_runs))
+    classic = [label for label in plan if label.startswith("run-")]
+    native = [label for label in plan if label.startswith("native-")]
+    dual = [label for label in plan if label.startswith("dual-")]
     native_flags = ["--ts4_renderer=native"]
     if shader_pack:
         native_flags.append(f"--ts4_shader_pack={shader_pack}")
-    frames = ",".join(map(str, scene.frames))
-
     def own_dump_flags(label):  # Native's own image of each capture, before the ramp
-        return [f"--ts4_native_dump_frames={frames}",
+        return [f"--ts4_native_dump_frames={','.join(map(str, plan[label]))}",
                 f"--ts4_native_dump_dir={out / label / 'native-dumps'}"]
 
     def own_image(label, frame):
@@ -356,18 +453,23 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0):
 
     shots, runs = {}, {}
     with GameRunLock(LOCK):
-        for label in classic + native + dual:
+        for label, run_frames in plan.items():
             if label in native:
                 flags = native_flags + (own_dump_flags(label) if dual else [])
             elif label in dual:
-                flags = native_flags + ["--ts4_native_dual_compare=true"] + own_dump_flags(label)
+                flags = (native_flags + ["--ts4_native_dual_compare=true"] + own_dump_flags(label) +
+                         [f"--{key}={value}" for key, value in (enhance or {}).items()])
             else:
                 flags = ["--ts4_renderer=classic"]
-            shots[label], report = run_game(label, scene, out, exe, flags)
-            failures = (run_failures(report, scene.frames) +
+            shots[label], report = run_game(label, scene, out, exe, flags, run_frames)
+            failures = (run_failures(report, run_frames) +
                         log_failures(read_log(out / label / "runtime.log"), scene.log))
-            if label in native or label in dual:
+            if label in dual:
+                failures += native_failures(report, enhance)
+            elif label in native:
                 failures += native_failures(report)
+            else:
+                failures += enhancement_failures(report)
             runs[label] = {"report": report, "failures": failures}
     ramp = None
     if dual:
@@ -377,7 +479,9 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0):
         ramp = fit_ramp(pairs)
     captures = []
     for frame in scene.frames:
-        missing = [label for label in classic + native + dual if frame not in shots[label]]
+        dumped = [label for label, run_frames in plan.items() if frame in run_frames]
+        native_here = [label for label in native if label in dumped]
+        missing = [label for label in dumped if frame not in shots[label]]
         missing += [f"{label} (Native's own image)" for label in dual
                     if not own_image(label, frame).exists()]
         if missing:
@@ -385,23 +489,24 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0):
             continue
         references = [load_image(shots[label][frame]) for label in classic]
         verdicts = repeatability(references, scene.check)
-        for label in native:
+        for label in native_here if references else []:
             verdicts[label] = judge_capture(
                 envelope_error(references, load_image(shots[label][frame])), scene.check)
         for label in dual:
-            native_image = apply_ramp(load_rgb8(own_image(label, frame)), ramp)
-            verdicts[label] = judge_capture(
-                flip_map(load_image(shots[label][frame]), native_image.astype(np.float32) / 255),
-                scene.check)
+            classic_image = load_image(shots[label][frame])
+            native_image = apply_ramp(shrink_to(load_rgb8(own_image(label, frame)),
+                                                classic_image.shape[:2]), ramp)
+            error = flip_map(classic_image, native_image.astype(np.float32) / 255)
+            verdicts[label] = (judge_enhanced(error, classic_image, scene.check) if enhance
+                               else judge_capture(error, scene.check))
         deciding = dual if dual else list(verdicts)
         captures.append({"frame": frame,
                          "passed": all(verdicts[label]["passed"] for label in deciding),
                          "runs": verdicts,
-                         "images": {label: shots[label][frame].as_posix()
-                                    for label in classic + native + dual}})
+                         "images": {label: shots[label][frame].as_posix() for label in dumped}})
     passed = all(c["passed"] for c in captures) and not any(r["failures"] for r in runs.values())
-    result = {"scene": scene.name, "passed": passed, "check": scene.check, "runs": runs,
-              "captures": captures}
+    result = {"scene": scene.name, "passed": passed, "check": scene.check,
+              "enhance": enhance or {}, "runs": runs, "captures": captures}
     (out / "result.json").write_text(json.dumps(result, indent=1))
     return result
 
@@ -411,7 +516,8 @@ def main(argv):
     parser.add_argument("scene", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--exe", type=Path, default=EXE)
-    parser.add_argument("--runs", type=int, help="override the scene's [check] runs (2 or more)")
+    parser.add_argument("--runs", type=int,
+                        help="override the scene's [check] runs (2 or more; 1 with --enhance)")
     parser.add_argument("--native", type=int, default=0,
                         help="Native runs after the Classic ones, judged against them")
     parser.add_argument("--dual", type=int, default=0,
@@ -419,12 +525,18 @@ def main(argv):
                              "(needs --native)")
     parser.add_argument("--shader-pack", type=Path,
                         help="the shader pack Native runs load (default: the one in cache/)")
+    parser.add_argument("--enhance", action="append", metavar="KEY=VALUE",
+                        help="dual runs set this image setting (e.g. ts4_resolution_scale=2); "
+                             "their Native frames, shrunk to Classic's size, may then differ "
+                             "from Classic's 1x frame only along edges (needs --dual)")
     args = parser.parse_args(argv)
     try:
         scene = load_scene(args.scene.read_text(encoding="utf-8"))
         if args.runs is not None:
-            if args.runs < 2:
-                raise SceneError("--runs must be at least 2")
+            # With --dual the dual runs decide, so the Classic runs can go (--runs 0); with
+            # --enhance one will do.
+            if args.runs < (0 if args.dual else 1 if args.enhance else 2):
+                raise SceneError("--runs must be at least 2 (1 with --enhance, 0 with --dual)")
             scene.check["runs"] = args.runs
     except (OSError, SceneError) as error:
         print(f"scene error: {error}", file=sys.stderr)
@@ -440,7 +552,11 @@ def main(argv):
         shader_pack = args.shader_pack.resolve() if args.shader_pack else None
         if args.dual and not args.native:
             raise SceneError("--dual needs --native, whose runs give the presenter's ramp")
-        result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack, args.dual)
+        enhance = parse_enhancements(args.enhance)
+        if enhance and not args.dual:
+            raise SceneError("--enhance needs --dual, whose Classic frames are the 1x reference")
+        result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack, args.dual,
+                           enhance)
     except (RunLockBusy, SceneError) as error:
         print(f"scene error: {error}", file=sys.stderr)
         return 2

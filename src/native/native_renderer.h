@@ -18,12 +18,13 @@ class Runtime;
 
 namespace topspin4::native {
 
-// The renderer the ts4_renderer setting chose; call before ApplyPresenterSettings.
+// The renderer the ts4_renderer setting chose; call before ApplyImageSettings.
 void Request(bool native);
 bool Requested();
 
-// Creates the renderer's resources on the runtime's Vulkan device when Native was
-// requested. Call after the graphics system is set up.
+// Applies the anisotropic filtering setting to Classic (on either renderer), then creates the
+// renderer's resources on the runtime's Vulkan device when Native was requested. Call after
+// the graphics system is set up.
 void Configure(rex::Runtime* runtime);
 
 bool IsEnabled();
@@ -50,9 +51,11 @@ bool PrepareRequested();
 // device still exists.
 void Shutdown();
 
-// Before the presenter is created (the app's OnPreSetup): applies
-// --ts4_native_cas to the presenter's effect settings when Native is requested.
-void ApplyPresenterSettings();
+// Before the presenter is created (the app's OnPreSetup), on either renderer: applies the
+// sharpening setting (image_quality.h) to the presenter's CAS, now and on each later change,
+// and logs the Native-only settings Classic cannot apply. Configure, on either renderer, does
+// the same for Classic's texture filtering once the GPU plugin defines it.
+void ApplyImageSettings();
 
 // At session end (window closed or guest exit; runs once): prints the draw
 // skip summary and writes --ts4_native_report.

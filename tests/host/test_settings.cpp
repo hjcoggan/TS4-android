@@ -176,3 +176,36 @@ TEST_CASE("Key bindings may name any key, and may be cleared") {
   CHECK(FindSetting("keybind_a")->Allows(""));
   CHECK_FALSE(FindSetting("keybind_a")->Allows("a\\b"));
 }
+
+TEST_CASE("The image settings default to the original look and list their levels") {
+  const Setting* scale = FindSetting("ts4_resolution_scale");
+  REQUIRE(scale);
+  CHECK(scale->default_value == "1");
+  CHECK(scale->choices == std::vector<std::string_view>{"1", "auto", "2", "3", "4"});
+  const Setting* msaa = FindSetting("ts4_msaa");
+  REQUIRE(msaa);
+  CHECK(msaa->default_value == "original");
+  CHECK(msaa->choices == std::vector<std::string_view>{"original", "4", "8"});
+  const Setting* filtering = FindSetting("ts4_anisotropic_filtering");
+  REQUIRE(filtering);
+  CHECK(filtering->default_value == "original");
+  CHECK(filtering->choices == std::vector<std::string_view>{"original", "4", "8", "16"});
+  const Setting* sharpening = FindSetting("ts4_sharpening");
+  REQUIRE(sharpening);
+  CHECK(sharpening->default_value == "off");
+  CHECK(sharpening->choices == std::vector<std::string_view>{"off", "low", "medium", "high"});
+}
+
+TEST_CASE("Image settings round-trip through the settings file, and a typo keeps the default") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  REQUIRE(SaveSetting(path, "ts4_anisotropic_filtering",
+                      TomlLiteral(*FindSetting("ts4_anisotropic_filtering"), "16")));
+  REQUIRE(SaveSetting(path, "ts4_sharpening", TomlLiteral(*FindSetting("ts4_sharpening"), "high")));
+  CHECK(Loaded(path).values == std::map<std::string, std::string>{
+                                   {"ts4_anisotropic_filtering", "16"}, {"ts4_sharpening", "high"}});
+  WriteFile(path, "ts4_anisotropic_filtering = 16\nts4_sharpening = \"hgih\"\n");
+  Loaded typo(path);
+  CHECK(typo.values.empty());
+  CHECK(typo.report.warnings.size() == 2);
+}

@@ -589,19 +589,13 @@ struct OutputPlan {
   bool downsample = false;
   DownsampleFilter filter = DownsampleFilter::kNone;
   uint32_t halvings = 0;  // 2:1 box steps before the final bilinear one
-  float lod_bias = 0.0f;  // texture LOD bias for the render resolution
 };
-// Texture LOD bias for a render resolution: sharper mips as the frame grows.
-constexpr float LodBiasFor(uint32_t render_scale) {
-  return render_scale >= 3 ? -1.0f : render_scale == 2 ? -0.5f : 0.0f;
-}
 constexpr OutputPlan PlanOutput(uint32_t render_scale, uint32_t window_width,
                                 uint32_t window_height) {
   OutputPlan plan;
   plan.target_scale = render_scale;
   plan.output_width = 1280 * render_scale;
   plan.output_height = 720 * render_scale;
-  plan.lod_bias = LodBiasFor(render_scale);
   // The window's 16:9 area, where the presenter puts the frame.
   uint32_t fit_width = window_width, fit_height = window_height;
   if (uint64_t(window_width) * 9 > uint64_t(window_height) * 16) {

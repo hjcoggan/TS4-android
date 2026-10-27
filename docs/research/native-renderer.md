@@ -170,6 +170,8 @@ anisotropy, and both shaders' SPIR-V. What it found, frame by frame:
 - **Anisotropic filtering.** Classic filters linear, mipmapped textures at 4x
   (`anisotropic_override` defaults to 3); Native used the fetch's own setting (off). The court and
   small banner text were softer. `ts4_native_anisotropy` now defaults to -2, Classic's setting.
+  Since image-quality ticket 02 both renderers take it from the `ts4_anisotropic_filtering`
+  setting, whose default is the game's own filtering (the Oracle's `anisotropic_override` -1).
 
 Result (`python scripts/scene_runner.py tests/scenes/exhibition-match.toml --native 1 --dual 1`):
 every dual frame passes, worst tiles 0, 0, 0 and 18, mean FLIP 0.0022 at player select and 0.010
