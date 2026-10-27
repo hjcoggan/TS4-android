@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, apply_ramp, envelope_error, fit_ramp,  # noqa: E402
-                          enhancement_failures, judge_enhanced, load_scene, log_failures,
+                          edges_may_differ, enhancement_failures, judge_enhanced, load_scene,
+                          log_failures,
                           native_failures, parse_enhancements, plan_runs, repeatability,
                           run_failures, shrink_to)
 
@@ -242,6 +243,18 @@ def test_an_enhanced_frame_may_differ_along_edges_but_not_over_an_area():
     verdict = judge_enhanced(area, reference, check)
     assert not verdict["passed"]
     assert verdict["failing_tiles"]
+
+
+def test_only_native_only_enhancements_may_differ_along_edges():
+    # Anisotropic filtering runs on both renderers, and sharpening acts in the presenter after the
+    # dumps: neither changes the comparison, so the strict judge applies.
+    assert not edges_may_differ({})
+    assert not edges_may_differ({"ts4_anisotropic_filtering": "16"})
+    assert not edges_may_differ({"ts4_anisotropic_filtering": "16", "ts4_sharpening": "high"})
+    # A Resolution scale or MSAA moves edges, and so does any enhancement not known to be shared.
+    assert edges_may_differ({"ts4_resolution_scale": "2"})
+    assert edges_may_differ({"ts4_anisotropic_filtering": "16", "ts4_msaa": "4"})
+    assert edges_may_differ({"ts4_native_color_mode": "natural"})
 
 
 def test_a_report_without_a_renderer_object_fails_a_native_run():

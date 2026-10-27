@@ -204,8 +204,22 @@ TEST_CASE("Image settings round-trip through the settings file, and a typo keeps
   REQUIRE(SaveSetting(path, "ts4_sharpening", TomlLiteral(*FindSetting("ts4_sharpening"), "high")));
   CHECK(Loaded(path).values == std::map<std::string, std::string>{
                                    {"ts4_anisotropic_filtering", "16"}, {"ts4_sharpening", "high"}});
-  WriteFile(path, "ts4_anisotropic_filtering = 16\nts4_sharpening = \"hgih\"\n");
+  WriteFile(path, "ts4_anisotropic_filtering = \"15\"\nts4_sharpening = \"hgih\"\n");
   Loaded typo(path);
   CHECK(typo.values.empty());
   CHECK(typo.report.warnings.size() == 2);
+}
+
+TEST_CASE("A number written without quotes is accepted where the setting's values are numbers") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "ts4_anisotropic_filtering = 16\nts4_resolution_scale = 2\nts4_msaa = 4\n");
+  CHECK(Loaded(path).values == std::map<std::string, std::string>{{"ts4_anisotropic_filtering", "16"},
+                                                                  {"ts4_msaa", "4"},
+                                                                  {"ts4_resolution_scale", "2"}});
+  // A number the setting does not allow is still a typo, and so is one for a setting of words.
+  WriteFile(path, "ts4_anisotropic_filtering = 15\nts4_sharpening = 3\nts4_resolution_scale = 5\n");
+  Loaded typo(path);
+  CHECK(typo.values.empty());
+  CHECK(typo.report.warnings.size() == 3);
 }

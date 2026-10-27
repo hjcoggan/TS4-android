@@ -20,6 +20,7 @@
 # Reference build, v0.0.1.3: TU1 installed in Edge through its Tools > Install Content.
 # -Set changes Edge config keys for this run only (name=value, the value as the config writes it,
 # e.g. postprocess_scaling_and_sharpening="cas"); like -Renderer, the config is put back after.
+# The config a run used is saved to edge-config.toml in its output folder.
 param(
     [string]$InputScript = "$PSScriptRoot/input/edge-boot-to-practice.txt",
     [ValidateRange(5, 1800)][int]$Seconds = 45,
@@ -94,6 +95,8 @@ try {
         $runConfig = [regex]::Replace($runConfig, $pattern, { "$name = $value" }.GetNewClosure())
     }
     if ($runConfig -ne $originalConfig) { $runConfig | Set-Content -LiteralPath $config -NoNewline }
+    # The proof of what this run was set to: the config the run used, saved beside its shots.
+    $runConfig | Set-Content -LiteralPath "$Out/edge-config.toml" -NoNewline
     $edgeArgs = @("`"$($iso.FullName)`"")
     if ($RenderDocAt -ge 0) {
         $renderdoccmd = 'C:\Program Files\RenderDoc\renderdoccmd.exe'

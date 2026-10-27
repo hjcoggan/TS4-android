@@ -514,7 +514,6 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
   image_quality::DeviceLimits limits;
   limits.max_image_size =
       std::min({p.maxImageDimension2D, p.maxFramebufferWidth, p.maxFramebufferHeight});
-  limits.max_anisotropy = p.samplerAnisotropy ? p.maxSamplerAnisotropy : 0.0f;
   // Every device allows a bias of 2 (VkPhysicalDeviceLimits' required minimum).
   limits.max_lod_bias = 2.0f;
   limits.sample_counts = p.framebufferColorSampleCounts & p.framebufferDepthSampleCounts &
@@ -1752,10 +1751,13 @@ void ApplyImageSettings() {
                 REXCVAR_GET(ts4_msaa));
   }
   const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
-  if (rex::cvar::GetFlagByName("present_effect") != "bilinear") {
+  const std::string present_effect = rex::cvar::GetFlagByName("present_effect");
+  if (present_effect != "bilinear") {
     if (cas.enabled) {
       REXLOG_INFO("image quality: --present_effect is set; --ts4_sharpening is not applied");
     }
+    // A developer's --present_effect=cas sharpens too, which the report must show.
+    g_cas_applied = image_quality::PresentEffectSharpens(present_effect);
     return;
   }
   rex::cvar::RegisterChangeCallback(
@@ -1936,16 +1938,21 @@ void Shutdown() {
 
 // Enhancements (ADR-0001): image options beyond the original frame (scene runs keep them off).
 // Each one is listed here, so the session report shows whether it actually
-// ran and the scene runner fails a run that had one on (its ENHANCEMENTS list
-// in scripts/scene_runner.py names the same cvars).
+// ran and the scene runner fails a parity run that had one on (scripts/scene_runner.py reads
+// the report's "enhancements"; it keeps no list of its own).
 struct Enhancement {
   const char* name;
   bool (*on)();
 };
 constexpr std::array<Enhancement, 5> kEnhancements = {{
-    // Both renderers' (ApplyImageSettings).
+    // Both renderers' (ApplyImageSettings). Filtering counts as on when the setting forces it or
+    // --anisotropic_override was given directly, which Classic takes over the setting.
     {"ts4_anisotropic_filtering",
-     [] { return image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering >= 0; }},
+     [] {
+       return image_quality::FilteringForced(
+           image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering,
+           rex::cvar::GetFlagByName("anisotropic_override"));
+     }},
     {"ts4_sharpening", [] { return g_cas_applied; }},
     {"ts4_native_color_mode",
      [] { return g.device != nullptr && g.colour == ColourMode::kNatural; }},

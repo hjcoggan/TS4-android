@@ -30,9 +30,11 @@ the ramp (plan_runs): a long scene costs one full run and a short one instead of
 
 With --enhance KEY=VALUE (needs --dual), the dual runs set that image setting (image-quality
 spec) while the Classic and Native runs keep the defaults. Each dual Native frame is box-shrunk to
-Classic's size and may differ from Classic's 1x frame of the same run only along edges
-(judge_enhanced); the report must show each such Enhancement on and no other. Every run, Classic's
-too, fails on an Enhancement on that it did not ask for.
+Classic's size. With anisotropic filtering or sharpening alone, which both renderers apply (or,
+for sharpening, neither before the dumps), the frame is judged as strictly as without an
+Enhancement; with a Native-only one (Resolution scale, MSAA) it may differ from Classic's 1x frame
+of the same run only along edges (judge_enhanced). The report must show each such Enhancement on
+and no other. Every run, Classic's too, fails on an Enhancement on that it did not ask for.
 
 Runs never overlap: the game animates by elapsed time, so a run slowed by another reaches a
 different state at the same frame number. A lock (analysis/game-run.lock, shared with
@@ -318,6 +320,18 @@ def edge_band(reference):
     return band
 
 
+# Enhancements that change neither renderer's dumped frame differently: anisotropic filtering is
+# applied by Classic and Native alike, and sharpening acts in the presenter, after the dumps.
+# Their runs are judged as strictly as the defaults.
+SHARED_ENHANCEMENTS = {"ts4_anisotropic_filtering", "ts4_sharpening"}
+
+
+def edges_may_differ(enhance):
+    """Whether the Native frame of a run with these Enhancements may differ from Classic's 1x frame
+    along edges (a Resolution scale, MSAA): any Enhancement not in SHARED_ENHANCEMENTS."""
+    return any(name not in SHARED_ENHANCEMENTS for name in enhance or {})
+
+
 def judge_enhanced(error, reference, check):
     """The tile rule over the error away from reference's edges: a frame with an Enhancement on
     passes when it differs from the 1x frame only along edges. A difference over an area (a
@@ -497,8 +511,8 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enh
             native_image = apply_ramp(shrink_to(load_rgb8(own_image(label, frame)),
                                                 classic_image.shape[:2]), ramp)
             error = flip_map(classic_image, native_image.astype(np.float32) / 255)
-            verdicts[label] = (judge_enhanced(error, classic_image, scene.check) if enhance
-                               else judge_capture(error, scene.check))
+            verdicts[label] = (judge_enhanced(error, classic_image, scene.check)
+                               if edges_may_differ(enhance) else judge_capture(error, scene.check))
         deciding = dual if dual else list(verdicts)
         captures.append({"frame": frame,
                          "passed": all(verdicts[label]["passed"] for label in deciding),

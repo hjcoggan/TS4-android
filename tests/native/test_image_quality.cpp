@@ -86,25 +86,31 @@ TEST_CASE("the texture sharpness bias sharpens by the presenter's upscale") {
 
 TEST_CASE("anisotropic filtering at Original leaves the game's own filtering") {
   CHECK(MakePlan({}, 1280, 720, kDesktop).texture_filtering == -1);
-  CHECK(MakePlan({}, 1280, 720, kDesktop).anisotropy == 0.0f);
 }
 
-TEST_CASE("a forced anisotropic filtering level is clamped to the device") {
+// The level is the plan's; the device clamp is ChooseSampler's (test_sampler_choice.cpp), the one
+// place a sampler's anisotropy is decided.
+TEST_CASE("a forced anisotropic filtering level is the plan's, in anisotropic_override's form") {
   Settings settings;
   settings.anisotropic_filtering = 16;
-  const Plan plan = MakePlan(settings, 1280, 720, kDesktop);
-  CHECK(plan.texture_filtering == 5);
-  CHECK(plan.anisotropy == 16.0f);
-  DeviceLimits eight = kDesktop;
-  eight.max_anisotropy = 8.0f;
-  CHECK(MakePlan(settings, 1280, 720, eight).anisotropy == 8.0f);
-  DeviceLimits none = kDesktop;
-  none.max_anisotropy = 0.0f;
-  CHECK(MakePlan(settings, 1280, 720, none).anisotropy == 0.0f);
+  CHECK(MakePlan(settings, 1280, 720, kDesktop).texture_filtering == 5);
   settings.anisotropic_filtering = 4;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).texture_filtering == 3);
   settings.anisotropic_filtering = 8;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).texture_filtering == 4);
+}
+
+TEST_CASE("filtering is forced when the setting or a direct anisotropic_override forces it") {
+  // Neither: the game's own (-1), on both.
+  CHECK_FALSE(FilteringForced(-1, "-1"));
+  CHECK_FALSE(FilteringForced(-1, ""));
+  // The setting alone, or the override alone (Classic takes it over the setting).
+  CHECK(FilteringForced(5, "-1"));
+  CHECK(FilteringForced(-1, "5"));
+  // 0 forces filtering off, which is not the game's own.
+  CHECK(FilteringForced(-1, "0"));
+  // An override that is not a number forces nothing.
+  CHECK_FALSE(FilteringForced(-1, "high"));
 }
 
 TEST_CASE("sharpening levels map to fixed CAS strengths, and Off leaves CAS off") {
@@ -116,6 +122,12 @@ TEST_CASE("sharpening levels map to fixed CAS strengths, and Off leaves CAS off"
   CHECK(MakePlan(settings, 1280, 720, kDesktop).cas.sharpness == 0.5);
   settings.sharpening = Sharpening::kHigh;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).cas.sharpness == 0.8);
+}
+
+TEST_CASE("a --present_effect of cas sharpens, and bilinear does not") {
+  CHECK(PresentEffectSharpens("cas"));
+  CHECK_FALSE(PresentEffectSharpens("bilinear"));
+  CHECK_FALSE(PresentEffectSharpens(""));
 }
 
 TEST_CASE("the settings' values parse, and a value they do not allow is the default") {

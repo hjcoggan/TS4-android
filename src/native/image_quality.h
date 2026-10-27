@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <string_view>
@@ -78,7 +79,6 @@ constexpr double CasStrength(Sharpening sharpening) {
 // What the device allows (VkPhysicalDeviceLimits and features).
 struct DeviceLimits {
   uint32_t max_image_size = 16384;  // maxImageDimension2D and maxFramebufferWidth/Height
-  float max_anisotropy = 16.0f;     // maxSamplerAnisotropy; 0 without samplerAnisotropy
   float max_lod_bias = 2.0f;        // maxSamplerLodBias
   // VkSampleCountFlags that colour, depth and stencil targets all support.
   uint32_t sample_counts = 1 | 2 | 4 | 8;
@@ -91,9 +91,8 @@ struct Plan {
   // The global texture sharpness bias (negative is sharper), added to each fetch's own.
   float lod_bias = 0.0f;
   // In anisotropic_override's form, as both renderers take it: -1 = the game's own filtering,
-  // 3..5 = 4x..16x.
+  // 3..5 = 4x..16x. The device's maximum clamps it where a sampler is chosen (ChooseSampler).
   int32_t texture_filtering = -1;
-  float anisotropy = 0.0f;  // the forced level the device gives; 0 = the game's own
   guest::CasSetting cas;
   uint32_t msaa = 0;  // as Settings::msaa
   uint32_t sample_counts = 1 | 2 | 4 | 8;
@@ -107,6 +106,22 @@ struct Plan {
     return std::max(samples, 1u);
   }
 };
+
+// Whether the session forces texture filtering on either renderer: the setting's plan_filtering
+// (Plan::texture_filtering), or a --anisotropic_override given directly, which Classic takes
+// over the setting. override_value is that flag's text; -1 is the game's own, and anything that
+// is not a number forces nothing.
+inline bool FilteringForced(int32_t plan_filtering, std::string_view override_value) {
+  int32_t forced = -1;
+  const char* end = override_value.data() + override_value.size();
+  if (std::from_chars(override_value.data(), end, forced).ptr != end) forced = -1;
+  return plan_filtering >= 0 || forced >= 0;
+}
+
+// Whether a --present_effect given directly sharpens the frame (CAS), as ts4_sharpening does.
+inline bool PresentEffectSharpens(std::string_view present_effect) {
+  return present_effect == "cas";
+}
 
 // What a fetch's texel offset is multiplied by before the shader divides it by the texture's
 // host size: a resolved texture drawn at texture_scale is that much larger than the guest's,
@@ -154,7 +169,6 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
   }
   if (settings.anisotropic_filtering) {
     plan.texture_filtering = std::bit_width(settings.anisotropic_filtering);  // 4x = 3
-    plan.anisotropy = std::min(float(settings.anisotropic_filtering), device.max_anisotropy);
   }
   plan.cas = guest::CasEffect(CasStrength(settings.sharpening));
   plan.msaa = settings.msaa;

@@ -46,6 +46,9 @@ LoadReport LoadSettingsFile(const std::filesystem::path& path, const ApplySettin
       value = *text;
     } else if (auto flag = node->as_boolean(); flag && setting.kind == Setting::Kind::kBool) {
       value = flag->get() ? "true" : "false";
+    } else if (auto number = node->as_integer(); number && setting.kind == Setting::Kind::kChoice) {
+      // A bare 16 for a choice of numbers (Allows still decides whether 16 is one).
+      value = std::to_string(number->get());
     }
     if (!value || !setting.Allows(*value)) {
       report.warnings.push_back("settings file: " + std::string(setting.key) +
