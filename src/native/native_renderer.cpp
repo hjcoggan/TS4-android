@@ -113,6 +113,9 @@ REXCVAR_DEFINE_UINT64(ts4_native_debug_skip_ps, 0, "TopSpin4",
 REXCVAR_DEFINE_UINT32(ts4_native_debug_max_image_size, 0, "TopSpin4",
                       "Native renderer debugging: treat the GPU's maximum image size as this "
                       "(0 = the GPU's own), to see a Resolution scale clamped");
+REXCVAR_DEFINE_UINT32(ts4_native_debug_max_samples, 0, "TopSpin4",
+                      "Native renderer debugging: treat render-target sample counts above this "
+                      "as unsupported by the GPU (0 = the GPU's own), to see MSAA fall back");
 REXCVAR_DEFINE_BOOL(ts4_native_dual_compare, false, "TopSpin4",
                     "Scene runs: Native draws every frame and writes its own dumps "
                     "(--ts4_native_dump_frames), while Classic still draws and presents, so "
@@ -391,6 +394,8 @@ struct State {
   bool clamped_once = false;  // clamped at some point this session (session report)
   bool scaled = false;  // drawn above 1x at some point this session (Enhancement report)
   bool msaa_raised = false;  // a target got more samples than the game asked for
+  // The MSAA setting's count last logged as falling back to fewer samples (0 = none).
+  uint32_t msaa_fallback_logged = 0;
   // This frame's image-quality plan (MakeImagePlan), made again as each frame begins.
   image_quality::Plan plan;
   image_quality::DeviceLimits limits;
@@ -535,6 +540,15 @@ void PublishImageSettings(std::string_view changed) {
   g_image_settings = settings;
 }
 
+// "1, 2, 4" for VkSampleCountFlags 1 | 2 | 4.
+std::string SampleCountsText(uint32_t counts) {
+  std::string text;
+  for (uint32_t bit = 1; bit <= 64; bit <<= 1) {
+    if (counts & bit) text += fmt::format("{}{}", text.empty() ? "" : ", ", bit);
+  }
+  return text;
+}
+
 image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
   const auto& p = device.properties();
   image_quality::DeviceLimits limits;
@@ -545,8 +559,18 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
   }
   // Every device allows a bias of 2 (VkPhysicalDeviceLimits' required minimum).
   limits.max_lod_bias = 2.0f;
-  limits.sample_counts = p.framebufferColorSampleCounts & p.framebufferDepthSampleCounts &
-                         p.framebufferStencilSampleCounts;
+  limits.sample_counts = image_quality::TargetSampleCounts(
+      {.framebuffer_color = p.framebufferColorSampleCounts,
+       .framebuffer_depth = p.framebufferDepthSampleCounts,
+       .framebuffer_stencil = p.framebufferStencilSampleCounts,
+       .sampled_color = p.sampledImageColorSampleCounts,
+       .sampled_depth = p.sampledImageDepthSampleCounts,
+       .sampled_stencil = p.sampledImageStencilSampleCounts,
+       .debug_max_samples = REXCVAR_GET(ts4_native_debug_max_samples)});
+  REXLOG_INFO("native renderer: render targets can have {} samples{}",
+              SampleCountsText(limits.sample_counts),
+              REXCVAR_GET(ts4_native_debug_max_samples) ? " (capped by ts4_native_debug_max_samples)"
+                                                        : "");
   return limits;
 }
 
@@ -561,6 +585,12 @@ VkSampleCountFlagBits TargetSamples(uint32_t surface_info) {
   const uint32_t guest = uint32_t(GuestSamples(surface_info));
   const uint32_t samples = g.plan.SamplesFor(guest);
   g.msaa_raised = g.msaa_raised || samples > guest;
+  if (guest > 1 && g.plan.msaa > samples && g.msaa_fallback_logged != g.plan.msaa) {
+    REXLOG_WARN("native renderer: MSAA {}x is not supported for render targets on this GPU; "
+                "using {}x",
+                g.plan.msaa, samples);
+    g.msaa_fallback_logged = g.plan.msaa;
+  }
   return VkSampleCountFlagBits(samples);
 }
 

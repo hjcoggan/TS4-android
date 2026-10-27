@@ -111,9 +111,37 @@ constexpr double CasStrength(Sharpening sharpening) {
 struct DeviceLimits {
   uint32_t max_image_size = 16384;  // maxImageDimension2D and maxFramebufferWidth/Height
   float max_lod_bias = 2.0f;        // maxSamplerLodBias
-  // VkSampleCountFlags that colour, depth and stencil targets all support.
+  // VkSampleCountFlags a render target supports (TargetSampleCounts).
   uint32_t sample_counts = 1 | 2 | 4 | 8;
 };
+
+// The VkPhysicalDeviceLimits sample counts a render target's usage needs: every target is a
+// colour or depth-stencil attachment and is also sampled (resolves read it), so a count must be
+// in the framebuffer and the sampled-image limits of all three aspects. Vulkan guarantees only
+// 1 and 4 in each.
+struct TargetSampleLimits {
+  uint32_t framebuffer_color = 0;
+  uint32_t framebuffer_depth = 0;
+  uint32_t framebuffer_stencil = 0;
+  uint32_t sampled_color = 0;
+  uint32_t sampled_depth = 0;
+  uint32_t sampled_stencil = 0;
+  // ts4_native_debug_max_samples: counts above it are treated as unsupported (0 = no cap).
+  uint32_t debug_max_samples = 0;
+};
+
+// The VkSampleCountFlags a render target can have on the device (DeviceLimits::sample_counts).
+constexpr uint32_t TargetSampleCounts(const TargetSampleLimits& l) {
+  uint32_t counts = l.framebuffer_color & l.framebuffer_depth & l.framebuffer_stencil &
+                    l.sampled_color & l.sampled_depth & l.sampled_stencil;
+  if (l.debug_max_samples) {
+    // Keep each count at or below the cap (counts are single bits, so bit <= cap).
+    uint32_t below = 0;
+    for (uint32_t bit = 1; bit && bit <= l.debug_max_samples; bit <<= 1) below |= bit;
+    counts &= below;
+  }
+  return counts | 1;
+}
 
 struct Plan {
   uint32_t scale = 1;  // the Resolution scale every render target draws at

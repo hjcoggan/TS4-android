@@ -197,6 +197,44 @@ TEST_CASE("an MSAA count the device lacks falls back to the highest it has below
   CHECK(MakePlan(settings, 1280, 720, required_only).SamplesFor(2) == 4);
 }
 
+TEST_CASE("a target's sample counts are those it can be both drawn to and sampled at") {
+  // Render targets are colour or depth-stencil attachments and are also sampled (resolves).
+  constexpr uint32_t kAll = 1 | 2 | 4 | 8;
+  TargetSampleLimits limits = {.framebuffer_color = kAll, .framebuffer_depth = kAll,
+                               .framebuffer_stencil = kAll, .sampled_color = kAll,
+                               .sampled_depth = kAll, .sampled_stencil = kAll};
+  CHECK(TargetSampleCounts(limits) == kAll);
+  // A device that draws at 8x but samples colour only at up to 4x: 8x falls back to 4x.
+  TargetSampleLimits sampled_four = limits;
+  sampled_four.sampled_color = 1 | 2 | 4;
+  Settings settings;
+  settings.msaa = 8;
+  DeviceLimits device = kDesktop;
+  device.sample_counts = TargetSampleCounts(sampled_four);
+  CHECK(MakePlan(settings, 1280, 720, device).SamplesFor(2) == 4);
+  TargetSampleLimits stencil_four = limits;
+  stencil_four.sampled_stencil = 1 | 4;
+  CHECK(TargetSampleCounts(stencil_four) == (1 | 4));
+  TargetSampleLimits depth_four = limits;
+  depth_four.sampled_depth = 1 | 2 | 4;
+  CHECK(TargetSampleCounts(depth_four) == (1 | 2 | 4));
+}
+
+TEST_CASE("the debug sample cap drops every count above it") {
+  constexpr uint32_t kAll = 1 | 2 | 4 | 8;
+  TargetSampleLimits limits = {.framebuffer_color = kAll, .framebuffer_depth = kAll,
+                               .framebuffer_stencil = kAll, .sampled_color = kAll,
+                               .sampled_depth = kAll, .sampled_stencil = kAll};
+  limits.debug_max_samples = 4;
+  CHECK(TargetSampleCounts(limits) == (1 | 2 | 4));
+  limits.debug_max_samples = 2;
+  CHECK(TargetSampleCounts(limits) == (1 | 2));
+  limits.debug_max_samples = 0;  // the device's own
+  CHECK(TargetSampleCounts(limits) == kAll);
+  limits.debug_max_samples = 1;
+  CHECK(TargetSampleCounts(limits) == 1);
+}
+
 TEST_CASE("the MSAA setting parses, and an invalid one is Original") {
   CHECK(ParseSettings({.msaa = "4"}).msaa == 4);
   CHECK(ParseSettings({.msaa = "8"}).msaa == 8);

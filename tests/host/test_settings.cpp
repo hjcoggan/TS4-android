@@ -207,6 +207,8 @@ TEST_CASE("Image settings round-trip through the settings file, and a typo keeps
   REQUIRE(SaveSetting(path, "ts4_resolution_scale",
                       TomlLiteral(*FindSetting("ts4_resolution_scale"), "auto")));
   CHECK(Loaded(path).values.at("ts4_resolution_scale") == "auto");
+  REQUIRE(SaveSetting(path, "ts4_msaa", TomlLiteral(*FindSetting("ts4_msaa"), "8")));
+  CHECK(Loaded(path).values.at("ts4_msaa") == "8");
   WriteFile(path, "ts4_anisotropic_filtering = \"15\"\nts4_sharpening = \"hgih\"\n");
   Loaded typo(path);
   CHECK(typo.values.empty());
