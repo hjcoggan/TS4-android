@@ -140,6 +140,18 @@ TEST_CASE("the settings' values parse, and a value they do not allow is the defa
   CHECK(ParseSettings({.anisotropic_filtering = "original", .sharpening = "off"}).anisotropic_filtering == 0);
 }
 
+TEST_CASE("the settings whose value is not allowed are named, so the log can say they are ignored") {
+  CHECK(IgnoredSettings({}).empty());
+  CHECK(IgnoredSettings({.resolution_scale = "auto", .msaa = "8", .anisotropic_filtering = "16",
+                         .sharpening = "low"})
+            .empty());
+  CHECK(IgnoredSettings({.msaa = "2"}) == std::vector<std::string_view>{"ts4_msaa"});
+  CHECK(IgnoredSettings({.resolution_scale = "5", .sharpening = "hgih"}) ==
+        std::vector<std::string_view>{"ts4_resolution_scale", "ts4_sharpening"});
+  CHECK(IgnoredSettings({.anisotropic_filtering = "2"}) ==
+        std::vector<std::string_view>{"ts4_anisotropic_filtering"});
+}
+
 TEST_CASE("the Resolution scale parses, and an invalid one is 1x") {
   CHECK(ParseSettings({.resolution_scale = "3"}).resolution_scale == 3);
   CHECK(ParseSettings({.resolution_scale = "1"}).resolution_scale == 1);

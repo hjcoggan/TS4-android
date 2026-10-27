@@ -9,7 +9,7 @@
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
 - [x] At Original, neither Classic nor Native forces anisotropy
 - [x] Default frames on both renderers are compared with the Oracle once and match within the dual-run tolerance
-- [x] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
+- [ ] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
 - [x] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
 - [x] Unit tests cover the plan's anisotropy level and its clamp
 - [x] A change of the setting during a run reaches both renderers (observed in a run's log)
@@ -46,3 +46,6 @@
   - The strict dual judge passes at 1300 (16x on both renderers, mean FLIP 0.0193, the same as the 16x-from-start run) and 1600 (back to the default, 0.0166, the same as the default run), worst tile 0 at both. If only one renderer had changed, 1300 would differ as the default and 16x frames do. `native-1` logs the same lines up to its last frame, 1300.
   - The scene "fails" only on the report: Enhancements on that `--enhance` did not ask for, as it should. Finding, not fixed: the report's `ts4_anisotropic_filtering` is the value at the end of the session, not "on at any point" as `ts4_msaa` and Resolution scale are, so `dual-1` (which ended at original) lists it off. A parity run that switched filtering on and back off would not fail.
 
+- 2026-10-27 (Claude), QA re-review (box 3 and 4):
+  - Box 3 now has a verdict. The scene runner's tile rule (`judge_capture`, hot FLIP 0.5, 32 px tiles, at most 50 hot pixels) was applied to each renderer's presented frame 1300 at the defaults against Edge's `edge-practice-original/shot-040s.png` (client area). It passes for both renderers in both court crops: Classic floor 0 and baseline 0 worst-tile hot pixels; Native floor 0 and baseline 22. The full frame fails only in the tiles around x 544-640, y 608-672, where the player and the HUD prompt differ between the two runs. Script and output: `analysis/scenes/iq02/crop_verdict.py`, `crop_verdict.txt`.
+  - Box 4 is unticked again. No banners were in view, Native at 16x was not compared with Edge, and there is no saved config proving `anisotropic_override = 5` for `edge-practice-af16`. To close it: rerun Edge at 16x on the practice route (`edge.ps1` now saves `edge-config.toml`), and compare Native's presented 16x frame as well. Banners need a match view that Edge reaches reliably, or the owner agreeing to the baseline crop alone.

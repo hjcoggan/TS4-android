@@ -11,7 +11,9 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <span>
 #include <string_view>
+#include <vector>
 
 #include "native/guest_decode.h"
 
@@ -64,6 +66,35 @@ constexpr Settings ParseSettings(const SettingValues& values) {
     if (values.sharpening == kSharpening[i]) settings.sharpening = Sharpening(i);
   }
   return settings;
+}
+
+// The settings whose value is none the setting allows (a typo on the command line or in a
+// `set`), by cvar name: ParseSettings gives them their default, and the log says so.
+inline std::vector<std::string_view> IgnoredSettings(const SettingValues& values) {
+  // As settings/registry.h lists them.
+  static constexpr std::string_view kScale[] = {"1", "auto", "2", "3", "4"};
+  static constexpr std::string_view kMsaa[] = {"original", "4", "8"};
+  static constexpr std::string_view kFiltering[] = {"original", "4", "8", "16"};
+  static constexpr std::string_view kSharpening[] = {"off", "low", "medium", "high"};
+  struct Allowed {
+    std::string_view name;
+    std::string_view value;
+    std::span<const std::string_view> choices;
+  };
+  const Allowed settings[] = {
+      {"ts4_resolution_scale", values.resolution_scale, kScale},
+      {"ts4_msaa", values.msaa, kMsaa},
+      {"ts4_anisotropic_filtering", values.anisotropic_filtering, kFiltering},
+      {"ts4_sharpening", values.sharpening, kSharpening},
+  };
+  std::vector<std::string_view> ignored;
+  for (const Allowed& setting : settings) {
+    if (std::find(setting.choices.begin(), setting.choices.end(), setting.value) ==
+        setting.choices.end()) {
+      ignored.push_back(setting.name);
+    }
+  }
+  return ignored;
 }
 
 // The CAS strength of each sharpening level, tuned by eye (image-quality ticket 03).

@@ -227,6 +227,11 @@ void ScriptInputDriver::ParseLine(const std::string& line) {
       REXLOG_WARN("script input: set needs a setting and a value: '{}'", line);
       return;
     }
+    if (!set_) {
+      // Players 2-4 have no setter: settings are the session's, set from player 1's script.
+      REXLOG_WARN("script input: set works only in player 1's script; ignored: '{}'", line);
+      return;
+    }
     step.set.emplace(std::move(name), std::move(value));
     step.frames = 0;  // takes no time
     queue_.push_back(step);

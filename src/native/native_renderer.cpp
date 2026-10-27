@@ -110,6 +110,9 @@ REXCVAR_DEFINE_UINT64(ts4_native_trace_ps, 0, "TopSpin4",
                       "using this pixel shader hash");
 REXCVAR_DEFINE_UINT64(ts4_native_debug_skip_ps, 0, "TopSpin4",
                       "Native renderer debugging: skip draws using this pixel shader hash");
+REXCVAR_DEFINE_UINT32(ts4_native_debug_max_image_size, 0, "TopSpin4",
+                      "Native renderer debugging: treat the GPU's maximum image size as this "
+                      "(0 = the GPU's own), to see a Resolution scale clamped");
 REXCVAR_DEFINE_BOOL(ts4_native_dual_compare, false, "TopSpin4",
                     "Scene runs: Native draws every frame and writes its own dumps "
                     "(--ts4_native_dump_frames), while Classic still draws and presents, so "
@@ -500,13 +503,35 @@ struct State {
   uint64_t logged_waits = 0;
 } g;
 
-// The image settings as the cvars hold them now.
+// The image settings, parsed on the thread that sets their cvars (startup, then each change's
+// callback) and handed to the render thread here: a cvar's string is not safe to read while
+// another thread writes it.
+std::mutex g_image_settings_mutex;
+image_quality::Settings g_image_settings;
+
 image_quality::Settings ImageSettings() {
+  std::lock_guard lock(g_image_settings_mutex);
+  return g_image_settings;
+}
+
+// Parses the image settings' cvars into g_image_settings; call only on the thread that sets them.
+// A value no setting allows is logged as ignored: all of them at startup (changed empty), else
+// only the cvar that changed.
+void PublishImageSettings(std::string_view changed) {
   const std::string scale = REXCVAR_GET(ts4_resolution_scale);
   const std::string msaa = REXCVAR_GET(ts4_msaa);
   const std::string filtering = REXCVAR_GET(ts4_anisotropic_filtering);
   const std::string sharpening = REXCVAR_GET(ts4_sharpening);
-  return image_quality::ParseSettings({scale, msaa, filtering, sharpening});
+  const image_quality::SettingValues values = {scale, msaa, filtering, sharpening};
+  for (std::string_view name : image_quality::IgnoredSettings(values)) {
+    if (changed.empty() || name == changed) {
+      REXLOG_WARN("image quality: {} '{}' is not a value it allows; ignored, using the default",
+                  name, rex::cvar::GetFlagByName(name));
+    }
+  }
+  const image_quality::Settings settings = image_quality::ParseSettings(values);
+  std::lock_guard lock(g_image_settings_mutex);
+  g_image_settings = settings;
 }
 
 image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
@@ -514,6 +539,9 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
   image_quality::DeviceLimits limits;
   limits.max_image_size =
       std::min({p.maxImageDimension2D, p.maxFramebufferWidth, p.maxFramebufferHeight});
+  if (const uint32_t debug = REXCVAR_GET(ts4_native_debug_max_image_size)) {
+    limits.max_image_size = std::min(limits.max_image_size, debug);
+  }
   // Every device allows a bias of 2 (VkPhysicalDeviceLimits' required minimum).
   limits.max_lod_bias = 2.0f;
   limits.sample_counts = p.framebufferColorSampleCounts & p.framebufferDepthSampleCounts &
@@ -1048,6 +1076,19 @@ void ApplyResolutionScale() {
   g.height = 720 * g.scale;
 }
 
+// This frame's image-quality plan, taken between frames (and once at startup). An MSAA change is
+// logged here; the multisampled targets are made again with the new count as draws use them.
+void TakeImagePlan() {
+  const uint32_t msaa_before = g.plan.msaa;
+  g.plan = MakeImagePlan();
+  if (g.plan.msaa != msaa_before) {
+    REXLOG_INFO("native renderer: MSAA {} -> {} at frame {}",
+                msaa_before ? fmt::format("{}x", msaa_before) : std::string("original"),
+                g.plan.msaa ? fmt::format("{}x", g.plan.msaa) : std::string("original"), g.frame);
+  }
+  ApplyResolutionScale();
+}
+
 void BeginFrameIfNeeded() {
   if (g.recording) {
     return;
@@ -1069,8 +1110,7 @@ void BeginFrameIfNeeded() {
   if (g.frame >= kFramesInFlight) {
     DestroyRetired(g.frame - kFramesInFlight);
   }
-  g.plan = MakeImagePlan();
-  ApplyResolutionScale();
+  TakeImagePlan();
   textures::BeginFrame(g.frame, g.plan.texture_filtering, g.plan.lod_bias);
   if (g.frame % 300 == 0) {
     textures::EvictUnused(g.frame);
@@ -1698,6 +1738,10 @@ bool g_requested = false;
 // Whether CAS sharpening ran this session (Enhancement report).
 bool g_cas_applied = false;
 
+// Whether texture filtering was forced at some point this session (Enhancement report), so a
+// parity run that turns it on and off again still fails.
+std::atomic<bool> g_filtering_forced{false};
+
 void Request(bool native) { g_requested = native; }
 
 bool Requested() { return g_requested; }
@@ -1722,33 +1766,70 @@ void ApplyLiveSharpening() {
   REXLOG_INFO("image quality: CAS sharpening {} (live)", cas.enabled ? cas.sharpness : 0.0);
 }
 
+// Records whether the setting or a direct --anisotropic_override forces filtering now; called
+// where filtering is set (startup and each change, on the thread that sets the cvars).
+void NoteFiltering() {
+  if (image_quality::FilteringForced(
+          image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering,
+          rex::cvar::GetFlagByName("anisotropic_override"))) {
+    g_filtering_forced = true;
+  }
+}
+
 // Classic's texture filtering follows the setting, unless --anisotropic_override was given on
 // the command line or as an environment variable (a developer's choice wins).
 bool g_classic_filtering_owned = false;
 void ApplyClassicFiltering(bool live) {
-  if (!g_classic_filtering_owned) {
-    return;
+  if (g_classic_filtering_owned) {
+    const int32_t filtering =
+        image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering;
+    rex::cvar::SetFlagByName("anisotropic_override", fmt::format("{}", filtering));
+    REXLOG_INFO("image quality: anisotropic filtering {}{}",
+                filtering < 0 ? std::string("original (the game's own)")
+                              : fmt::format("{}x", 1u << (filtering - 1)),
+                live ? " (live)" : "");
   }
-  const int32_t filtering = image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering;
-  rex::cvar::SetFlagByName("anisotropic_override", fmt::format("{}", filtering));
-  REXLOG_INFO("image quality: anisotropic filtering {}{}",
-              filtering < 0 ? std::string("original (the game's own)")
-                            : fmt::format("{}x", 1u << (filtering - 1)),
-              live ? " (live)" : "");
+  // After anisotropic_override holds the setting's value (until then it holds the SDK's 4x).
+  NoteFiltering();
+}
+
+// On Classic: Resolution scale and MSAA are Native only, and a valid value other than the
+// original says so (an invalid one is already logged as ignored).
+void WarnNativeOnly(bool live) {
+  const image_quality::Settings settings = ImageSettings();
+  const char* when = live ? " (live)" : "";
+  if (settings.resolution_scale != 1) {
+    REXLOG_WARN("image quality: Resolution scale {} is unavailable on the Classic renderer "
+                "(Native only); drawing at 1x{}",
+                settings.resolution_scale == image_quality::kAutoScale
+                    ? std::string("auto")
+                    : fmt::format("{}x", settings.resolution_scale),
+                when);
+  }
+  if (settings.msaa != 0) {
+    REXLOG_WARN("image quality: MSAA {}x is unavailable on the Classic renderer (Native only); "
+                "drawing the game's own{}",
+                settings.msaa, when);
+  }
 }
 
 }  // namespace
 
 void ApplyImageSettings() {
-  if (!g_requested && REXCVAR_GET(ts4_resolution_scale) != "1") {
-    REXLOG_WARN("image quality: Resolution scale {} is unavailable on the Classic renderer "
-                "(Native only); drawing at 1x",
-                REXCVAR_GET(ts4_resolution_scale));
+  PublishImageSettings({});
+  // First, so the callbacks below and the render thread see the new value.
+  for (const char* name :
+       {"ts4_resolution_scale", "ts4_msaa", "ts4_anisotropic_filtering", "ts4_sharpening"}) {
+    rex::cvar::RegisterChangeCallback(
+        name, [](std::string_view changed, std::string_view) { PublishImageSettings(changed); });
   }
-  if (!g_requested && REXCVAR_GET(ts4_msaa) != "original") {
-    REXLOG_WARN("image quality: MSAA {} is unavailable on the Classic renderer (Native only); "
-                "drawing the game's own",
-                REXCVAR_GET(ts4_msaa));
+  if (!g_requested) {
+    WarnNativeOnly(false);
+    // A change while playing is just as unavailable (Native logs its own as it takes it).
+    for (const char* name : {"ts4_resolution_scale", "ts4_msaa"}) {
+      rex::cvar::RegisterChangeCallback(
+          name, [](std::string_view, std::string_view) { WarnNativeOnly(true); });
+    }
   }
   const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
   const std::string present_effect = rex::cvar::GetFlagByName("present_effect");
@@ -1831,8 +1912,7 @@ void Configure(rex::Runtime* runtime) {
   if (g.device) {
     g.limits = LimitsOf(*g.device);
   }
-  g.plan = MakeImagePlan();
-  ApplyResolutionScale();
+  TakeImagePlan();
   g.colour = REXCVAR_GET(ts4_native_color_mode) == 0 ? ColourMode::kOriginal
                                                       : ColourMode::kNatural;
   bool ok = g.device && InitializeContext(g.device, runtime->memory()) &&
@@ -1945,14 +2025,10 @@ struct Enhancement {
   bool (*on)();
 };
 constexpr std::array<Enhancement, 5> kEnhancements = {{
-    // Both renderers' (ApplyImageSettings). Filtering counts as on when the setting forces it or
-    // --anisotropic_override was given directly, which Classic takes over the setting.
-    {"ts4_anisotropic_filtering",
-     [] {
-       return image_quality::FilteringForced(
-           image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering,
-           rex::cvar::GetFlagByName("anisotropic_override"));
-     }},
+    // Both renderers' (ApplyImageSettings). Filtering counts as on when the setting forced it or
+    // --anisotropic_override was given directly, which Classic takes over the setting, at any
+    // point this session (NoteFiltering).
+    {"ts4_anisotropic_filtering", [] { return g_filtering_forced.load(); }},
     {"ts4_sharpening", [] { return g_cas_applied; }},
     {"ts4_native_color_mode",
      [] { return g.device != nullptr && g.colour == ColourMode::kNatural; }},
