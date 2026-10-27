@@ -12,6 +12,8 @@ Commands:
                               stages; the shaders' SPIR-V goes to vs-EID.txt and ps-EID.txt
   texture ID [--all-mips]     texel samples per mip and face, and PNGs of them
   rt EID                      the colour targets as they are after the draw, as PNGs
+  present                     the swapchain images written in the capture, as PNGs: the shown
+                              frame after the presenter's effect (CAS), which the dumps lack
   pixel ID X Y [MIP] [SLICE]  one texel's value
   history ID X Y              every event that wrote texel (X, Y): shader output and result
   actions FROM TO             every action between two events (passes, copies, dispatches with
@@ -289,8 +291,25 @@ def cmd_mesh(ctrl, textures, args):
             f"depth {z / w if w else 0:.7f}")
 
 
+def cmd_present(ctrl, textures, args):
+    """present: every swapchain image the capture wrote to, as it is after the last event, as
+    PNGs: the frame the window shows, after the presenter's effect (CAS, FSR). The frame dumps
+    (--ts4_dump_frames) are the presenter's input, before the effect."""
+    last = all_actions(ctrl.GetRootActions(), [])[-1].eventId
+    ctrl.SetFrameEvent(last, True)
+    for rid, t in textures.items():
+        if not t.creationFlags & rd.TextureCategory.SwapBuffer:
+            continue
+        used = [f"{u.eventId}:{str(u.usage).rsplit('.', 1)[-1]}" for u in ctrl.GetUsage(rid)]
+        say(f"swapchain image {fmt_tex(t)}: " + ", ".join(used))
+        if any(not u.endswith((":Present", ":Barrier")) for u in used):
+            path = os.path.join(OUT, f"present-{int(rid)}.png")
+            save_texture(ctrl, rid, 0, 0, path)
+            say(f"  -> {path}")
+
+
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
-            "history": cmd_history, "mesh": cmd_mesh,
+            "history": cmd_history, "mesh": cmd_mesh, "present": cmd_present,
             "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
 
 def succeeded(result):
