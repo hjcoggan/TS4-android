@@ -134,6 +134,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_settings.cpp
         tests/host/test_crash_report.cpp
         tests/host/test_pad_bindings.cpp
+        tests/host/test_script_input.cpp
         tests/native/test_debug_labels.cpp
         tests/native/test_draw_skips.cpp
         tests/native/test_fault_finder.cpp
@@ -161,6 +162,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/native/test_thread_budget.cpp
         tests/native/test_write_watch.cpp
         src/settings/settings_file.cpp
+        src/script_input.cpp
         # The Native renderer's pure code, as WWE All Stars' native tests build it.
         src/native/live_topup.cpp
         src/native/pipeline_parts.cpp

@@ -108,17 +108,18 @@ void ScriptInputDriver::ReadDuration(std::istream& in, Step& step) {
   }
 }
 
-void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> frames) {
+void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> frames,
+                        std::function<void(std::string, std::string)> set) {
   const std::filesystem::path file = REXCVAR_GET(ts4_input_script);
   if (file.empty()) {
     return;
   }
   // XInput, SDL and MnK stay out, so a real pad or keyboard cannot disturb a
   // scripted run. The script is the only non-synthetic device: ordinal 0, user 0.
-  config.input_factory = [file, frames](bool) -> std::unique_ptr<rex::system::IInputSystem> {
+  config.input_factory = [file, frames, set](bool) -> std::unique_ptr<rex::system::IInputSystem> {
     auto input = std::make_unique<InputSystem>(nullptr);
     auto driver = std::make_unique<ScriptInputDriver>(file, ScriptInputDriver::SteadyClock,
-                                                      frames);
+                                                      frames, ScriptInputDriver::kDevice, set);
     driver->Setup();
     input->AddDriver(std::move(driver));
     // Players 2-4 in order, so each pad's ordinal is its player's.
@@ -137,12 +138,13 @@ void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> fr
 }
 
 ScriptInputDriver::ScriptInputDriver(std::filesystem::path command_file, Clock clock,
-                                     FrameSource frames, DeviceId id)
+                                     FrameSource frames, DeviceId id, Setter set)
     : InputDriver(/*window=*/nullptr, /*window_z_order=*/0),
       file_(std::move(command_file)),
       id_(id),
       clock_(std::move(clock)),
-      frames_(std::move(frames)) {}
+      frames_(std::move(frames)),
+      set_(std::move(set)) {}
 
 std::chrono::milliseconds ScriptInputDriver::SteadyClock() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -219,6 +221,15 @@ void ScriptInputDriver::ParseLine(const std::string& line) {
     }
     step.at = true;
     queue_.push_back(step);
+  } else if (verb == "SET") {
+    std::string name, value;
+    if (!(in >> name >> value)) {
+      REXLOG_WARN("script input: set needs a setting and a value: '{}'", line);
+      return;
+    }
+    step.set.emplace(std::move(name), std::move(value));
+    step.frames = 0;  // takes no time
+    queue_.push_back(step);
   } else {
     REXLOG_WARN("script input: unknown command '{}'", line);
     return;
@@ -274,8 +285,8 @@ ScriptInputDriver::Step ScriptInputDriver::CurrentStep(uint32_t* packet) {
       current_ = queue_.front();
       queue_.pop_front();
       Start(now, frame);
-      // An `at` whose frame is past holds nothing: go straight on.
-      while (current_.at && Over(now, frame) && !queue_.empty()) {
+      // An `at` whose frame is past, or a `set`, holds nothing: go straight on.
+      while ((current_.at || current_.set) && Over(now, frame) && !queue_.empty()) {
         current_ = queue_.front();
         queue_.pop_front();
         Start(now, frame);
@@ -296,6 +307,9 @@ void ScriptInputDriver::Start(std::chrono::milliseconds now, uint64_t frame) {
   // not logged).
   if (!current_.source.empty()) {
     REXLOG_INFO("script input: frame {}: {}", frame, current_.source);
+  }
+  if (current_.set && set_) {
+    set_(current_.set->first, current_.set->second);
   }
 }
 

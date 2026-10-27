@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Image-quality plan prefactor)
 
-**Status:** ready-for-agent (one box open: a live change has not been observed)
+**Status:** ready-for-agent
 
 - [x] The setting loads from the settings file and the command line, and an invalid value falls back to Original
 - [x] At Original, neither Classic nor Native forces anisotropy
@@ -12,7 +12,7 @@
 - [x] At 16x, a court crop (far baseline and banners) is compared with Edge at `anisotropic_override = 5`
 - [x] The setting is listed in the session report's enhancements and in the scene runner's list, so a parity run with it on fails
 - [x] Unit tests cover the plan's anisotropy level and its clamp
-- [ ] A change of the setting during a run reaches both renderers (observed in a run's log)
+- [x] A change of the setting during a run reaches both renderers (observed in a run's log)
 
 ## Comments
 
@@ -37,3 +37,12 @@
 
   Classic against Native at the default: 0.64 / 0.022 (floor), 0.81 / 0.030 (baseline). Native's 16x presented frame was not taken: the scene runner's Native-only runs keep the defaults. The 16x dual frame is Classic's presented one, and Native at 16x is covered by the strict dual comparison above (worst tile 0). What 16x changes, per renderer: in the baseline crop, Classic default to 16x differs by a mean 1.24 / 0.033, Edge by 1.24 / 0.032 (the same size of change); Laplacian variance (high-pass energy) there rises 869 to 1022 (+18%) on Classic and 889 to 1011 (+14%) on Edge; in the floor crop 434 to 441 and 434 to 439 (about +1%). At the default, Native's presented frames are a little softer than Classic's (Laplacian variance 385 against 434 on the floor, 734 against 869 on the baseline), though the dual comparison against Classic's frame of the same run has zero hot tiles; a possible cause is not investigated. Banners are not in the practice ground's view, so the crops are floor and court lines only; a banner crop would need a match view. Script: not kept in the repo (an ad hoc numpy and `flip_map` comparison).
 - Live change: not observed. The input script grammar (`src/script_input.h`) has no verb that sets a cvar, and no earlier ticket or document records a way to change one during a run (the F6 overlay and PC SETTINGS page are UI), so no run changed the setting mid-run. What exists: `ApplyClassicFiltering` is registered as a change callback on `ts4_anisotropic_filtering` and logs "(live)"; `textures::BeginFrame` re-reads the plan every frame; `test_sampler_choice.cpp` shows a filtering change gives a new sampler key. Those are code and unit-test evidence only, which is why the live box stays open.
+- 2026-10-27 (Claude), live change observed. New tooling: a `set <cvar> <value>` command in the scripted pad's grammar (`src/script_input.h`/`.cpp`). It takes no time, and the app applies it on the UI thread through `rex::cvar::SetFlagByName`, so the change callbacks fire as they do for the settings page or the F6 overlay (`src/topspin4_app.h`; logs "script input: set X = Y", or "was rejected"). Tests: `tests/host/test_script_input.cpp` (applied at its frame, holds no pad state, needs a value). Build and `-Action Check` pass (270 test cases; pytest 88; launcher 53).
+- Run: `analysis/scenes/iq02/practice-ground-live.toml` (practice-ground.toml plus `at 1100` `set ts4_anisotropic_filtering 16` / `set ts4_sharpening high`, and `at 1450` back to `original` / `off`), `--runs 0 --native 1 --dual 1`, out `analysis/scenes/iq02/practice-ground-live/` (`../practice-ground-live.log`). `dual-1/runtime.log`:
+  - 740 `script input: frame 1100: set ts4_anisotropic_filtering 16`
+  - 743 `image quality: anisotropic filtering 16x (live)` (Classic: `anisotropic_override` set by the change callback)
+  - 747 `native renderer: texture filtering -1 -> 5 at frame 1100; samplers are rebuilt as draws need them`
+  - 755 `image quality: anisotropic filtering original (the game's own) (live)` and 759 `native renderer: texture filtering 5 -> -1 at frame 1450`
+  - The strict dual judge passes at 1300 (16x on both renderers, mean FLIP 0.0193, the same as the 16x-from-start run) and 1600 (back to the default, 0.0166, the same as the default run), worst tile 0 at both. If only one renderer had changed, 1300 would differ as the default and 16x frames do. `native-1` logs the same lines up to its last frame, 1300.
+  - The scene "fails" only on the report: Enhancements on that `--enhance` did not ask for, as it should. Finding, not fixed: the report's `ts4_anisotropic_filtering` is the value at the end of the session, not "on at any point" as `ts4_msaa` and Resolution scale are, so `dual-1` (which ended at original) lists it off. A parity run that switched filtering on and back off would not fail.
+
