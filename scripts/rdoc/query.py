@@ -275,21 +275,29 @@ def cmd_constants(ctrl, textures, args):
     shows as raw pointers; this follows the stage's pointer to the buffer that holds it."""
     import struct
     eid, stage = int(args[0]), args[1]
+    stages = {"vs": rd.ShaderStage.Vertex, "ps": rd.ShaderStage.Pixel}
+    if stage not in stages:
+        say(f"constants: stage must be vs or ps, not {stage!r}")
+        return
+    shader_stage = stages[stage]
     first, count = int(args[2]), int(args[3]) if len(args) > 3 else 1
     ctrl.SetFrameEvent(eid, True)
     pipe = ctrl.GetPipelineState()
-    refl = pipe.GetShaderReflection(rd.ShaderStage.Pixel)
+    refl = pipe.GetShaderReflection(shader_stage)
+    if refl is None:  # a depth-only pass binds no pixel shader
+        say(f"draw {eid}: no {stage} shader bound")
+        return
     pointers = None
     for i, cb in enumerate(refl.constantBlocks):
-        d = pipe.GetConstantBlock(rd.ShaderStage.Pixel, i, 0).descriptor
+        d = pipe.GetConstantBlock(shader_stage, i, 0).descriptor
         variables = ctrl.GetCBufferVariableContents(
-            pipe.GetGraphicsPipelineObject(), refl.resourceId, rd.ShaderStage.Pixel,
-            pipe.GetShaderEntryPoint(rd.ShaderStage.Pixel), i, d.resource, d.byteOffset,
+            pipe.GetGraphicsPipelineObject(), refl.resourceId, shader_stage,
+            pipe.GetShaderEntryPoint(shader_stage), i, d.resource, d.byteOffset,
             d.byteSize)
         if len(variables) >= 2 and variables[0].name == "_child0":
             pointers = [v.value.u64v[0] for v in variables]
     if pointers is None:
-        say(f"draw {eid}: no constant pointers in the pixel shader's blocks")
+        say(f"draw {eid}: no constant pointers in the {stage} shader's blocks")
         return
     address = pointers[0 if stage == "vs" else 1] + first * 16
     for b in ctrl.GetBuffers():

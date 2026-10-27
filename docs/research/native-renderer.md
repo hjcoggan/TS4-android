@@ -208,14 +208,15 @@ Captures of Exhibition frame 3600 on Native at 1x and at `--ts4_resolution_scale
 - **The shadow map is the 1040x1024 target.** Two depth-only passes draw into it, one per player
   (EIDs 655-948 at viewport 512,0 512x1024 and 1098-1247 at 0,0 512x1024). It is resolved
   (`resolve depth 1040x1024`, EID 1250) to a 1024x1024 R32_FLOAT texture, which the court and
-  player draws sample as `ShadowDepthMapPlayer` (`SharedConstants + 44`). 1040 is 13 EDRAM tiles
+  player draws sample as `ShadowDepthMapPlayer`. Its slot in SharedConstants differs per shader
+  (EID 5263's receiver reads it at +20), so find it per shader. 1040 is 13 EDRAM tiles
   of 80 pixels: the 1024-wide map padded to the tile width. The colour half of the same target is
   resolved to a 1024x1024 RGBA8 at EID 1311. At 2x the target is 2080x2048 and the textures are
   2048x2048. The 512x512 R32_FLOAT the court samples is not a resolve and stays 512x512.
-- **No converted shader has a fetch-instruction offset.** Every `tfetch*` call in the 493-shader
-  pack (`cache/shader-native/hlsl`) has offset (0, 0), and nothing calls `getWeights2D` or
-  `tfetch2DBicubic`. `patches/xenosrecomp/0007-texel-offsets-at-scale` therefore changes no
-  sample in this game. Only its heap-index mask (`& 0x1FFFFFFF`) is live, matching the bits
+- **No converted shader has a fetch-instruction offset.** Every `tfetch2D` call in the 493-shader
+  pack (`cache/shader-native/hlsl`) has offset (0, 0); only 2D fetches carry offsets in the
+  converter. Nothing calls `getWeights2D` or `tfetch2DBicubic`.
+  `patches/xenosrecomp/0007-texel-offsets-at-scale` therefore changes no sample in this pack. Only its heap-index mask (`& 0x1FFFFFFF`) is live, matching the bits
   `textures.cpp` sets. It stays as Edge's `draw_resolution_scaled_texture_offsets` behaviour for
   any shader added to the pack later.
 - **Blur and shadow taps are in UV, so they cover the same guest area at any scale.** No
