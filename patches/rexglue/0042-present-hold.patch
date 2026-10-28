@@ -1,0 +1,205 @@
+diff --git a/include/rex/ui/present_hold.h b/include/rex/ui/present_hold.h
+new file mode 100644
+index 0000000..e8b5309
+--- /dev/null
++++ b/include/rex/ui/present_hold.h
+@@ -0,0 +1,56 @@
++/**
++ * @file        ui/present_hold.h
++ * @brief       How long after the guest vblank to hold a finished frame before presenting it
++ *
++ * On a variable-refresh display (or the host clock) the display shows a frame when the present
++ * reaches it, and a present queued before the frame's GPU work is done reaches it when that work
++ * completes. Frames finishing a few milliseconds apart after the guest vblank were then shown a
++ * few milliseconds apart from the 60 Hz step: 8-14 % of display changes at 4x Resolution scale
++ * with 8x MSAA on a 360 Hz VRR display. The presenter instead waits for each frame's GPU work,
++ * then presents at a hold point after the guest vblank, the same for every frame: the 95th
++ * percentile of recent completion times plus a margin, between the paced present offset and the
++ * period less a millisecond. A frame finishing later still is presented as soon as it is done.
++ *
++ * @license     BSD 3-Clause License
++ *              See LICENSE file in the project root for full license text.
++ */
++#pragma once
++#include <algorithm>
++#include <array>
++#include <cstddef>
++#include <cstdint>
++
++namespace rex::ui::pacing {
++
++class PresentHold {
++ public:
++  // About 4 s of frames at 60 Hz, so the hold follows a scene getting lighter or heavier.
++  static constexpr size_t kWindow = 240;
++  static constexpr int64_t kMarginUs = 1000;
++  static constexpr int64_t kEndMarginUs = 1000;
++
++  // A frame's GPU work completed this long after its guest vblank.
++  void Completed(int64_t after_vblank_us) {
++    window_[next_] = after_vblank_us;
++    next_ = (next_ + 1) % kWindow;
++    count_ = std::min(count_ + 1, kWindow);
++  }
++
++  // The hold point after the guest vblank, in microseconds.
++  int64_t HoldUs(int64_t offset_us, int64_t period_us) const {
++    const int64_t latest = std::max(offset_us, period_us - kEndMarginUs);
++    if (count_ == 0) return std::min(offset_us, latest);
++    std::array<int64_t, kWindow> sorted;
++    std::copy_n(window_.begin(), count_, sorted.begin());
++    const size_t p95 = (count_ * 95) / 100;
++    std::nth_element(sorted.begin(), sorted.begin() + p95, sorted.begin() + count_);
++    return std::clamp(sorted[p95] + kMarginUs, offset_us, latest);
++  }
++
++ private:
++  std::array<int64_t, kWindow> window_{};
++  size_t next_ = 0;
++  size_t count_ = 0;
++};
++
++}  // namespace rex::ui::pacing
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index 087c912..9d5bc34 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -32,6 +32,7 @@
+ #include <rex/platform.h>
+ #include <rex/types.h>
+ #include <rex/ui/flags.h>
++#include <rex/ui/present_hold.h>
+ #include <rex/ui/present_waiter.h>
+ #include <rex/ui/surface.h>
+ #include <rex/ui/ui_drawer.h>
+@@ -754,6 +755,13 @@ class Presenter {
+   // For calling from the painting implementations if requested.
+   void ExecuteUIDrawersFromUIThread(UIDrawContext& ui_draw_context);
+ 
++  // The present hold (present_hold.h), for the painting implementation between submitting the
++  // paint and presenting it. HeldPresent returns false when this present is not held; otherwise
++  // the implementation waits for the paint's GPU work, calls PresentHoldCompleted, and presents
++  // no earlier than `until`.
++  bool HeldPresent(std::chrono::steady_clock::time_point& until) const;
++  void PresentHoldCompleted(std::chrono::steady_clock::time_point done);
++
+  private:
+   enum class PaintMode {
+     // Don't paint at all.
+@@ -1103,6 +1111,12 @@ class Presenter {
+   bool guest_output_pacing_skip_period_ = false;
+   bool guest_output_pacing_shutdown_ = false;
+   std::atomic<bool> guest_output_paced_frame_pending_{false};
++  // Present hold (present_hold.h): the guest vblank and hold point of the present being made by
++  // the pacing thread (until zero: not held), and the completion times seen.
++  mutable std::mutex present_hold_mutex_;
++  pacing::PresentHold present_hold_;
++  std::chrono::steady_clock::time_point present_hold_vblank_{};
++  std::chrono::steady_clock::time_point present_hold_until_{};
+   // steady_clock ticks when the pending frame was submitted, for the pacing log.
+   std::atomic<int64_t> guest_output_paced_frame_arrival_{0};
+   std::atomic<uint32_t> guest_output_paced_frames_replaced_{0};
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index 0e341cb..cb15536 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -123,6 +123,12 @@ REXCVAR_DEFINE_BOOL(present_pacing_thread_priority, true, "UI/Presenter",
+                     "Run the pacing thread in the MMCSS Games task (else at highest priority) and "
+                     "ask Windows for full-speed timers")
+     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
++REXCVAR_DEFINE_BOOL(present_hold, true, "UI/Presenter",
++                    "Where the display shows a frame as soon as it is presented (variable "
++                    "refresh, host clock): wait for each paced frame's GPU work, then present it "
++                    "at the same point after every guest vblank, so frames finishing at "
++                    "different times are still shown evenly. Costs a few ms of latency")
++    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+ REXCVAR_DEFINE_BOOL(present_repeat_held_vblanks, true, "UI/Presenter",
+                     "When a guest vblank brings no new frame and the guest vblank does not follow "
+                     "a fixed-refresh display (variable refresh, host clock), present the last "
+@@ -866,7 +872,20 @@ void Presenter::GuestOutputPacingThread() {
+     if (waiter) {
+       queue_wait = waiter->WaitForShown(0, period);
+     }
++    // Where the display shows a present as it arrives (variable refresh, host clock), present
++    // the frame once its GPU work is done, at the same point after every vblank (present_hold.h).
++    const bool hold = display_every == 0 && REXCVAR_GET(present_hold);
++    if (hold) {
++      const Clock::time_point frame_vblank = target - offset;
++      std::lock_guard hold_lock(present_hold_mutex_);
++      present_hold_vblank_ = frame_vblank;
++      present_hold_until_ =
++          frame_vblank + std::chrono::microseconds(present_hold_.HoldUs(us(offset), us(period)));    }
+     PresentLatestGuestOutput();
++    if (hold) {
++      std::lock_guard hold_lock(present_hold_mutex_);
++      present_hold_until_ = {};
++    }
+     const Clock::time_point presented = Clock::now();
+     std::optional<pacing::PresentWaiter::Shown> shown;
+     if (waiter) {
+@@ -968,6 +987,21 @@ void Presenter::GuestOutputPacingThread() {
+   }
+ }
+ 
++bool Presenter::HeldPresent(std::chrono::steady_clock::time_point& until) const {
++  std::lock_guard lock(present_hold_mutex_);
++  until = present_hold_until_;
++  return until != std::chrono::steady_clock::time_point{};
++}
++
++void Presenter::PresentHoldCompleted(std::chrono::steady_clock::time_point done) {
++  std::lock_guard lock(present_hold_mutex_);
++  if (present_hold_until_ == std::chrono::steady_clock::time_point{}) {
++    return;
++  }
++  present_hold_.Completed(
++      std::chrono::duration_cast<std::chrono::microseconds>(done - present_hold_vblank_).count());
++}
++
+ void Presenter::PresentLatestGuestOutput() {
+   // Trigger the presentation on the host.
+   PaintResult paint_result = PaintResult::kNotPresented;
+diff --git a/src/ui/vulkan/vulkan_presenter.cpp b/src/ui/vulkan/vulkan_presenter.cpp
+index 5c361f2..8b443ae 100644
+--- a/src/ui/vulkan/vulkan_presenter.cpp
++++ b/src/ui/vulkan/vulkan_presenter.cpp
+@@ -17,6 +17,7 @@
+ #include <cstring>
+ #include <memory>
+ #include <utility>
++#include <thread>
+ #include <vector>
+ 
+ #include <rex/assert.h>
+@@ -24,6 +25,8 @@
+ #include <rex/logging.h>
+ #include <rex/math.h>
+ #include <rex/platform.h>
++#include <rex/thread.h>
++#include <rex/ui/present_pacing.h>
+ #include <rex/ui/vulkan/presenter.h>
+ #include <rex/ui/vulkan/util.h>
+ 
+@@ -2635,6 +2638,22 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+     }
+   }
+ 
++  // The present hold (present_hold.h): the display shows this present as it arrives, so present
++  // it once the paint (queued after the frame's GPU work) is done, and no earlier than the hold.
++  if (std::chrono::steady_clock::time_point until; HeldPresent(until)) {
++    const uint64_t painted = paint_context_.submission_tracker.GetCurrentSubmission() - 1;
++    if (paint_context_.submission_tracker.AwaitSubmissionCompletion(painted)) {
++      PresentHoldCompleted(std::chrono::steady_clock::now());
++      pacing::SleepThenSpin(
++          until, std::chrono::steady_clock::duration(std::chrono::microseconds(1000)),
++          [] { return std::chrono::steady_clock::now(); },
++          [](std::chrono::steady_clock::duration d) {
++            rex::thread::PreciseSleep(std::chrono::duration_cast<std::chrono::microseconds>(d));
++          },
++          [] { std::this_thread::yield(); });
++    }
++  }
++
+   VkPresentInfoKHR present_info;
+   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+   present_info.pNext = nullptr;
