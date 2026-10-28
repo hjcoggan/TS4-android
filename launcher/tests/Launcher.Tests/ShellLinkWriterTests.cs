@@ -13,7 +13,7 @@ public sealed class ShellLinkWriterTests : IDisposable
     private static string[] ReadBack(string link)
     {
         var script = $"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{link}'); " +
-                     "$s.TargetPath; '[' + $s.Arguments + ']'; $s.WorkingDirectory";
+                     "$s.TargetPath; '[' + $s.Arguments + ']'; $s.WorkingDirectory; $s.IconLocation";
         var start = new ProcessStartInfo("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script])
         {
             RedirectStandardOutput = true,
@@ -34,8 +34,25 @@ public sealed class ShellLinkWriterTests : IDisposable
         File.WriteAllText(exe, "exe");
         var link = Path.Combine(_root, "Top Spin 4.lnk");
 
-        new ShellLinkWriter().Write(link, exe, "", Path.GetDirectoryName(exe)!);
+        new ShellLinkWriter().Write(link, exe, "", Path.GetDirectoryName(exe)!, exe);
 
-        Assert.Equal([exe, "[]", Path.GetDirectoryName(exe)!], ReadBack(link));
+        Assert.Equal([exe, "[]", Path.GetDirectoryName(exe)!, exe + ",0"], ReadBack(link));
+    }
+
+    [Fact]
+    public void A_written_shortcut_shows_the_icon_it_was_given()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Shortcuts are written through the Windows shell.");
+        var exe = Path.Combine(_root, "game", "topspin4.exe");
+        var ico = Path.Combine(_root, "art", "topspin4.ico");
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(ico)!);
+        File.WriteAllText(exe, "exe");
+        File.WriteAllBytes(ico, [0, 0, 1, 0, 0, 0]);
+        var link = Path.Combine(_root, "Top Spin 4.lnk");
+
+        new ShellLinkWriter().Write(link, exe, "", Path.GetDirectoryName(exe)!, ico);
+
+        Assert.Equal(ico + ",0", ReadBack(link)[3]);
     }
 }

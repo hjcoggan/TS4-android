@@ -23,7 +23,7 @@
     <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
       <StackPanel Spacing="8">
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource BallBrush}" Text="1" />
+          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentTextBrush}" Text="1" />
           <TextBlock FontSize="24" FontWeight="Bold" Foreground="White" Text="Disc" />
         </StackPanel>
         <TextBlock Classes="small" TextAlignment="Left"
@@ -41,7 +41,7 @@
     <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
       <StackPanel Spacing="8">
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource BallBrush}" Text="2" />
+          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentTextBrush}" Text="2" />
           <TextBlock FontSize="24" FontWeight="Bold" Foreground="White" Text="Title Update 1" />
         </StackPanel>
         <TextBlock Classes="small" TextAlignment="Left"

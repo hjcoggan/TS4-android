@@ -6,13 +6,15 @@ namespace TopSpin4.Launcher.Core;
 /// </summary>
 public interface IShortcutWriter
 {
-    void Write(string linkPath, string target, string arguments, string workingDirectory);
+    /// <param name="iconPath">The file the shortcut's icon comes from (an <c>.ico</c> or the exe).</param>
+    void Write(string linkPath, string target, string arguments, string workingDirectory, string iconPath);
 }
 
 /// <summary>
 /// The Direct shortcut: "Top Spin 4" on the Desktop and in the Start menu, running the game exe
 /// with no arguments from its own folder, so the game reads the saved Settings file and finds its
-/// prepared data itself (src/user_paths.h), or opens the Launcher when setup is missing.
+/// prepared data itself (src/user_paths.h), or opens the Launcher when setup is missing. Its icon is
+/// the title icon the Disc art module wrote beside the art, and the exe's own icon without it.
 /// </summary>
 public sealed class DirectShortcut(IShortcutWriter writer, IEnumerable<string> folders)
 {
@@ -24,11 +26,13 @@ public sealed class DirectShortcut(IShortcutWriter writer, IEnumerable<string> f
     /// <summary>
     /// Creates the shortcut in each folder, replacing the one already there, and returns the files
     /// written. A folder that can't be written to does not stop the others; the failures are
-    /// reported together once the rest are done.
+    /// reported together once the rest are done. <paramref name="artIcon"/> is the art folder's
+    /// <c>.ico</c> (<see cref="DiscArtFolder.IconPath"/>); a null or missing one leaves the exe's icon.
     /// </summary>
-    public IReadOnlyList<string> Create(string gameExe)
+    public IReadOnlyList<string> Create(string gameExe, string? artIcon = null)
     {
         var target = Path.GetFullPath(gameExe);
+        var icon = artIcon is not null && File.Exists(artIcon) ? Path.GetFullPath(artIcon) : target;
         var workingDirectory = Path.GetDirectoryName(target)!;
         List<string> created = [];
         List<string> failures = [];
@@ -40,7 +44,7 @@ public sealed class DirectShortcut(IShortcutWriter writer, IEnumerable<string> f
             try
             {
                 Directory.CreateDirectory(folder);
-                writer.Write(staged, target, "", workingDirectory);
+                writer.Write(staged, target, "", workingDirectory, icon);
                 File.Move(staged, link, overwrite: true);
                 created.Add(link);
             }

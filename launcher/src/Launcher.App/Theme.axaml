@@ -1,8 +1,11 @@
 <!--
   The Launcher's look: bold condensed display type (Anton) and condensed body type (Barlow
   Condensed), both bundled under the SIL Open Font License; ball yellow and court blue on a dark
-  base. No game art. Every button shows a thick focus outline, because the Launcher is
-  driven by a pad as much as by a mouse.
+  base. This is the original look, and it holds no game art. When the player's art folder has
+  the Top Spin 4 art, LauncherLook sets the colour of each brush below to the art palette
+  (ThemePalette.Art in Launcher.Core) and the window shows the pictures; the brushes are
+  changed in place, so every StaticResource below follows. Every button shows a thick focus
+  outline, because the Launcher is driven by a pad as much as by a mouse.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -10,16 +13,23 @@
     <FontFamily x:Key="DisplayFont">avares://topspin4-launcher/Assets/Fonts#Anton</FontFamily>
     <FontFamily x:Key="BodyFont">avares://topspin4-launcher/Assets/Fonts#Barlow Condensed</FontFamily>
 
-    <Color x:Key="Navy">#0A1220</Color>
+    <!-- Keep these values equal to ThemePalette.Original: a test holds that palette to 4.5:1 text contrast. -->
     <SolidColorBrush x:Key="BaseBrush" Color="#0A1220" />
+    <!-- Under text when a picture is behind the page; clear in the original look. -->
+    <SolidColorBrush x:Key="ScrimBrush" Color="#00000000" />
+    <SolidColorBrush x:Key="DimBrush" Color="#00000000" />
     <SolidColorBrush x:Key="PanelBrush" Color="#142038" />
     <SolidColorBrush x:Key="BallBrush" Color="#D7E44A" />
     <SolidColorBrush x:Key="BallHotBrush" Color="#EAF56E" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#D7E44A" />
     <SolidColorBrush x:Key="CourtBrush" Color="#2A6FDB" />
     <SolidColorBrush x:Key="SkyBrush" Color="#8CB4FF" />
     <SolidColorBrush x:Key="TextBrush" Color="#E6ECFF" />
     <SolidColorBrush x:Key="MutedBrush" Color="#9AA8D0" />
     <SolidColorBrush x:Key="ErrorBrush" Color="#FF8A7A" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#0A1220" />
+    <SolidColorBrush x:Key="SecondaryFillBrush" Color="#33203055" />
+    <SolidColorBrush x:Key="SecondaryBorderBrush" Color="#4A6BC4" />
   </Styles.Resources>
 
   <Style Selector="Window">
@@ -81,30 +91,29 @@
   <!-- The big button: Play, and Set up. -->
   <Style Selector="Button.play">
     <Setter Property="Background" Value="{StaticResource BallBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource Navy}" />
+    <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="Padding" Value="64,4,64,8" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="CornerRadius" Value="3" />
-    <Setter Property="BorderBrush" Value="{StaticResource Navy}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BaseBrush}" />
     <Setter Property="BorderThickness" Value="3" />
   </Style>
   <Style Selector="Button.play:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource BallHotBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource Navy}" />
+    <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
   </Style>
   <Style Selector="Button.play:disabled /template/ ContentPresenter">
-    <Setter Property="Background" Value="#4A4E2A" />
-    <Setter Property="Foreground" Value="#2A2A2A" />
+    <Setter Property="Opacity" Value="0.45" />
   </Style>
 
   <!-- Smaller actions. -->
   <Style Selector="Button.secondary">
-    <Setter Property="Background" Value="#33203055" />
+    <Setter Property="Background" Value="{StaticResource SecondaryFillBrush}" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-    <Setter Property="BorderBrush" Value="#4A6BC4" />
+    <Setter Property="BorderBrush" Value="{StaticResource SecondaryBorderBrush}" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="FontSize" Value="19" />
     <Setter Property="FontWeight" Value="Bold" />

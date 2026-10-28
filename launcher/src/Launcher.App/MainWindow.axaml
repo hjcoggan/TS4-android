@@ -5,19 +5,40 @@
         Width="1100" Height="680" MinWidth="720" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BaseBrush}">
-  <Grid RowDefinitions="*,Auto">
-    <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14"
-                  Width="760" Margin="0,24">
-        <TextBlock Classes="display" Text="TOP SPIN 4" HorizontalAlignment="Center" FontSize="72"
-                   LetterSpacing="4" Foreground="{StaticResource BallBrush}" />
-        <TextBlock Classes="kicker" Text="RECOMP" HorizontalAlignment="Center" Margin="0,-10,0,8" />
+  <Grid>
+    <!-- The player's art, when the art folder has it (MainWindow.ApplyTheme): the page's picture, quietened on Setup and Settings. -->
+    <Image x:Name="BackgroundImage" Stretch="UniformToFill" IsVisible="False" IsHitTestVisible="False" />
+    <Border x:Name="DimLayer" Background="{StaticResource DimBrush}" IsVisible="False" IsHitTestVisible="False" />
 
-        <!-- One page at a time: Setup, Home or Settings (LauncherShell). Added by the code behind. -->
-        <Panel x:Name="PageHost" />
-      </StackPanel>
-    </ScrollViewer>
+    <Grid RowDefinitions="*,Auto">
+      <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
+        <!-- The scrim under every page's text: clear in the original look, dark over a picture, so text never sits on the art. -->
+        <Border x:Name="ContentScrim" Background="{StaticResource ScrimBrush}" CornerRadius="8" Padding="20,18"
+                MaxWidth="800" Margin="16,24" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+          <StackPanel Spacing="14">
+            <!-- The title: the logo from the player's disc when there is one, else the title text. -->
+            <StackPanel x:Name="TitleText" Spacing="14">
+              <TextBlock Classes="display" Text="TOP SPIN 4" HorizontalAlignment="Center" FontSize="72"
+                         LetterSpacing="4" Foreground="{StaticResource AccentTextBrush}" />
+              <TextBlock Classes="kicker" Text="RECOMP" HorizontalAlignment="Center" Margin="0,-10,0,8" />
+            </StackPanel>
+            <StackPanel x:Name="LogoBlock" Spacing="6" IsVisible="False">
+              <Image x:Name="LogoImage" Stretch="Uniform" HorizontalAlignment="Center" Height="110" />
+              <TextBlock x:Name="LogoKicker" Classes="kicker" Text="RECOMP" HorizontalAlignment="Center" Margin="0,0,0,6" />
+            </StackPanel>
 
-    <TextBlock x:Name="HintText" Grid.Row="1" Classes="small" HorizontalAlignment="Center" Margin="0,0,0,14" />
+            <!-- One page at a time: Setup, Home or Settings (LauncherShell). Added by the code behind. -->
+            <Panel x:Name="PageHost" />
+          </StackPanel>
+        </Border>
+      </ScrollViewer>
+
+      <Border Grid.Row="1" Background="{StaticResource ScrimBrush}" Padding="12,8,12,10">
+        <StackPanel Spacing="4">
+          <TextBlock x:Name="HintText" Classes="small" HorizontalAlignment="Center" />
+          <TextBlock x:Name="CreditText" Classes="small" HorizontalAlignment="Center" TextAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
   </Grid>
 </Window>

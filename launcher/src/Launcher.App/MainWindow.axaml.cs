@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media.Imaging;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using TopSpin4.Launcher.Core;
@@ -39,6 +40,10 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _padTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private LauncherPage? _shownPage;
     private bool _padHeldForBinding;
+    private readonly string _artFolder;
+    private LauncherTheme? _theme;
+    private Bitmap? _homeBackground, _setupBackground, _logo, _boxArt;
+    private (RowState Disc, SetupPhase Phase)? _themeKey;
 
     public MainWindow()
     {
@@ -55,8 +60,10 @@ public partial class MainWindow : Window
         _home = new HomeModel(preparation, _gameExe);
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
         // The disc row reads the disc's art the moment it accepts the disc; the art folder sits beside the settings.
-        var artFolder = Path.Combine(userRoot, DiscArt.FolderName);
-        _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, artFolder, Log));
+        _artFolder = Path.Combine(userRoot, DiscArt.FolderName);
+        // Once the disc is extracted (and at each start) the art is read again from there if the art folder is missing or incomplete.
+        _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, _artFolder, Log),
+            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log));
         _shell = new LauncherShell(_flow);
 
         _setupPage = new SetupPage(_flow);
@@ -77,7 +84,21 @@ public partial class MainWindow : Window
         _homePage.ActionPressed += async action => await OnHomeAction(action);
         _settingsPage.BackPressed += _shell.Back;
         // The exe or the prepared folders may change while the window is open; look again when it is used.
-        Activated += (_, _) => Refresh();
+        Activated += (_, _) =>
+        {
+            ReloadTheme();
+            Refresh();
+        };
+
+        // The look starts from whatever the art folder holds. If the folder is missing or incomplete the art is read again
+        // from the prepared disc folder in the background (never failing the start), and the look follows when it is done.
+        ReloadTheme();
+        Opened += async (_, _) =>
+        {
+            await Task.Run(_flow.RefreshArt);
+            ReloadTheme();
+            Refresh();
+        };
 
         // The game started without setup done: the setup page says why (or the home page, if this Launcher finds the files).
         if (App.Options.NotSetUp is { } reason) Say(NotSetUp.Describe(reason));
@@ -181,7 +202,7 @@ public partial class MainWindow : Window
         {
             var shortcut = new DirectShortcut(new ShellLinkWriter(),
                 [Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.Programs)]);
-            shortcut.Create(_gameExe);
+            shortcut.Create(_gameExe, DiscArtFolder.Open(_artFolder).IconPath);
             _home.Say("Created the Top Spin 4 shortcut on your Desktop and in the Start menu. It starts the game with your saved settings.");
         }
         catch (IOException error)
@@ -270,10 +291,52 @@ public partial class MainWindow : Window
         Refresh();
     }
 
+    // Reads the art folder again and, if what it holds changed, redraws in the new look: the player's art where the folder
+    // has it, the original look's own resource where it does not. A picture that cannot be read counts as missing.
+    private void ReloadTheme()
+    {
+        var theme = LauncherTheme.From(DiscArtFolder.Open(_artFolder));
+        if (_theme is not null && theme.SameLookAs(_theme)) return;
+        var old = new[] { _homeBackground, _setupBackground, _logo, _boxArt };
+        _homeBackground = LauncherLook.Load(theme.Source(ThemeImage.HomeBackground), Log);
+        _setupBackground = LauncherLook.Load(theme.Source(ThemeImage.SetupBackground), Log);
+        _logo = LauncherLook.Load(theme.Source(ThemeImage.Logo), Log);
+        _boxArt = LauncherLook.Load(theme.Source(ThemeImage.BoxArt), Log);
+        _theme = theme;
+        // The picture that failed to load is missing, so its colours are the original look's too: decide from what is on screen.
+        var showsArt = _homeBackground is not null || _setupBackground is not null || _logo is not null || _boxArt is not null;
+        LauncherLook.Apply(showsArt ? theme.Palette : ThemePalette.Original);
+        Icon = LauncherLook.Icon(theme.Source(ThemeImage.WindowIcon), Log);
+        CreditText.Text = showsArt ? theme.CreditLine : LauncherTheme.Original.CreditLine;
+        _homePage.ShowBoxArt(_boxArt);
+        LogoImage.Source = _logo;
+        ShowPageLook(_shell.Page);
+        foreach (var bitmap in old) bitmap?.Dispose();
+    }
+
+    // The picture behind the page, and the header: the logo (large on Home, small elsewhere) or the title text.
+    private void ShowPageLook(LauncherPage page)
+    {
+        var background = page == LauncherPage.Home ? _homeBackground : _setupBackground;
+        BackgroundImage.Source = background;
+        BackgroundImage.IsVisible = background is not null;
+        DimLayer.IsVisible = background is not null && page != LauncherPage.Home;
+        LogoBlock.IsVisible = _logo is not null;
+        TitleText.IsVisible = _logo is null;
+        LogoImage.Height = page == LauncherPage.Home ? 110 : 52;
+    }
+
     // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.
     private void Refresh()
     {
         var page = _shell.Page;
+        // The art arrives with the disc row's accept and when setup finishes; look again at those moments.
+        if (_themeKey != (_flow.Disc.State, _flow.Phase))
+        {
+            _themeKey = (_flow.Disc.State, _flow.Phase);
+            ReloadTheme();
+        }
+        ShowPageLook(page);
         _setupPage.IsVisible = page == LauncherPage.Setup;
         _homePage.IsVisible = page == LauncherPage.Home;
         _settingsPage.IsVisible = page == LauncherPage.Settings;

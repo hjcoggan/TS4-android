@@ -64,6 +64,24 @@ public static class DiscArt
         return Run(source, discFolder, artFolder, log);
     }
 
+    /// <summary>
+    /// Reads the art from the prepared disc folder again when <paramref name="artFolder"/> is missing or incomplete
+    /// (<see cref="DiscArtFolder.IsComplete"/>), and does nothing, returning null, when it is complete. It never
+    /// throws: whatever stops it is logged, so neither setup nor a start can fail on the art.
+    /// </summary>
+    public static DiscArtResult? RestoreFromFolder(string discFolder, string artFolder, Action<string>? log = null)
+    {
+        if (DiscArtFolder.Open(artFolder).IsComplete) return null;
+        try
+        {
+            return FromFolder(discFolder, artFolder, log);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return Failed(log, $"Disc art: could not read the art from {discFolder}: {error.Message}");
+        }
+    }
+
     private static DiscArtResult Failed(Action<string>? log, string problem)
     {
         log?.Invoke(problem);

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using TopSpin4.Launcher.Core;
 
 namespace TopSpin4.Launcher.Pages;
@@ -26,6 +27,13 @@ public partial class HomePage : UserControl
 
     public event Action? PlayPressed;
     public event Action<HomeAction>? ActionPressed;
+
+    /// <summary>The box art beside PLAY; null takes the card away and leaves PLAY centred, the original look.</summary>
+    public void ShowBoxArt(IImage? image)
+    {
+        BoxArtImage.Source = image;
+        BoxArtFrame.IsVisible = image is not null;
+    }
 
     public Control EntryControl => PlayButton.IsEnabled ? PlayButton : _buttons[_home.Actions[0]];
 

@@ -13,11 +13,20 @@
       </Style>
       <Style Selector="Button.attention:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{StaticResource SkyBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource Navy}" />
+        <Setter Property="Foreground" Value="{StaticResource BaseBrush}" />
       </Style>
     </StackPanel.Styles>
-    <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
-    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" AutomationProperties.LiveSetting="Polite" />
+    <!-- The box art sits beside PLAY when the player's art folder has it; without it the column is empty and PLAY stays centred. -->
+    <Grid ColumnDefinitions="Auto,*">
+      <Border x:Name="BoxArtFrame" Grid.Column="0" IsVisible="False" Width="280" CornerRadius="4" ClipToBounds="True"
+              VerticalAlignment="Center" Margin="0,0,24,0">
+        <Image x:Name="BoxArtImage" Stretch="Uniform" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="18" VerticalAlignment="Center">
+        <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
+        <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" AutomationProperties.LiveSetting="Polite" />
+      </StackPanel>
+    </Grid>
     <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Left" IsVisible="False" AutomationProperties.LiveSetting="Assertive" />
     <!-- Safe start moves here after a GPU failure or a crash. -->
     <StackPanel x:Name="ProminentHost" HorizontalAlignment="Center" />

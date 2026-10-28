@@ -15,11 +15,11 @@ public sealed class DirectShortcutTests : IDisposable
     // Writes a file the way a real shortcut writer does, and refuses to add a second one beside it.
     private sealed class FileWriter : IShortcutWriter
     {
-        public List<(string LinkPath, string Target, string Arguments, string WorkingDirectory)> Calls { get; } = [];
+        public List<(string LinkPath, string Target, string Arguments, string WorkingDirectory, string IconPath)> Calls { get; } = [];
 
-        public void Write(string linkPath, string target, string arguments, string workingDirectory)
+        public void Write(string linkPath, string target, string arguments, string workingDirectory, string iconPath)
         {
-            Calls.Add((linkPath, target, arguments, workingDirectory));
+            Calls.Add((linkPath, target, arguments, workingDirectory, iconPath));
             if (File.Exists(linkPath)) throw new IOException("A shortcut was already there: " + linkPath);
             File.WriteAllText(linkPath, target);
         }
@@ -71,10 +71,47 @@ public sealed class DirectShortcutTests : IDisposable
         Assert.Equal(4, writer.Calls.Count);
     }
 
+    [Fact]
+    public void The_icon_is_the_ico_in_the_art_folder_when_it_exists()
+    {
+        var ico = Path.Combine(_root, "art", DiscArtFolder.IconFileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(ico)!);
+        File.WriteAllBytes(ico, [0, 0, 1, 0, 0, 0]);
+        var writer = new FileWriter();
+
+        Shortcut(writer).Create(GameExe, ico);
+
+        Assert.Equal(2, writer.Calls.Count);
+        Assert.All(writer.Calls, call => Assert.Equal(Path.GetFullPath(ico), call.IconPath));
+        Assert.All(writer.Calls, call => Assert.Equal(Path.GetFullPath(GameExe), call.Target));
+    }
+
+    [Fact]
+    public void The_icon_is_the_exe_when_the_art_folder_has_no_ico()
+    {
+        var missing = Path.Combine(_root, "art", DiscArtFolder.IconFileName);
+        var writer = new FileWriter();
+
+        Shortcut(writer).Create(GameExe, missing);
+
+        Assert.All(writer.Calls, call => Assert.Equal(Path.GetFullPath(GameExe), call.IconPath));
+    }
+
+    [Fact]
+    public void The_icon_is_the_exe_when_there_is_no_art_at_all()
+    {
+        var writer = new FileWriter();
+
+        Shortcut(writer).Create(GameExe, null);
+        Shortcut(writer).Create(GameExe);
+
+        Assert.All(writer.Calls, call => Assert.Equal(Path.GetFullPath(GameExe), call.IconPath));
+    }
+
     // Fails the way a locked or full folder does, after the shell has been asked to write.
     private sealed class FailingWriter : IShortcutWriter
     {
-        public void Write(string linkPath, string target, string arguments, string workingDirectory) =>
+        public void Write(string linkPath, string target, string arguments, string workingDirectory, string iconPath) =>
             throw new IOException("The disk is full.");
     }
 

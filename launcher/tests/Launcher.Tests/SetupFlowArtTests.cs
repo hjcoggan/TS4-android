@@ -20,11 +20,24 @@ public sealed class SetupFlowArtTests : IDisposable
 
     private string ArtFolder => Path.Combine(_root, "user", DiscArt.FolderName);
 
-    private SetupFlow Flow(Action<string>? discArt)
+    private SetupFlow Flow(Action<string>? discArt, Action<string>? preparedArt = null)
     {
         var preparation = new Preparation(Path.Combine(_root, "cache"), FileManifest.Parse(_disc.ManifestText()),
             FileManifest.Parse(TestTitleUpdate.ManifestText()), new FakeDiskSpace(), _time);
-        return new SetupFlow(preparation, _time, _log.Add, discArt);
+        return new SetupFlow(preparation, _time, _log.Add, discArt, preparedArt);
+    }
+
+    private string WriteTu() =>
+        TestTitleUpdate.Package().WriteTo(Path.Combine(_root, "input", "TU_1A5822P_000000C000000.0000000000083"));
+
+    private async Task<SetupFlow> PreparedFlow(Action<string>? discArt, Action<string>? preparedArt)
+    {
+        var flow = Flow(discArt, preparedArt);
+        await flow.ChooseDisc(WriteDisc());
+        await flow.ChooseTitleUpdate(WriteTu());
+        await flow.PrepareAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        return flow;
     }
 
     private string WriteDisc(TestDisc? disc = null)
@@ -115,5 +128,71 @@ public sealed class SetupFlowArtTests : IDisposable
         await flow.ChooseDisc(path);
 
         Assert.Equal([path], asked);
+    }
+
+    // Setup read the art from the .iso when the disc was chosen; once the disc is extracted it is read again from there if that left the folder incomplete.
+    [Fact]
+    public async Task After_setup_the_art_is_read_again_from_the_prepared_disc_folder_when_the_art_folder_is_missing()
+    {
+        var flow = await PreparedFlow(discArt: null, preparedArt: root => DiscArt.RestoreFromFolder(root, ArtFolder, _log.Add));
+
+        Assert.True(DiscArtFolder.Open(ArtFolder).IsComplete);
+        Assert.Equal(flow.Prepared!.GameDataRoot, DiscArtFolder.Open(ArtFolder).Source);
+        Assert.Empty(_log);
+    }
+
+    [Fact]
+    public async Task After_setup_a_complete_art_folder_from_the_iso_is_not_read_again()
+    {
+        await PreparedFlow(iso => DiscArt.FromIso(iso, ArtFolder, _log.Add), root => DiscArt.RestoreFromFolder(root, ArtFolder, _log.Add));
+
+        Assert.True(DiscArtFolder.Open(ArtFolder).IsComplete);
+        Assert.EndsWith(".iso", DiscArtFolder.Open(ArtFolder).Source);
+    }
+
+    [Fact]
+    public async Task A_failure_reading_the_prepared_folder_is_logged_and_setup_still_ends_ready()
+    {
+        var flow = await PreparedFlow(null, _ => throw new IOException("the art folder is read-only"));
+
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        Assert.Null(flow.Message);
+        Assert.Contains("the art folder is read-only", Assert.Single(_log));
+        Assert.Contains("Disc art", _log[0]);
+    }
+
+    [Fact]
+    public async Task The_prepared_folder_is_read_again_at_a_later_start_through_RefreshArt()
+    {
+        await PreparedFlow(null, null);
+        var asked = new List<string>();
+        var later = Flow(null, asked.Add);
+
+        later.RefreshArt();
+
+        Assert.Equal(SetupPhase.Ready, later.Phase);
+        Assert.Equal([later.Prepared!.GameDataRoot], asked);
+    }
+
+    [Fact]
+    public void Without_prepared_files_there_is_nothing_to_read_the_art_from()
+    {
+        var asked = new List<string>();
+        var flow = Flow(null, asked.Add);
+
+        flow.RefreshArt();
+
+        Assert.Empty(asked);
+    }
+
+    [Fact]
+    public async Task A_failure_in_RefreshArt_is_logged_and_never_thrown()
+    {
+        await PreparedFlow(null, null);
+        var later = Flow(null, _ => throw new UnauthorizedAccessException("denied"));
+
+        later.RefreshArt();
+
+        Assert.Contains("denied", Assert.Single(_log));
     }
 }

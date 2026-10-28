@@ -8,7 +8,7 @@ namespace TopSpin4.Launcher.Core;
 /// </summary>
 public sealed class ShellLinkWriter : IShortcutWriter
 {
-    public void Write(string linkPath, string target, string arguments, string workingDirectory)
+    public void Write(string linkPath, string target, string arguments, string workingDirectory, string iconPath)
     {
         if (!OperatingSystem.IsWindows()) throw new IOException("Shortcuts can only be created on Windows.");
         try
@@ -17,7 +17,7 @@ public sealed class ShellLinkWriter : IShortcutWriter
             link.SetPath(target);
             link.SetArguments(arguments);
             link.SetWorkingDirectory(workingDirectory);
-            link.SetIconLocation(target, 0);
+            link.SetIconLocation(iconPath, 0);
             link.SetDescription(DirectShortcut.Name);
             ((IPersistFile)link).Save(linkPath, true);
         }

@@ -26,6 +26,7 @@ public sealed class SetupFlow
     private readonly TimeProvider _time;
     private readonly Action<string>? _log;
     private readonly Action<string>? _readDiscArt;
+    private readonly Action<string>? _readPreparedArt;
     private readonly RowCheck _discCheck = new();
     private readonly RowCheck _titleUpdateCheck = new();
     private OverallProgress? _overall;
@@ -36,12 +37,19 @@ public sealed class SetupFlow
     /// the change, so that the art is there when the window redraws (<see cref="DiscArt.FromIso"/>). It
     /// can fail or throw without consequence: the failure is logged and the row stays accepted.
     /// </param>
-    public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null)
+    /// <param name="readPreparedArt">
+    /// Called with the prepared disc folder once setup has finished and by <see cref="RefreshArt"/>, so the art is
+    /// read again from there when the art folder is missing or incomplete (<see cref="DiscArt.RestoreFromFolder"/>).
+    /// Like <paramref name="readDiscArt"/> it can fail or throw without consequence.
+    /// </param>
+    public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null,
+        Action<string>? readPreparedArt = null)
     {
         _preparation = preparation;
         _time = time ?? TimeProvider.System;
         _log = log;
         _readDiscArt = readDiscArt;
+        _readPreparedArt = readPreparedArt;
         Prepared = preparation.Existing();
         Phase = Prepared is null ? SetupPhase.NeedsInputs : SetupPhase.Ready;
         Disc = Fresh(preparation.NeedsDisc);
@@ -190,6 +198,7 @@ public sealed class SetupFlow
         {
             Prepared = await Task.Run(() => _preparation.Prepare(Disc.Path, TitleUpdate.Path, progress, cancel), CancellationToken.None);
             Phase = SetupPhase.Ready;
+            await Task.Run(RefreshArt, CancellationToken.None);
         }
         catch (SetupException problem)
         {
@@ -257,6 +266,23 @@ public sealed class SetupFlow
         Disc = Fresh(_preparation.NeedsDisc);
         TitleUpdate = Fresh(_preparation.NeedsTitleUpdate);
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Reads the art again from the prepared disc folder if the art folder is missing or incomplete. Setup does it when it
+    /// has finished, and the window does it at start. Without prepared files it does nothing; a failure is logged, never thrown.
+    /// </summary>
+    public void RefreshArt()
+    {
+        if (_readPreparedArt is null || Prepared is not { } prepared) return;
+        try
+        {
+            _readPreparedArt(prepared.GameDataRoot);
+        }
+        catch (Exception problem)
+        {
+            _log?.Invoke($"Disc art: could not read the art from {prepared.GameDataRoot}: {problem.Message}");
+        }
     }
 
     /// <summary>Shows a line on the setup page, e.g. when an action outside setup could not be carried out.</summary>
