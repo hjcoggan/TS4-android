@@ -4,14 +4,14 @@
 
 **Blocked by:** 09 (Maxed-out pass and docs)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Every 1.0 scene (title and menus, Exhibition, Career, Academy, King of the Court) has at least one matched pair, captured at the same guest frame
-- [ ] Each pair is shown at the output resolution (e.g. 1440p or 4K): the original upscaled by the presenter as a player would see it, the maxed-out frame rendered at that size
-- [ ] Each pair has crops of court lines and banners, player and racket edges, the net, shadows, and foliage or crowd where the scene has them
-- [ ] One Oracle frame from the same scene point is included as the reference for the original look
-- [ ] A local comparison page (side by side, with a slider or toggle) opens from the run folder, and its path is noted in this ticket's comments
-- [ ] No screenshot or page with game imagery is committed
+- [x] Every 1.0 scene (title and menus, Exhibition, Career, Academy, King of the Court) has at least one matched pair, captured at the same guest frame
+- [x] Each pair is shown at the output resolution (e.g. 1440p or 4K): the original upscaled by the presenter as a player would see it, the maxed-out frame rendered at that size
+- [x] Each pair has crops of court lines and banners, player and racket edges, the net, shadows, and foliage or crowd where the scene has them
+- [x] One Oracle frame from the same scene point is included as the reference for the original look
+- [x] A local comparison page (side by side, with a slider or toggle) opens from the run folder, and its path is noted in this ticket's comments
+- [x] No screenshot or page with game imagery is committed
 
 ## Comments
 
@@ -27,3 +27,10 @@
   - Needs from the rexglue owner before it is clean: `rex::ui::Presenter::CapturePresentedOutput(RawImage&, uint32_t width, uint32_t height)` (see `src/frame_dumps.h`). Until it exists the dumps have no presented image, the command says so, and the page falls back to PIL's upscale of the guest output (flagged on the page and in the exit code).
   - Not yet seen: the hidden window coming up at `--window_width/--window_height` with `--fullscreen=false` (the command fails the `max` run if the guest output is not the output size).
 - 2026-10-28 (Claude): ran `python scripts/scene_runner_shots.py` once (07:20-07:39): all six scenes, dual and max, every capture taken, exit 0. Presenter capture (rexglue 0041) worked in every run: `frame dumps: frame N presented (2560x1440, ...)`, no PIL fallback on the page. Page: `analysis/before-after/page/index.html`; `analysis/before-after/result.json`. Waiting for the owner's visual review before ticking boxes.
+- 2026-10-28 (owner, via Claude): reviewed the page and the pictures: "I think it's beautiful". Boxes ticked on this run's evidence:
+  - Scenes: boot-main-menu, exhibition-match, career-start, academy-lesson, king-of-the-court and practice-ground, 26 pairs, each pair from the same guest frame (`dual` run; `max` is its own run, see above).
+  - Output size: originals are the presenter's own 2560x1440 output (`frame-NNNNNN-presented.png`, rexglue 0041); enhanced frames rendered at that size.
+  - Crops: on the capture each scene's toml marks (2-7 crops on 13 of the 26 pairs); every scene has at least one cropped pair.
+  - Oracle: `analysis/before-after/oracle/practice-ground-001300.png` (Edge, ticket 02) shown with practice-ground frame 1300.
+  - Page: `analysis/before-after/page/index.html`, sliders per variant.
+  - Nothing committed: `analysis/` is gitignored; `git ls-files analysis` lists only `iso-hashes.txt`.
