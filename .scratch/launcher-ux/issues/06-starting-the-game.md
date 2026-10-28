@@ -10,10 +10,20 @@ Spec: User Stories 35–38, 40–45; Implementation Decisions "Game session from
 
 **Blocked by:** 01 (Home screen tracer), 05 (Game files location)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Launcher.Tests: home status after a normal exit, a GPU failure exit and a crash exit; Safe start prominent only after the last two; the crash report path is offered after a crash
-- [ ] Launcher.Tests: the shortcut writer gets the game exe as target, no arguments and its folder as working folder, for Desktop and Start menu; a second call replaces rather than adds
-- [ ] Host test: the not-set-up decision returns "open the Launcher with reason" when the disc or TU1 is missing, and nothing when both are found or folders are given on the command line
-- [ ] Headless smoke run with developer folders on the command line is unchanged
-- [ ] `pwsh scripts/build.ps1 -Action Check` passes
+- [x] Launcher.Tests: home status after a normal exit, a GPU failure exit and a crash exit; Safe start prominent only after the last two; the crash report path is offered after a crash
+- [x] Launcher.Tests: the shortcut writer gets the game exe as target, no arguments and its folder as working folder, for Desktop and Start menu; a second call replaces rather than adds
+- [x] Host test: the not-set-up decision returns "open the Launcher with reason" when the disc or TU1 is missing, and nothing when both are found or folders are given on the command line
+- [x] Headless smoke run with developer folders on the command line is unchanged
+- [x] `pwsh scripts/build.ps1 -Action Check` passes
+
+## Comments
+
+2026-10-28, launcher-ux integration (qa reviewed):
+- Launcher.Tests: `HomeModelTests` (exits, Safe start prominence, crash report), `DirectShortcutTests`, `ShellLinkWriterTests` (real .lnk in a temp folder).
+- Host tests: not-set-up decision cases in `test_user_paths.cpp`.
+- Smoke runs: worktree t06 `analysis/smoke-20261028-180951`, tfix `analysis/smoke-20261028-183737`.
+- Oracle comparison not applicable: no rendering change, and the smoke runs take no screenshots.
+- Not exercised (ticket 08): hide and return, real shortcuts, the hand-off opening the Launcher.
+- `pwsh scripts/build.ps1 -Action Check` passed at 64e3827 (QA rerun at 61b4b4d; rerun after the QA fixes with TOPSPIN4_EXE set, 285/285 Launcher tests, 403 host cases).

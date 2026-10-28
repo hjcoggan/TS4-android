@@ -4,10 +4,18 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Launcher.Tests: the home model gives "ready" with both prepared folders and the game exe present, and "game exe missing" without the exe, before any Play
+- [x] Launcher.Tests: the home model gives "ready" with both prepared folders and the game exe present, and "game exe missing" without the exe, before any Play
 - [ ] The dev build output has the Launcher beside `topspin4.exe`, and that Launcher shows the renderer setting on the Settings page
 - [ ] Home shows PLAY, a status line, Settings, Help, Open logs and a "Trouble starting?" area holding Safe start
-- [ ] The README has a help section (dumping your own disc and TU1, the in-game Settings page keys) with no pointer to sources of game data (ADR-0006)
-- [ ] `pwsh scripts/build.ps1 -Action Check` passes
+- [x] The README has a help section (dumping your own disc and TU1, the in-game Settings page keys) with no pointer to sources of game data (ADR-0006)
+- [x] `pwsh scripts/build.ps1 -Action Check` passes
+
+## Comments
+
+2026-10-28, launcher-ux integration (qa reviewed):
+- Home model: `HomeModelTests` (ready; game exe missing before any Play).
+- README help section: `README.md` Help section, no pointer to game-data sources.
+- `pwsh scripts/build.ps1 -Action Check` passed at 64e3827 (QA rerun at 61b4b4d; rerun after the QA fixes with TOPSPIN4_EXE set, 285/285 Launcher tests, 403 host cases).
+- Unticked: Launcher beside `topspin4.exe` is observed in the build output, but the renderer row on the Settings page and the Home layout have not been seen in a window. Remaining boxes need the real window; they wait on ticket 08 (owner run).

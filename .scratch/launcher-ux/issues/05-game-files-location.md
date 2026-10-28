@@ -4,10 +4,19 @@
 
 **Blocked by:** 01 (Home screen tracer)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Launcher.Tests: not enough free space is reported before setup starts; setup into a chosen place records it in the location file
-- [ ] Launcher.Tests: a move lands verified files in the new place, records it and removes the old copy; an interrupted move leaves the old place recorded and intact
-- [ ] Host test: prepared-data lookup prefers the command line, then the location file, then the default folder
-- [ ] Headless smoke run with developer folders on the command line is unchanged
-- [ ] `pwsh scripts/build.ps1 -Action Check` passes
+- [x] Launcher.Tests: not enough free space is reported before setup starts; setup into a chosen place records it in the location file
+- [x] Launcher.Tests: a move lands verified files in the new place, records it and removes the old copy; an interrupted move leaves the old place recorded and intact
+- [x] Host test: prepared-data lookup prefers the command line, then the location file, then the default folder
+- [x] Headless smoke run with developer folders on the command line is unchanged
+- [x] `pwsh scripts/build.ps1 -Action Check` passes
+
+## Comments
+
+2026-10-28, launcher-ux integration (qa reviewed):
+- Launcher.Tests: `GameFilesLocationTests` (space before setup, location file, verified move, interrupted move); the move also checks free space and carries the shader cache (review fixes, 61b4b4d).
+- Host tests: `test_user_paths` lookup order; UTF-8 location file and completion marker (64e3827).
+- Smoke runs alive at 30 s, no fatals or unregistered targets: worktree t05 `analysis/smoke-20261028-175040`, tfix `analysis/smoke-20261028-182809` and `smoke-20261028-183737`.
+- Oracle comparison not applicable: no rendering change, and the smoke runs take no screenshots.
+- `pwsh scripts/build.ps1 -Action Check` passed at 64e3827 (QA rerun at 61b4b4d; rerun after the QA fixes with TOPSPIN4_EXE set, 285/285 Launcher tests, 403 host cases).

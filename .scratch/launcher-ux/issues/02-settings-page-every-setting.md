@@ -6,11 +6,20 @@ To make this possible the game's settings export moves to format 2: it adds the 
 
 **Blocked by:** 01 (Home screen tracer)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Host test: export format 2 holds every registry setting, the Presets with their covered values and the binding fields; reading it back gives the same registry and Presets
-- [ ] Launcher.Tests: tabs follow the export's order; every setting is present; Original on defaults; Enhanced writes its settings; a tweak gives Custom; Native-only settings don't cause Custom on Classic; Native-only rows are unavailable on Classic
-- [ ] Launcher.Tests: a change rewrites only its line in an existing Settings file; Reset to defaults writes every default; an unreadable export gives a reason, not an empty page
-- [ ] The Launcher keeps no list of settings or Presets of its own
+- [x] Host test: export format 2 holds every registry setting, the Presets with their covered values and the binding fields; reading it back gives the same registry and Presets
+- [x] Launcher.Tests: tabs follow the export's order; every setting is present; Original on defaults; Enhanced writes its settings; a tweak gives Custom; Native-only settings don't cause Custom on Classic; Native-only rows are unavailable on Classic
+- [x] Launcher.Tests: a change rewrites only its line in an existing Settings file; Reset to defaults writes every default; an unreadable export gives a reason, not an empty page
+- [x] The Launcher keeps no list of settings or Presets of its own
 - [ ] A value changed in the Launcher shows the same on the in-game Settings page (owner run, ticket 08)
-- [ ] `pwsh scripts/build.ps1 -Action Check` passes
+- [x] `pwsh scripts/build.ps1 -Action Check` passes
+
+## Comments
+
+2026-10-28, launcher-ux integration (qa reviewed):
+- Host tests: "reads back as the same registry", "carries the Graphics Presets", "says which settings are bindings".
+- Launcher.Tests: `SettingsPageModelTests`, `SettingsStoreTests`; the real exe's format 2 export read through a pipe passes (`Reading_the_export_from_a_gui_exe_through_a_pipe_works`, run with TOPSPIN4_EXE).
+- No own list: `The_page_keeps_no_list_of_its_own...`; the renderer choice labels are the ones ticket 01 asks for.
+- `pwsh scripts/build.ps1 -Action Check` passed at 64e3827 (QA rerun at 61b4b4d; rerun after the QA fixes with TOPSPIN4_EXE set, 285/285 Launcher tests, 403 host cases).
+- Remaining boxes need the real window; they wait on ticket 08 (owner run).
