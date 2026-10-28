@@ -134,12 +134,24 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
-    topspin4::native::ApplyPresenterSettings();
+    topspin4::native::ApplyImageSettings();
     rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
     // input system, so no binding can steer it.
     topspin4::InstallRemappedInput(config);
-    topspin4::InstallScriptInput(config, &rex::system::GuestSwapCount);
+    // A script's `set` changes a setting on the UI thread, where the settings page and the F6
+    // overlay change theirs (the presenter's CAS must be switched there).
+    rex::ui::WindowedAppContext* context = &app_context();
+    topspin4::InstallScriptInput(
+        config, &rex::system::GuestSwapCount, [context](std::string name, std::string value) {
+          context->CallInUIThread([name, value] {
+            if (rex::cvar::SetFlagByName(name, value)) {
+              REXLOG_INFO("script input: set {} = {}", name, value);
+            } else {
+              REXLOG_WARN("script input: set {} = {} was rejected", name, value);
+            }
+          });
+        });
   }
 
   void OnPostSetup() override {

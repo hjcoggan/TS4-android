@@ -12,6 +12,8 @@ Commands:
                               stages; the shaders' SPIR-V goes to vs-EID.txt and ps-EID.txt
   texture ID [--all-mips]     texel samples per mip and face, and PNGs of them
   rt EID                      the colour targets as they are after the draw, as PNGs
+  present                     the swapchain images written in the capture, as PNGs: the shown
+                              frame after the presenter's effect (CAS), which the dumps lack
   pixel ID X Y [MIP] [SLICE]  one texel's value
   history ID X Y              every event that wrote texel (X, Y): shader output and result
   actions FROM TO             every action between two events (passes, copies, dispatches with
@@ -19,6 +21,11 @@ Commands:
                               from render target through the EDRAM buffer to guest memory
   buffer ID OFFSET LEN EID    a buffer range (hex offset and length) after an event: how many
                               bytes are nonzero, and the first dwords
+  constants EID vs|ps FIRST [COUNT]
+                              float4 registers FIRST.. of a draw's guest constants, read
+                              through Native's constant pointers (Native captures only)
+  durations [FROM TO]         GPU time per action on replay (EventGPUDuration): the frame's
+                              sum, and the actions FROM..TO (default: the 10 longest)
 """
 import json
 import math
@@ -264,6 +271,47 @@ def cmd_buffer(ctrl, textures, args):
         f"bytes nonzero; first {words}")
 
 
+def cmd_constants(ctrl, textures, args):
+    """constants EID vs|ps FIRST [COUNT]: float4 registers FIRST.. of a draw's guest constants.
+    Native's push constants hold buffer addresses (vertex, pixel, shared), which a draw's block
+    shows as raw pointers; this follows the stage's pointer to the buffer that holds it."""
+    import struct
+    eid, stage = int(args[0]), args[1]
+    stages = {"vs": rd.ShaderStage.Vertex, "ps": rd.ShaderStage.Pixel}
+    if stage not in stages:
+        say(f"constants: stage must be vs or ps, not {stage!r}")
+        return
+    shader_stage = stages[stage]
+    first, count = int(args[2]), int(args[3]) if len(args) > 3 else 1
+    ctrl.SetFrameEvent(eid, True)
+    pipe = ctrl.GetPipelineState()
+    refl = pipe.GetShaderReflection(shader_stage)
+    if refl is None:  # a depth-only pass binds no pixel shader
+        say(f"draw {eid}: no {stage} shader bound")
+        return
+    pointers = None
+    for i, cb in enumerate(refl.constantBlocks):
+        d = pipe.GetConstantBlock(shader_stage, i, 0).descriptor
+        variables = ctrl.GetCBufferVariableContents(
+            pipe.GetGraphicsPipelineObject(), refl.resourceId, shader_stage,
+            pipe.GetShaderEntryPoint(shader_stage), i, d.resource, d.byteOffset,
+            d.byteSize)
+        if len(variables) >= 2 and variables[0].name == "_child0":
+            pointers = [v.value.u64v[0] for v in variables]
+    if pointers is None:
+        say(f"draw {eid}: no constant pointers in the {stage} shader's blocks")
+        return
+    address = pointers[0 if stage == "vs" else 1] + first * 16
+    for b in ctrl.GetBuffers():
+        if b.gpuAddress and b.gpuAddress <= address < b.gpuAddress + b.length:
+            data = bytes(ctrl.GetBufferData(b.resourceId, address - b.gpuAddress, count * 16))
+            for r in range(len(data) // 16):
+                v = struct.unpack_from("<4f", data, r * 16)
+                say(f"  {stage} c{first + r} = " + " ".join(f"{x:.7g}" for x in v))
+            return
+    say(f"draw {eid}: no buffer holds address {address:X}")
+
+
 def cmd_mesh(ctrl, textures, args):
     """mesh EID [N]: the first N (8) vertices' clip position after the vertex shader, and its
     screen x, y and depth (viewport 0."""
@@ -289,9 +337,62 @@ def cmd_mesh(ctrl, textures, args):
             f"depth {z / w if w else 0:.7f}")
 
 
+def cmd_present(ctrl, textures, args):
+    """present: every swapchain image the capture wrote to, as it is after the last event, as
+    PNGs: the frame the window shows, after the presenter's effect (CAS, FSR). The frame dumps
+    (--ts4_dump_frames) are the presenter's input, before the effect."""
+    last = all_actions(ctrl.GetRootActions(), [])[-1].eventId
+    ctrl.SetFrameEvent(last, True)
+    for rid, t in textures.items():
+        if not t.creationFlags & rd.TextureCategory.SwapBuffer:
+            continue
+        used = [f"{u.eventId}:{str(u.usage).rsplit('.', 1)[-1]}" for u in ctrl.GetUsage(rid)]
+        say(f"swapchain image {fmt_tex(t)}: " + ", ".join(used))
+        if any(not u.endswith((":Present", ":Barrier")) for u in used):
+            path = os.path.join(OUT, f"present-{int(rid)}.png")
+            save_texture(ctrl, rid, 0, 0, path)
+            say(f"  -> {path}")
+
+
+def cmd_durations(ctrl, textures, args):
+    """durations [FROM TO]: GPU time of each action (RenderDoc's EventGPUDuration, measured on
+    replay), the sum over the frame, and the actions FROM..TO (by default the 10 longest) with
+    their names, so one pass (the presenter's CAS) can be timed against the frame."""
+    counter = rd.GPUCounter.EventGPUDuration
+    if counter not in ctrl.EnumerateCounters():
+        say("durations: this replay has no EventGPUDuration counter")
+        return
+    desc = ctrl.DescribeCounter(counter)
+    scale = {rd.CounterUnit.Seconds: 1000.0}.get(desc.unit)
+    if scale is None:
+        say(f"durations: EventGPUDuration is in {desc.unit}, not seconds")
+        return
+
+    def value(r):
+        if desc.resultType == rd.CompType.Float:
+            return r.value.d if desc.resultByteWidth == 8 else r.value.f
+        return r.value.u64 if desc.resultByteWidth == 8 else r.value.u32
+
+    ms = {r.eventId: value(r) * scale for r in ctrl.FetchCounters([counter])}
+    sdfile = ctrl.GetStructuredFile()
+    actions = all_actions(ctrl.GetRootActions(), [])
+    say(f"frame: {len(ms)} timed events, {sum(ms.values()):.4f} ms GPU in all")
+    if args:
+        first, last = int(args[0]), int(args[1])
+        chosen = [a for a in actions if first <= a.eventId <= last]
+        say(f"events {first}..{last}: {sum(ms.get(a.eventId, 0.0) for a in chosen):.4f} ms")
+    else:
+        chosen = sorted((a for a in actions if a.eventId in ms),
+                        key=lambda a: -ms[a.eventId])[:10]
+    for a in chosen:
+        t = ms.get(a.eventId)
+        say(f"  eid {a.eventId} {'%.4f ms' % t if t is not None else '-'} {a.GetName(sdfile)}")
+
+
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
-            "history": cmd_history, "mesh": cmd_mesh,
-            "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer}
+            "history": cmd_history, "mesh": cmd_mesh, "present": cmd_present,
+            "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer,
+            "constants": cmd_constants, "durations": cmd_durations}
 
 def succeeded(result):
     return getattr(result, "code", result) == rd.ResultCode.Succeeded

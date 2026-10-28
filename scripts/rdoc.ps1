@@ -80,7 +80,7 @@ switch ($Verb) {
     'query' {
         if (!$Capture -or !(Test-Path -LiteralPath $Capture)) { throw "query needs a capture file: $Capture" }
         if (!$Commands) { throw "query needs at least one command (scripts/rdoc/query.py lists them)" }
-        if (!$Out) { $Out = Join-Path (Split-Path -LiteralPath $Capture -Parent) 'query' }
+        if (!$Out) { $Out = Join-Path ([IO.Path]::GetDirectoryName($Capture)) 'query' }
         $list = @($Commands | ForEach-Object { , @($_ -split '\s+' | Where-Object { $_ }) })
         Invoke-RenderDocScript 'query.py' @{ capture = (Resolve-Path -LiteralPath $Capture).Path; out = $Out; commands = $list }
         Get-Content "$Out/query.txt"

@@ -1,0 +1,74 @@
+diff --git a/include/rex/system/guest_swaps.h b/include/rex/system/guest_swaps.h
+index e8d7a48..1a1a7ca 100644
+--- a/include/rex/system/guest_swaps.h
++++ b/include/rex/system/guest_swaps.h
+@@ -9,8 +9,9 @@
+ 
+ namespace rex::system {
+ 
+-// VdSwap calls so far: one per frame the guest presents, whichever module's Direct3D made
+-// it. Hosts time scripted input and frame captures by it.
++// VdSwap calls so far that issue a swap packet: one per frame the guest presents, whichever
++// module's Direct3D made it (a call with an invalid front buffer issues none and is not
++// counted). Hosts time scripted input and frame captures by it.
+ uint64_t GuestSwapCount();
+ 
+ // Called on the GPU thread once each swap's image is the presenter's newest guest output, with
+diff --git a/include/rex/system/swap_choice.h b/include/rex/system/swap_choice.h
+index fa6aa78..391437d 100644
+--- a/include/rex/system/swap_choice.h
++++ b/include/rex/system/swap_choice.h
+@@ -33,7 +33,9 @@ struct SwapChoice {
+ // may be drawing into older ones). available(s): whether frame s was published.
+ //
+ // The swap's own frame when it is published and intact; the oldest intact frame when the GPU runs
+-// too far behind; the newest frame before it when the app published none for this swap.
++// too far behind; in both cases the next newer published frame when the one wanted is missing
++// (the app published none for this swap), up to the newest. The search only goes up, so the shown
++// frame never steps back below what an earlier swap showed.
+ template <typename Available>
+ constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_t swap,
+                                      uint64_t latest, uint64_t max_lag, Available available) {
+@@ -41,18 +43,8 @@ constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_
+   uint64_t show = latest;
+   if (swap < latest) {
+     show = swap < oldest_intact ? oldest_intact : swap;
+-    if (swap >= oldest_intact) {
+-      // This swap's frame, else the newest published one before it.
+-      while (show > oldest_intact && !available(show)) {
+-        --show;
+-      }
+-    } else {
+-      while (show < latest && !available(show)) {
+-        ++show;
+-      }
+-    }
+-    if (!available(show)) {
+-      show = latest;
++    while (show < latest && !available(show)) {
++      ++show;
+     }
+   }
+   SwapChoice choice;
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+index 33eb373..abed8e8 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -472,7 +472,6 @@ void VdSwap_entry(mapped_void buffer_ptr,      // ptr into primary ringbuffer
+                   mapped_u32 frontbuffer_ptr,  // ptr to frontbuffer address
+                   mapped_u32 texture_format_ptr, mapped_u32 color_space_ptr, mapped_u32 width,
+                   mapped_u32 height) {
+-  rex::system::guest_swaps.fetch_add(1, std::memory_order_relaxed);
+   // All of these parameters are REQUIRED.
+   assert(buffer_ptr);
+   assert(fetch_ptr);
+@@ -505,6 +504,9 @@ void VdSwap_entry(mapped_void buffer_ptr,      // ptr into primary ringbuffer
+                   frontbuffer_virtual_address);
+     return;
+   }
++  // Counted only here: a swap that writes no swap packet never reaches the GPU's swap count
++  // (FramesShownCount), so counting it would leave the two clocks one apart for good.
++  rex::system::guest_swaps.fetch_add(1, std::memory_order_relaxed);
+   gpu_fetch.base_address = frontbuffer_physical_address >> 12;
+ 
+   auto texture_format = rex::graphics::xenos::TextureFormat(texture_format_ptr.value());

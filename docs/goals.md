@@ -10,7 +10,7 @@ An enhanced port (ADR-0001) of the Reference build (ADR-0002), recompiled with R
 - **Online:** stubbed. Title-server login and the DLC check are short-circuited, so boot doesn't wait on a dead server. Player Match and World Tour fail with a clean "unavailable" message.
 - **Frame rate:** locked at the game's 60 fps tick. The simulation is tied to frame rate, so unlocking it changes game speed.
 - **Renderer:** the Native renderer by default, with the Classic renderer selectable (ADR-0005). 1.0 waits until the Native renderer matches Classic in every 1.0 mode.
-- **Enhancements in 1.0:** resolution scaling with MSAA, and button remapping.
+- **Enhancements in 1.0:** resolution scaling, MSAA, anisotropic filtering and CAS sharpening (`.scratch/image-quality/`), and button remapping.
 - **Extras:** the Agassi preorder outfit is available through an unlock option. Stereoscopic 3D stays disabled.
 - **Saves and settings:** stored in a per-user directory, in the game's own save format, so Career saves can be copied between the Oracle and the port.
 

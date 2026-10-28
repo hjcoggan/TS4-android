@@ -12,8 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, apply_ramp, envelope_error, fit_ramp,  # noqa: E402
-                          load_scene, log_failures,
-                          native_failures, repeatability, run_failures)
+                          edges_may_differ, enhancement_failures, judge_enhanced, load_scene,
+                          log_failures,
+                          native_failures, parse_enhancements, plan_runs, repeatability,
+                          run_failures, shrink_to)
 
 GOOD = """
 name = "boot-main-menu"
@@ -35,6 +37,46 @@ def test_a_valid_scene_has_its_frames_in_order_and_the_default_checks():
     assert scene.frames == [350, 1300]
     assert "press START" in scene.input
     assert scene.check == DEFAULTS
+
+
+LABELLED = GOOD + """
+[[capture]]
+frame = 700
+label = "the match, first point"
+crops = [
+  { name = "net", box = [0.19, 0.32, 0.31, 0.12] },
+  { name = "far baseline", box = [0.3, 0.04, 0.3, 0.14] },
+]
+"""
+
+
+def test_a_capture_may_name_itself_and_its_close_up_crops():
+    scene = load_scene(LABELLED)
+    assert scene.frames == [350, 700, 1300]
+    assert scene.labels[700] == "the match, first point"
+    assert scene.labels[350] == "frame 350"  # no label: named by its frame
+    assert [c["name"] for c in scene.crops[700]] == ["net", "far baseline"]
+    assert scene.crops[700][0]["box"] == [0.19, 0.32, 0.31, 0.12]
+    assert 350 not in scene.crops
+
+
+@pytest.mark.parametrize("crop, says", [
+    ('{ box = [0, 0, 0.5, 0.5] }', "name"),
+    ('{ name = "x", box = [0, 0, 0.5] }', "box"),
+    ('{ name = "x", box = [0, 0, "a", 0.5] }', "box"),
+    ('{ name = "x", box = [0.6, 0, 0.5, 0.5] }', "box"),
+    ('{ name = "x", box = [0, 0, 0, 0.5] }', "box"),
+])
+def test_a_bad_crop_says_what_is_wrong(crop, says):
+    text = GOOD + f"\n[[capture]]\nframe = 700\ncrops = [{crop}]\n"
+    with pytest.raises(SceneError, match=says):
+        load_scene(text)
+
+
+def test_the_scenes_in_the_repo_name_valid_captures():
+    for path in (ROOT / "tests/scenes").glob("*.toml"):
+        scene = load_scene(path.read_text(encoding="utf-8"))
+        assert set(scene.labels) == set(scene.frames), path.name
 
 
 def test_check_overrides_one_value_and_keeps_the_rest():
@@ -170,7 +212,7 @@ def report_with(renderer):
 
 
 NATIVE_CLEAN = {"native_requested": True, "native_active": True, "fallback": "none", "frames": 10,
-                "debug_cvars": [], "enhancements": [{"name": "ts4_native_cas", "on": False}],
+                "debug_cvars": [], "enhancements": [{"name": "ts4_sharpening", "on": False}],
                 "draw_skips": {}, "gpu_failure": ""}
 
 
@@ -188,11 +230,71 @@ def test_every_draw_skip_debug_cvar_and_enhancement_fails_a_native_run():
     renderer = dict(NATIVE_CLEAN,
                     draw_skips={"no_texture": {"total": 3, "first_frame": 7, "first_key": "00ab"}},
                     debug_cvars=["ts4_native_debug_no_blend"],
-                    enhancements=[{"name": "ts4_native_cas", "on": True}])
+                    enhancements=[{"name": "ts4_sharpening", "on": True}])
     assert native_failures(report_with(renderer)) == [
         "draw skip no_texture: 3 from frame 7 (key 00ab)",
         "debug cvar ts4_native_debug_no_blend is set",
-        "Enhancement ts4_native_cas is on"]
+        "Enhancement ts4_sharpening is on"]
+
+
+def test_an_enhancement_on_fails_a_classic_run_too():
+    # Anisotropic filtering and sharpening work on Classic as well.
+    renderer = dict(NATIVE_CLEAN, native_requested=False, native_active=False,
+                    enhancements=[{"name": "ts4_anisotropic_filtering", "on": True}])
+    assert enhancement_failures(report_with(renderer)) == [
+        "Enhancement ts4_anisotropic_filtering is on"]
+
+
+def test_an_enhancement_asked_for_must_be_on_and_others_still_fail():
+    renderer = dict(NATIVE_CLEAN, enhancements=[
+        {"name": "ts4_resolution_scale", "on": True}, {"name": "ts4_msaa", "on": False},
+        {"name": "ts4_sharpening", "on": True}])
+    asked = {"ts4_resolution_scale": "2", "ts4_msaa": "4"}
+    assert enhancement_failures(report_with(renderer), asked) == [
+        "Enhancement ts4_msaa was asked for (4) but is not on",
+        "Enhancement ts4_sharpening is on"]
+
+
+def test_enhancements_parse_from_key_value_pairs():
+    assert parse_enhancements(["ts4_resolution_scale=2", "ts4_msaa=8"]) == {
+        "ts4_resolution_scale": "2", "ts4_msaa": "8"}
+    with pytest.raises(SceneError):
+        parse_enhancements(["ts4_msaa"])
+
+
+def test_a_scaled_frame_is_box_shrunk_to_the_reference_size():
+    big = np.zeros((4, 6, 3), np.uint8)
+    big[:2, :2] = 200  # one 2x2 block
+    small = shrink_to(big, (2, 3))
+    assert small.shape == (2, 3, 3)
+    assert (small[0, 0] == 200).all() and (small[1, 1] == 0).all()
+    assert shrink_to(small, (2, 3)) is small
+
+
+def test_an_enhanced_frame_may_differ_along_edges_but_not_over_an_area():
+    check = dict(DEFAULTS, tile=8, tile_hot_max=4)
+    reference = np.zeros((32, 32, 3), np.float32)
+    reference[:, 16:] = 1.0  # one vertical edge
+    edge_only = np.zeros((32, 32), np.float32)
+    edge_only[:, 15:17] = 1.0  # every pixel along the edge differs
+    assert judge_enhanced(edge_only, reference, check)["passed"]
+    area = np.zeros((32, 32), np.float32)
+    area[2:10, 2:10] = 1.0  # a block away from any edge: a missing glow
+    verdict = judge_enhanced(area, reference, check)
+    assert not verdict["passed"]
+    assert verdict["failing_tiles"]
+
+
+def test_only_native_only_enhancements_may_differ_along_edges():
+    # Anisotropic filtering runs on both renderers, and sharpening acts in the presenter after the
+    # dumps: neither changes the comparison, so the strict judge applies.
+    assert not edges_may_differ({})
+    assert not edges_may_differ({"ts4_anisotropic_filtering": "16"})
+    assert not edges_may_differ({"ts4_anisotropic_filtering": "16", "ts4_sharpening": "high"})
+    # A Resolution scale or MSAA moves edges, and so does any enhancement not known to be shared.
+    assert edges_may_differ({"ts4_resolution_scale": "2"})
+    assert edges_may_differ({"ts4_anisotropic_filtering": "16", "ts4_msaa": "4"})
+    assert edges_may_differ({"ts4_native_color_mode": "natural"})
 
 
 def test_a_report_without_a_renderer_object_fails_a_native_run():
@@ -219,6 +321,26 @@ def test_the_presenter_ramp_is_read_off_pairs_and_fills_gaps():
     assert ramp[0][128] == 115 and ramp[2][255] == 255
     assert 0 < ramp[1][64] < 115  # interpolated between the values seen
     assert (apply_ramp(own, ramp) == shown).all()
+
+
+def test_a_full_scene_plays_every_run_to_its_last_capture():
+    plan = plan_runs([350, 1300], classic_runs=2, native_runs=1, dual_runs=1)
+    assert plan == [("run-1", [350, 1300]), ("run-2", [350, 1300]),
+                    ("native-1", [350, 1300]), ("dual-1", [350, 1300])]
+
+
+def test_a_dual_scene_without_classic_runs_reads_the_ramp_off_the_first_capture_alone():
+    plan = plan_runs([350, 1300], classic_runs=0, native_runs=1, dual_runs=1)
+    assert plan == [("native-1", [350]), ("dual-1", [350, 1300])]
+
+
+@pytest.mark.parametrize("args", [["--runs", "0"], ["--runs", "0", "--native", "1"]])
+def test_no_classic_runs_needs_the_dual_runs_to_decide(tmp_path, args):
+    from scene_runner import main
+    scene = tmp_path / "scene.toml"
+    scene.write_text(GOOD)
+    # An existing --exe, so only the refusal can stop it before a run.
+    assert main([str(scene), "--exe", str(scene), "--out", str(tmp_path / "out"), *args]) == 2
 
 
 def test_a_presenter_image_that_is_no_ramp_of_natives_is_refused():

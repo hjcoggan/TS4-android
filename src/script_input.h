@@ -16,6 +16,10 @@
 //   wait <t>                    neutral pad
 //   at <frame>                  neutral pad until the guest has presented
 //                               <frame> frames; nothing if that is past
+//   set <cvar> <value>          change a setting through the cvar system, so
+//                               its change callbacks fire as for a player
+//                               (a live change); takes no time, the next
+//                               step starts on the same poll
 //
 // A duration <t> is milliseconds (120) or guest frames with an 'f' suffix
 // (6f). A frame step ends when the Present count reaches its start + n; the
@@ -45,6 +49,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <rex/input/input_driver.h>
@@ -52,17 +57,14 @@
 
 namespace topspin4 {
 
-// With --ts4_input_script set, replace the runtime's input system with one
-// whose only device is a ScriptInputDriver reading that file (user 0), timing
-// frame steps by `frames`. Without it, leave the config alone.
-void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> frames);
-
 class ScriptInputDriver final : public rex::input::InputDriver {
  public:
   // Monotonic time; tests pass a hand-advanced one.
   using Clock = std::function<std::chrono::milliseconds()>;
   // Frames the guest has presented (rex::system::GuestSwapCount in the game).
   using FrameSource = std::function<uint64_t()>;
+  // Applies a `set <name> <value>` command; called on the polling thread, under the driver's lock.
+  using Setter = std::function<void(std::string name, std::string value)>;
 
   static constexpr auto kDevice = static_cast<rex::input::DeviceId>(0x53435254);  // 'SCRT'
   // Players 2-4's pads (--ts4_input_script_p2..p4), each from its own command file.
@@ -71,7 +73,7 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   }
 
   ScriptInputDriver(std::filesystem::path command_file, Clock clock, FrameSource frames,
-                    rex::input::DeviceId id = kDevice);
+                    rex::input::DeviceId id = kDevice, Setter set = {});
 
   static std::chrono::milliseconds SteadyClock();
 
@@ -95,6 +97,8 @@ class ScriptInputDriver final : public rex::input::InputDriver {
     // Frame timing instead of ms: a length, or with `at`, an absolute frame.
     std::optional<uint64_t> frames;
     bool at = false;
+    // `set`: the setting and its value, applied when the step starts.
+    std::optional<std::pair<std::string, std::string>> set;
     std::string source;  // the command line, logged when the step starts
   };
 
@@ -111,6 +115,7 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   rex::input::DeviceId id_;
   Clock clock_;
   FrameSource frames_;
+  Setter set_;
   size_t consumed_ = 0;  // bytes of the file already parsed
   std::optional<std::chrono::milliseconds> last_poll_;
   std::mutex mutex_;
@@ -122,5 +127,11 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   uint32_t packet_ = 0;
   uint16_t keystroke_buttons_ = 0;  // the buttons GetDeviceKeystroke last reported down
 };
+
+// With --ts4_input_script set, replace the runtime's input system with one
+// whose only device is a ScriptInputDriver reading that file (user 0), timing
+// frame steps by `frames`. Without it, leave the config alone. `set` commands go to `set`.
+void InstallScriptInput(rex::RuntimeConfig& config, ScriptInputDriver::FrameSource frames,
+                        ScriptInputDriver::Setter set);
 
 }  // namespace topspin4

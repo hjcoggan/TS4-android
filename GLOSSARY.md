@@ -69,3 +69,7 @@ _Avoid_: new renderer, HD renderer
 **Enhancement**:
 A setting that changes the game away from original behaviour. Every Enhancement defaults to original behaviour.
 _Avoid_: fix, improvement (when it is an opt-in setting)
+
+**Resolution scale**:
+The Enhancement that renders the game at a whole multiple of its original 1280x720 and fits the result to the window. Auto picks the smallest multiple that covers the 16:9 area of the window the frame is shown in.
+_Avoid_: internal resolution, render resolution, supersampling (when the setting is meant)

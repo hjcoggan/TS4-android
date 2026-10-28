@@ -118,6 +118,21 @@ inline constexpr uint32_t kSpecPwlGammaOutput = 1u << 3;
 // constants): the shader samples the texture as is and PWL-decodes the colour
 // components.
 inline constexpr uint32_t kPwlFetchFlag = 1u << 31;
+// XenosRecomp's XR_OFFSET_SCALE_SHIFT (patch 0007): a resolved texture's offset scale minus 1
+// in bits 29-30 of its descriptor index (image_quality::TextureOffsetScale).
+inline constexpr uint32_t kOffsetScaleShift = 29;
+
+// A texture descriptor index as the shaders read it: the heap index in bits 0-28, a resolved
+// texture's offset scale minus 1 in bits 29-30 and kPwlFetchFlag in bit 31. offset_scale is
+// image_quality::TextureOffsetScale (1..4).
+constexpr uint32_t DescriptorIndex(uint32_t heap_index, bool pwl_decode, uint32_t offset_scale) {
+  return heap_index | (offset_scale - 1) << kOffsetScaleShift | (pwl_decode ? kPwlFetchFlag : 0u);
+}
+// XenosRecomp's XR_HEAP_INDEX, XR_OFFSET_SCALE and the flag test of xrFetchGamma (patches
+// xenosrecomp/0001, 0007): each field is read from the whole index, never from a masked one.
+constexpr uint32_t HeapIndexOf(uint32_t index) { return index & ((1u << kOffsetScaleShift) - 1u); }
+constexpr uint32_t OffsetScaleOf(uint32_t index) { return ((index >> kOffsetScaleShift) & 3u) + 1; }
+constexpr bool PwlDecodeOf(uint32_t index) { return (index & kPwlFetchFlag) != 0; }
 
 struct GammaFetchPath {
   bool srgb_view = false;      // sample through the format's sRGB twin

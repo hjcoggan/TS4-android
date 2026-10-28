@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <concepts>
 #include <cstring>
 #include <filesystem>
 #include <thread>
@@ -13,6 +14,7 @@
 #include <rex/cvar.h>
 #include <rex/logging.h>
 #include <rex/runtime.h>
+#include <rex/system/external_frame.h>
 #include <rex/system/guest_swaps.h>
 #include <rex/ui/presenter.h>
 
@@ -29,6 +31,11 @@ REXCVAR_DEFINE_STRING(ts4_dump_frames, "", "TopSpin4",
                       "comma-separated (src/frame_dumps.h)");
 REXCVAR_DEFINE_STRING(ts4_dump_dir, "", "TopSpin4",
                       "Scene runs: the directory ts4_dump_frames writes frame-NNNNNN.png to");
+REXCVAR_DEFINE_STRING(ts4_dump_presented, "", "TopSpin4",
+                      "Scene runs: also save each dumped frame as the presenter shows it in an "
+                      "output of this size (WxH, e.g. 2560x1440): "
+                      "frame-NNNNNN-presented.png next to the dump, with the presenter's "
+                      "upscaling and sharpening. Needs the presenter's CapturePresentedOutput");
 REXCVAR_DEFINE_INT32(ts4_exit_after_frame, -1, "TopSpin4",
                      "Scene runs: after this guest frame is shown (and dumped), write the "
                      "session report and exit");
@@ -73,10 +80,14 @@ struct Dump {
   std::string file;
   uint32_t width, height;
   uint8_t max_luma;  // brightest pixel, so a black frame shows without opening it
+  // --ts4_dump_presented: the same frame as the presenter shows it; empty when not saved.
+  std::string presented_file;
+  uint32_t presented_width = 0, presented_height = 0;
 };
 
 rex::Runtime* g_runtime = nullptr;
 std::set<uint64_t> g_frames;
+OutputSize g_presented_size;  // 0x0 when --ts4_dump_presented is not set
 std::filesystem::path g_dir;
 int64_t g_exit_after = -1;
 std::filesystem::path g_report;
@@ -118,16 +129,30 @@ std::string JsonString(const std::string& text) {
   return out + "\"";
 }
 
-void SaveDump(uint64_t frame) {
-  auto* graphics = g_runtime ? g_runtime->graphics_system() : nullptr;
-  rex::ui::Presenter* presenter = graphics ? graphics->presenter() : nullptr;
-  rex::ui::RawImage image;
-  if (!presenter || !presenter->CaptureGuestOutput(image)) {
-    REXLOG_WARN("frame dumps: frame {} not saved: no presenter output", frame);
-    return;
+// Whether the SDK's presenter can paint its guest output for an output of a given size: the
+// presented-output API (see frame_dumps.h) is a rexglue patch that may not be in the tree yet.
+// A concept, so a presenter without it is not a compile error.
+template <typename P>
+concept PaintsOutput = requires(P& presenter, rex::ui::RawImage& image) {
+  { presenter.CapturePresentedOutput(image, uint32_t(0), uint32_t(0)) } -> std::same_as<bool>;
+};
+
+template <typename P>
+bool CapturePresentedFrom(P& presenter, rex::ui::RawImage& image, OutputSize size) {
+  if constexpr (PaintsOutput<P>) {
+    return presenter.CapturePresentedOutput(image, size.width, size.height);
+  } else {
+    (void)presenter, (void)image, (void)size;
+    return false;
   }
+}
+
+// The image as a PNG at path; false (and a warning) when it cannot be written. max_luma gets the
+// brightest pixel.
+bool WritePng(const rex::ui::RawImage& image, const std::filesystem::path& path,
+              uint8_t& max_luma) {
   std::vector<uint8_t> rgb(size_t(image.width) * image.height * 3);
-  uint8_t max_luma = 0;
+  max_luma = 0;
   for (uint32_t y = 0; y < image.height; ++y) {
     for (uint32_t x = 0; x < image.width; ++x) {
       const uint8_t* in = &image.data[y * image.stride + x * 4];
@@ -136,21 +161,69 @@ void SaveDump(uint64_t frame) {
       max_luma = std::max(max_luma, uint8_t((299 * in[0] + 587 * in[1] + 114 * in[2]) / 1000));
     }
   }
-  const std::filesystem::path path = g_dir / DumpFileName(frame);
   FILE* file = OpenFile(path, "wb");
   if (!file) {
     REXLOG_WARN("frame dumps: cannot write {}", Utf8Text(path));
-    return;
+    return false;
   }
   const std::vector<uint8_t> png = EncodePngRgb(rgb.data(), image.width, image.height);
   const bool written = std::fwrite(png.data(), 1, png.size(), file) == png.size();
   if (std::fclose(file) != 0 || !written) {
     REXLOG_WARN("frame dumps: writing {} failed", Utf8Text(path));
+    return false;
+  }
+  return true;
+}
+
+// --ts4_dump_presented: the frame as the presenter shows it at the output size, beside the dump.
+// Best effort: a failure costs this file only, and the report says which dumps have one.
+void SavePresented(rex::ui::Presenter& presenter, uint64_t frame, Dump& dump) {
+  rex::ui::RawImage image;
+  if (!CapturePresentedFrom(presenter, image, g_presented_size)) {
+    REXLOG_WARN("frame dumps: frame {} has no presented image at {}x{}", frame,
+                g_presented_size.width, g_presented_size.height);
+    return;
+  }
+  const std::filesystem::path path = g_dir / PresentedFileName(frame);
+  uint8_t max_luma = 0;
+  if (!WritePng(image, path, max_luma)) {
+    return;
+  }
+  REXLOG_INFO("frame dumps: frame {} presented ({}x{}, max luma {}) to {}", frame, image.width,
+              image.height, max_luma, Utf8Text(path));
+  dump.presented_file = Utf8Text(path.filename());
+  dump.presented_width = image.width;
+  dump.presented_height = image.height;
+}
+
+void SaveDump(uint64_t frame) {
+  auto* graphics = g_runtime ? g_runtime->graphics_system() : nullptr;
+  rex::ui::Presenter* presenter = graphics ? graphics->presenter() : nullptr;
+  rex::ui::RawImage image;
+  if (!presenter || !presenter->CaptureGuestOutput(image)) {
+    REXLOG_WARN("frame dumps: frame {} not saved: no presenter output", frame);
+    return;
+  }
+  if (rex::system::external_frame::IsEnabled()) {
+    // The swap shows the Native frame with its own number unless the GPU ran too far behind
+    // (rex/system/swap_choice.h); then this image is of another frame than Native's own dump.
+    const uint64_t shown = rex::system::external_frame::LastSwappedSequence();
+    if (shown != frame) {
+      REXLOG_WARN("frame dumps: frame {} shows Native's frame {}, not its own", frame, shown);
+    }
+  }
+  const std::filesystem::path path = g_dir / DumpFileName(frame);
+  uint8_t max_luma = 0;
+  if (!WritePng(image, path, max_luma)) {
     return;
   }
   REXLOG_INFO("frame dumps: frame {} ({}x{}, max luma {}) to {}", frame, image.width,
               image.height, max_luma, Utf8Text(path));
-  g_dumps.push_back({frame, Utf8Text(path.filename()), image.width, image.height, max_luma});
+  Dump dump{frame, Utf8Text(path.filename()), image.width, image.height, max_luma};
+  if (g_presented_size.width) {
+    SavePresented(*presenter, frame, dump);
+  }
+  g_dumps.push_back(std::move(dump));
 }
 
 void WriteReport(uint64_t frame) {
@@ -167,8 +240,14 @@ void WriteReport(uint64_t frame) {
   for (size_t i = 0; i < g_dumps.size(); ++i) {
     const Dump& d = g_dumps[i];
     json += fmt::format("{}\n  {{\"frame\": {}, \"file\": {}, \"width\": {}, \"height\": {}, "
-                        "\"max_luma\": {}}}",
+                        "\"max_luma\": {}",
                         i ? "," : "", d.frame, JsonString(d.file), d.width, d.height, d.max_luma);
+    if (!d.presented_file.empty()) {
+      json += fmt::format(", \"presented_file\": {}, \"presented_width\": {}, "
+                          "\"presented_height\": {}",
+                          JsonString(d.presented_file), d.presented_width, d.presented_height);
+    }
+    json += "}";
   }
   json += "\n ]";
   if (!extra.empty()) {
@@ -250,6 +329,15 @@ void Install(rex::Runtime* runtime) {
     }
   }
 #endif
+  if (!ParseOutputSize(REXCVAR_GET(ts4_dump_presented), g_presented_size)) {
+    REXLOG_ERROR("frame dumps: bad --ts4_dump_presented size '{}' (want WxH, e.g. 2560x1440)",
+                 REXCVAR_GET(ts4_dump_presented));
+  }
+  if (g_presented_size.width && !PaintsOutput<rex::ui::Presenter>) {
+    REXLOG_ERROR("frame dumps: --ts4_dump_presented needs rex::ui::Presenter::"
+                 "CapturePresentedOutput, which this build's SDK lacks; only the guest output is "
+                 "dumped");
+  }
   if (!g_frames.empty()) {
     if (g_dir.empty()) {
       REXLOG_ERROR("frame dumps: --ts4_dump_frames needs --ts4_dump_dir");

@@ -1,0 +1,164 @@
+diff --git a/include/rex/system/external_frame.h b/include/rex/system/external_frame.h
+index b2d9f08..9c17165 100644
+--- a/include/rex/system/external_frame.h
++++ b/include/rex/system/external_frame.h
+@@ -21,6 +21,8 @@ struct Frame {
+   uint64_t image_view = 0;
+   uint32_t width = 0;
+   uint32_t height = 0;
++  // GuestSwapCount at the Present that made it: the swap that belongs to it has that number
++  // (TakeForSwap, swap_choice.h).
+   uint64_t sequence = 0;
+ };
+ 
+@@ -37,8 +39,9 @@ struct SwapStep {
+   bool repeated = false;  // the same frame as the previous swap
+   uint64_t skipped = 0;   // published frames that no swap showed
+ };
+-// Latest() for a guest swap, remembering its sequence so that repeats and skips
+-// against the previous swap can be reported.
++// The frame that belongs to the guest swap being processed (swap_choice.h), remembering its
++// sequence so that repeats and skips against the previous swap can be reported. GPU thread,
++// before NotifyFrameShown.
+ SwapStep TakeForSwap();
+ // The sequence the last swap showed (0 also before the first swap).
+ uint64_t LastSwappedSequence();
+diff --git a/include/rex/system/guest_swaps.h b/include/rex/system/guest_swaps.h
+index efad7b4..e8d7a48 100644
+--- a/include/rex/system/guest_swaps.h
++++ b/include/rex/system/guest_swaps.h
+@@ -21,5 +21,8 @@ using FrameShownObserver = void (*)(uint64_t frame);
+ void SetFrameShownObserver(FrameShownObserver observer);
+ // The GPU's side: call after each swap.
+ void NotifyFrameShown();
++// GPU thread: the swaps the GPU has shown, so during a swap (before NotifyFrameShown) that swap's
++// number on the GuestSwapCount clock.
++uint64_t FramesShownCount();
+ 
+ }  // namespace rex::system
+diff --git a/include/rex/system/swap_choice.h b/include/rex/system/swap_choice.h
+index 2844a2b..fa6aa78 100644
+--- a/include/rex/system/swap_choice.h
++++ b/include/rex/system/swap_choice.h
+@@ -3,11 +3,13 @@
+  * @brief       Which app-published frame a guest swap shows
+  *
+  * The app publishes a frame at the guest's Present, before the swap packet that
+- * belongs to it reaches the command processor. Showing the newest frame at each
+- * swap goes wrong whenever the command processor runs a frame behind: one swap
+- * shows the next frame early (skipping its own) and the following swap has
+- * nothing newer (repeating it), while presents stay evenly spaced. So each swap
+- * shows the frame after the one the previous swap showed.
++ * belongs to it reaches the command processor, numbered on the guest swap clock
++ * (GuestSwapCount at that Present). Showing the newest frame at each swap goes
++ * wrong whenever the command processor runs a frame behind: one swap shows the
++ * next frame early (skipping its own) and the following swap has nothing newer
++ * (repeating it), while presents stay evenly spaced. So each swap shows its own
++ * frame, the one with its swap number: then the presenter's image of swap N is
++ * the frame the app drew for it (frame dumps rely on that).
+  *
+  * @license     BSD 3-Clause License
+  *              See LICENSE file in the project root for full license text.
+@@ -25,32 +27,46 @@ struct SwapChoice {
+   bool repeated = false;  // the previous swap's frame again
+ };
+ 
+-// last_shown: the sequence the previous swap showed (none before the first swap).
+-// latest: the newest published sequence. max_lag: how far behind latest a frame may be and still
+-// be intact (the app may be drawing into older ones). available(s): whether frame s was published.
++// last_shown: the sequence the previous swap showed (none before the first swap). swap: this
++// swap's number on the guest swap clock, the sequence of its own frame. latest: the newest
++// published sequence. max_lag: how far behind latest a frame may be and still be intact (the app
++// may be drawing into older ones). available(s): whether frame s was published.
++//
++// The swap's own frame when it is published and intact; the oldest intact frame when the GPU runs
++// too far behind; the newest frame before it when the app published none for this swap.
+ template <typename Available>
+-constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_t latest,
+-                                     uint64_t max_lag, Available available) {
+-  if (!last_shown) {
+-    return {latest, 0, false};
+-  }
+-  if (*last_shown >= latest) {
+-    return {*last_shown, 0, true};
+-  }
+-  uint64_t next = *last_shown + 1;
++constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_t swap,
++                                     uint64_t latest, uint64_t max_lag, Available available) {
+   const uint64_t oldest_intact = latest > max_lag ? latest - max_lag : 0;
+-  if (next < oldest_intact) {
+-    next = oldest_intact;
++  uint64_t show = latest;
++  if (swap < latest) {
++    show = swap < oldest_intact ? oldest_intact : swap;
++    if (swap >= oldest_intact) {
++      // This swap's frame, else the newest published one before it.
++      while (show > oldest_intact && !available(show)) {
++        --show;
++      }
++    } else {
++      while (show < latest && !available(show)) {
++        ++show;
++      }
++    }
++    if (!available(show)) {
++      show = latest;
++    }
+   }
+-  while (next < latest && !available(next)) {
+-    ++next;
++  SwapChoice choice;
++  choice.show = show;
++  if (last_shown) {
++    choice.repeated = show == *last_shown;
++    choice.skipped = show > *last_shown + 1 ? show - *last_shown - 1 : 0;
+   }
+-  return {next, next - *last_shown - 1, false};
++  return choice;
+ }
+ 
+-constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_t latest,
+-                                     uint64_t max_lag) {
+-  return ChooseSwapFrame(last_shown, latest, max_lag, [](uint64_t) { return true; });
++constexpr SwapChoice ChooseSwapFrame(std::optional<uint64_t> last_shown, uint64_t swap,
++                                     uint64_t latest, uint64_t max_lag) {
++  return ChooseSwapFrame(last_shown, swap, latest, max_lag, [](uint64_t) { return true; });
+ }
+ 
+ }  // namespace rex::system::external_frame
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+index d307229..33eb373 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -108,6 +108,8 @@ void NotifyFrameShown() {
+     observer(frame);
+   }
+ }
++
++uint64_t FramesShownCount() { return frames_shown; }
+ }  // namespace rex::system
+ 
+ namespace rex::kernel::xboxkrnl {
+diff --git a/src/system/external_frame.cpp b/src/system/external_frame.cpp
+index 107233c..aca7af5 100644
+--- a/src/system/external_frame.cpp
++++ b/src/system/external_frame.cpp
+@@ -13,6 +13,7 @@
+ #include <optional>
+ 
+ #include <rex/cvar.h>
++#include <rex/system/guest_swaps.h>
+ #include <rex/system/swap_choice.h>
+ 
+ REXCVAR_DEFINE_BOOL(external_frame_in_order, true, "GPU",
+@@ -63,7 +64,9 @@ SwapStep TakeForSwap() {
+   };
+   SwapChoice choice;
+   if (REXCVAR_GET(external_frame_in_order)) {
+-    choice = ChooseSwapFrame(g_last_shown, g_latest.sequence, kMaxSwapLag, available);
++    // This swap's number, on the clock the app numbers its frames by.
++    choice = ChooseSwapFrame(g_last_shown, FramesShownCount(), g_latest.sequence, kMaxSwapLag,
++                             available);
+   } else {
+     // The newest frame at every swap.
+     choice.show = g_latest.sequence;

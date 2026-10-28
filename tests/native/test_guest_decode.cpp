@@ -321,15 +321,6 @@ TEST_CASE("720p is never filtered, even into a smaller window: the presenter fit
   CHECK(plan.output_height == 720);
 }
 
-TEST_CASE("texture LOD bias follows the render resolution") {
-  CHECK(LodBiasFor(1) == 0.0f);
-  CHECK(LodBiasFor(4) == -1.0f);
-  CHECK(PlanOutput(1, 1920, 1080).lod_bias == 0.0f);
-  CHECK(PlanOutput(2, 1920, 1080).lod_bias == -0.5f);
-  CHECK(PlanOutput(3, 1920, 1080).lod_bias == -1.0f);
-  CHECK(PlanOutput(4, 1920, 1080).lod_bias == -1.0f);
-}
-
 TEST_CASE("CAS strength 0 leaves the presenter as it is; others sharpen, clamped to 1") {
   CHECK_FALSE(CasEffect(0.0).enabled);
   CHECK_FALSE(CasEffect(-1.0).enabled);
@@ -378,4 +369,15 @@ TEST_CASE("repacked vertices hold the guest bytes Xenos fetches for each one") {
   CHECK(host[23] == 0x3C3D3E3Fu);
   CHECK(GuestVertexBytes(3, 16, 32) == 64);
   CHECK(GuestVertexBytes(3, 20, 20) == 60);
+}
+
+TEST_CASE("the window's 16:9 area is the largest that fits, and nothing without a window") {
+  CHECK(FitWindow(1920, 1080).width == 1920);
+  CHECK(FitWindow(1920, 1080).height == 1080);
+  CHECK(FitWindow(3440, 1440).width == 2560);  // ultrawide: bars beside
+  CHECK(FitWindow(3440, 1440).height == 1440);
+  CHECK(FitWindow(1280, 1024).width == 1280);  // 5:4: bars above and below
+  CHECK(FitWindow(1280, 1024).height == 720);
+  CHECK(FitWindow(0, 0).width == 0);
+  CHECK(FitWindow(0, 0).height == 0);
 }

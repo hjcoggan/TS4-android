@@ -69,13 +69,40 @@ at 4350
 press A
 """
 
+# label and crops: what scripts/scene_runner_shots.py shows on its before-and-after page
+# (crop boxes are fractions of the frame: x, y, width, height).
 [[capture]]  # lesson menu, the Academy grounds behind it
 frame = 2200
+label = "lesson menu over the Academy grounds"
+crops = [
+  { name = "trees (foliage)", box = [0.69, 0.0, 0.31, 0.38] },
+  { name = "tree and brick building", box = [0.0, 0.0, 0.30, 0.22] },
+  { name = "plants and flowers", box = [0.10, 0.57, 0.13, 0.15] },
+  { name = "lesson card text", box = [0.35, 0.23, 0.30, 0.18] },
+  { name = "stairs and railing", box = [0.0, 0.72, 0.28, 0.28] },
+]
 [[capture]]  # the coach's welcome
 frame = 2350
+label = "the coach's welcome"
 [[capture]]  # lesson card over the court
 frame = 2800
+label = "lesson card over the court"
 [[capture]]  # the lesson, on court
 frame = 3250
+label = "the lesson, on court"
+crops = [
+  { name = "net", box = [0.17, 0.32, 0.30, 0.12] },
+  { name = "court lines, near corner", box = [0.06, 0.58, 0.17, 0.26] },
+  { name = "player, racket and shadow", box = [0.47, 0.61, 0.14, 0.25] },
+  { name = "clutter beside the court", box = [0.015, 0.22, 0.12, 0.29] },
+  { name = "HUD text", box = [0.33, 0.025, 0.30, 0.065] },
+]
 [[capture]]  # the lesson, later
 frame = 4300
+label = "the lesson, later"
+crops = [
+  { name = "net", box = [0.26, 0.32, 0.30, 0.12] },
+  { name = "court lines, near corner", box = [0.145, 0.55, 0.12, 0.28] },
+  { name = "player, racket and shadow", box = [0.40, 0.57, 0.13, 0.24] },
+  { name = "HUD text", box = [0.33, 0.025, 0.30, 0.065] },
+]

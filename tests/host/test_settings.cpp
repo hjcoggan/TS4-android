@@ -176,3 +176,68 @@ TEST_CASE("Key bindings may name any key, and may be cleared") {
   CHECK(FindSetting("keybind_a")->Allows(""));
   CHECK_FALSE(FindSetting("keybind_a")->Allows("a\\b"));
 }
+
+TEST_CASE("The image settings default to the original look and list their levels") {
+  const Setting* scale = FindSetting("ts4_resolution_scale");
+  REQUIRE(scale);
+  CHECK(scale->default_value == "1");
+  CHECK(scale->choices == std::vector<std::string_view>{"1", "auto", "2", "3", "4"});
+  const Setting* msaa = FindSetting("ts4_msaa");
+  REQUIRE(msaa);
+  CHECK(msaa->default_value == "original");
+  CHECK(msaa->choices == std::vector<std::string_view>{"original", "4", "8"});
+  const Setting* filtering = FindSetting("ts4_anisotropic_filtering");
+  REQUIRE(filtering);
+  CHECK(filtering->default_value == "original");
+  CHECK(filtering->choices == std::vector<std::string_view>{"original", "4", "8", "16"});
+  const Setting* sharpening = FindSetting("ts4_sharpening");
+  REQUIRE(sharpening);
+  CHECK(sharpening->default_value == "off");
+  CHECK(sharpening->choices == std::vector<std::string_view>{"off", "low", "medium", "high"});
+}
+
+TEST_CASE("Image settings round-trip through the settings file, and a typo keeps the default") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  REQUIRE(SaveSetting(path, "ts4_anisotropic_filtering",
+                      TomlLiteral(*FindSetting("ts4_anisotropic_filtering"), "16")));
+  REQUIRE(SaveSetting(path, "ts4_sharpening", TomlLiteral(*FindSetting("ts4_sharpening"), "high")));
+  CHECK(Loaded(path).values == std::map<std::string, std::string>{
+                                   {"ts4_anisotropic_filtering", "16"}, {"ts4_sharpening", "high"}});
+  REQUIRE(SaveSetting(path, "ts4_resolution_scale",
+                      TomlLiteral(*FindSetting("ts4_resolution_scale"), "auto")));
+  CHECK(Loaded(path).values.at("ts4_resolution_scale") == "auto");
+  REQUIRE(SaveSetting(path, "ts4_msaa", TomlLiteral(*FindSetting("ts4_msaa"), "8")));
+  CHECK(Loaded(path).values.at("ts4_msaa") == "8");
+  WriteFile(path, "ts4_anisotropic_filtering = \"15\"\nts4_sharpening = \"hgih\"\n");
+  Loaded typo(path);
+  CHECK(typo.values.empty());
+  CHECK(typo.report.warnings.size() == 2);
+}
+
+TEST_CASE("A number written without quotes is accepted where the setting's values are numbers") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "ts4_anisotropic_filtering = 16\nts4_resolution_scale = 2\nts4_msaa = 4\n");
+  CHECK(Loaded(path).values == std::map<std::string, std::string>{{"ts4_anisotropic_filtering", "16"},
+                                                                  {"ts4_msaa", "4"},
+                                                                  {"ts4_resolution_scale", "2"}});
+  // A number the setting does not allow is still a typo, and so is one for a setting of words.
+  WriteFile(path, "ts4_anisotropic_filtering = 15\nts4_sharpening = 3\nts4_resolution_scale = 5\n");
+  Loaded typo(path);
+  CHECK(typo.values.empty());
+  CHECK(typo.report.warnings.size() == 3);
+}
+
+TEST_CASE("Resolution scale and MSAA are Native only; every other setting is available on both") {
+  for (const Setting& setting : PlayerSettings()) {
+    CAPTURE(setting.key);
+    CHECK(setting.AvailableOn(kRendererNative));
+    const bool native_only = setting.key == "ts4_resolution_scale" || setting.key == "ts4_msaa";
+    CHECK(setting.AvailableOn(kRendererClassic) == !native_only);
+  }
+  CHECK(FindSetting("ts4_anisotropic_filtering")->AvailableOn(kRendererClassic));
+  CHECK(FindSetting("ts4_sharpening")->AvailableOn(kRendererClassic));
+  CHECK_FALSE(FindSetting("ts4_resolution_scale")->AvailableOn(kRendererClassic));
+  CHECK_FALSE(FindSetting("ts4_msaa")->AvailableOn(kRendererClassic));
+}

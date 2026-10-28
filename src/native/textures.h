@@ -9,6 +9,7 @@
 
 #include <rex/ui/vulkan/api.h>
 
+#include "native/image_quality.h"
 #include "native/texture_formats.h"
 
 namespace topspin4::native::textures {
@@ -16,9 +17,10 @@ namespace topspin4::native::textures {
 // scale: the native resolution scale; resolve targets are that much larger
 // than their guest textures.
 // colour: how gamma fetches are decoded (texture_formats.h, GammaFetch).
-// lod_bias: the render resolution's texture LOD bias (guest::PlanOutput);
-// --ts4_native_lod_bias, when set, replaces it.
-bool Initialize(uint32_t scale, ColourMode colour, float lod_bias);
+// plan: the samplers' part of the image-quality plan (texture filtering, the global texture
+// sharpness bias and the device's limit on a sampler's bias), until BeginFrame gives another;
+// --ts4_native_lod_bias, when set, replaces the bias.
+bool Initialize(uint32_t scale, ColourMode colour, const image_quality::Plan& plan);
 
 // A texture fetch constant as the guest stores it (six big-endian dwords).
 struct FetchConstant {
@@ -83,10 +85,10 @@ struct UploadStats {
 };
 void TakeUploadStats(UploadStats& stats);
 
-// At each frame's start, before any Bind: takes this frame's Texture filtering
-// (ts4_native_anisotropy). A change reaches the samplers draws look up from
-// this frame on; the old ones stay for frames still in flight.
-void BeginFrame(uint64_t frame);
+// At each frame's start, before any Bind: takes this frame's texture filtering, texture sharpness
+// bias and bias limit from the plan. A change reaches the samplers draws look up from this frame
+// on; the old ones stay for frames still in flight.
+void BeginFrame(uint64_t frame, const image_quality::Plan& plan);
 
 // Destroys guest-memory textures no draw has used for a while, so memory does
 // not grow with every arena and attire the session loads.

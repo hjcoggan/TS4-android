@@ -7,7 +7,9 @@ from Classic. The renderer, its hooks and every finding so far are in
 
 ## The loop
 
-1. **Measure on the same frame.** `python scripts/scene_runner.py <scene> --native 1 --dual 1`.
+1. **Measure on the same frame.** `python scripts/scene_runner.py <scene> --runs 0 --native 1 --dual 1`
+   (`--runs 0` skips the Classic runs, which only report in dual mode, and cuts the Native run
+   to the first capture, which the presenter's ramp is read from).
    The dual run draws every frame with both renderers (`--ts4_native_dual_compare`) and judges
    Native against Classic on the identical frame, so a match's AI or load times cannot hide or
    fake a difference. The plain `--native` verdict compares different runs and is decisive only
@@ -22,7 +24,8 @@ from Classic. The renderer, its hooks and every finding so far are in
 3. **Compare the draw's inputs, one class at a time.** `query … 'draw EID'` on both sides, then
    `'texture ID'` for each bound texture. For constants, `--ts4_native_trace_frame=N
    --ts4_native_trace_ps=<decimal hash>` dumps Native's vertex and pixel constants for draws
-   with that pixel shader. `python scripts/shader_lookup.py <hash>` gives the shader's HLSL and
+   with that pixel shader; on a Native capture, `query … 'constants EID ps FIRST COUNT'` reads
+   them without a new run. `python scripts/shader_lookup.py <hash>` gives the shader's HLSL and
    the register of every constant it reads. Line those up with Classic's `xe_uniform_float_constants`,
    which pack only the used registers in ascending order.
 4. **When every input matches,** the difference is in how a vertex or texture is decoded. Read
@@ -60,8 +63,10 @@ from Classic. The renderer, its hooks and every finding so far are in
   sharpens foliage with -1 and -2). When a draw's textures, samplers and constants match but its
   output alpha or detail does not, decode the fetch constants in the Native trace (`slot N
   fetch` lines) against `xe_gpu_texture_fetch_t`.
-- **Classic's defaults are part of the picture.** Classic filters at 4x anisotropy
-  (`anisotropic_override` 3). `query … 'draw EID'` prints each sampler's filter and anisotropy.
+- **Classic's defaults are part of the picture.** Both renderers take texture filtering from the
+  `ts4_anisotropic_filtering` setting: at its default, the game's own (`anisotropic_override` -1,
+  as the Oracle); the SDK's own default was 4x. `query … 'draw EID'` prints each sampler's filter
+  and anisotropy.
 - **Same-frame captures.** `pwsh scripts/rdoc.ps1 capture … -ExtraArguments
   '--ts4_renderer=native','--ts4_native_dual_compare=true'` puts both renderers' draws in one
   capture, Native's first. `'mesh EID 4000'` dumps post-VS positions for matching vertex sets.

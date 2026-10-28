@@ -170,6 +170,8 @@ anisotropy, and both shaders' SPIR-V. What it found, frame by frame:
 - **Anisotropic filtering.** Classic filters linear, mipmapped textures at 4x
   (`anisotropic_override` defaults to 3); Native used the fetch's own setting (off). The court and
   small banner text were softer. `ts4_native_anisotropy` now defaults to -2, Classic's setting.
+  Since image-quality ticket 02 both renderers take it from the `ts4_anisotropic_filtering`
+  setting, whose default is the game's own filtering (the Oracle's `anisotropic_override` -1).
 
 Result (`python scripts/scene_runner.py tests/scenes/exhibition-match.toml --native 1 --dual 1`):
 every dual frame passes, worst tiles 0, 0, 0 and 18, mean FLIP 0.0022 at player select and 0.010
@@ -197,6 +199,38 @@ What King of the Court took (`analysis/rdoc-kotc-6400`):
   TEXCOORD7; Native's `kInputLocations` knew only TEXCOORD7 there, so the first morph target of
   Top Spin 4's morph meshes (four extra POSITIONn/NORMALn streams) read zeros. The TV cameramen
   came out posed differently: 41% of their post-VS vertices up to 0.02 NDC off Classic's.
+
+## Shadow map and texel offsets at scale (image-quality ticket 05, 2026-10-27)
+
+Captures of Exhibition frame 3600 on Native at 1x and at `--ts4_resolution_scale=2`
+(`analysis/scenes/iq05/rdoc-1x`, `rdoc-2x`; the draw order and EIDs are the same in both).
+
+- **The shadow map is the 1040x1024 target.** Two depth-only passes draw into it, one per player
+  (EIDs 655-948 at viewport 512,0 512x1024 and 1098-1247 at 0,0 512x1024). It is resolved
+  (`resolve depth 1040x1024`, EID 1250) to a 1024x1024 R32_FLOAT texture, which the court and
+  player draws sample as `ShadowDepthMapPlayer`. Its slot in SharedConstants differs per shader
+  (EID 5263's receiver reads it at +20), so find it per shader. 1040 is 13 EDRAM tiles
+  of 80 pixels: the 1024-wide map padded to the tile width. The colour half of the same target is
+  resolved to a 1024x1024 RGBA8 at EID 1311. At 2x the target is 2080x2048 and the textures are
+  2048x2048. The 512x512 R32_FLOAT the court samples is not a resolve and stays 512x512.
+- **No converted shader has a fetch-instruction offset.** Every `tfetch2D` call in the 493-shader
+  pack (`cache/shader-native/hlsl`) has offset (0, 0); only 2D fetches carry offsets in the
+  converter. Nothing calls `getWeights2D` or `tfetch2DBicubic`.
+  `patches/xenosrecomp/0007-texel-offsets-at-scale` therefore changes no sample in this pack. Only its heap-index mask (`& 0x1FFFFFFF`) is live, matching the bits
+  `textures.cpp` sets. It stays as Edge's `draw_resolution_scaled_texture_offsets` behaviour for
+  any shader added to the pack later.
+- **Blur and shadow taps are in UV, so they cover the same guest area at any scale.** No
+  fragment shader of the post chain or the shadow receivers queries a texture's size.
+  - Bloom: 1280x720 scene resolve -> 640x360 (EID 7925) -> 13-tap blur, vertical then horizontal
+    (EIDs 7956, 7982, the same pixel shader) -> composite (EID 8008). The taps are
+    `texcoord + k * c0.xy`, k = -6..6; c0 is (0, 1/512) and (1/512, 0) at 1x and at 2x. The blur
+    target is 1280x720 at 2x.
+  - Shadow filtering: the receiver that wrote the shadow-edge pixel (EID 5263) takes 16 taps at
+    UV offsets that are literals in the shader (at most 0.0016, about 1.6 texels of the 1024 map).
+    Its SPIR-V and every pixel constant it reads are identical at 1x and 2x.
+- **No target needs pinning to 1x.** Every resolve target scaled with the frame (radar gun
+  256x64 -> 512x128 with its mips, 160x128 -> 320x256, 640x360 -> 1280x720). Ticket 04's
+  seven scenes at 2x and 3x had no failing tile.
 
 ## Open
 
