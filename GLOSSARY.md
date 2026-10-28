@@ -77,12 +77,16 @@ The player's saved settings. It is the one source of truth that the Settings pag
 _Avoid_: config, cvars file
 
 **Settings page**:
-The in-game screen, usable with a controller, where players change settings while playing. It opens from a PC SETTINGS row in the game's own OPTIONS menu, from F4, or with a pad combo, and it is the main way players change settings.
+The in-game screen, usable with a controller, where players change settings while playing. It opens from a PC SETTINGS row in the game's own OPTIONS menu, from F4, or with a pad combo. The Launcher shows the same settings before the game starts.
 _Avoid_: overlay, F6 menu, options menu (that is the game's own)
 
 **Launcher**:
-The separate program that prepares the disc and Title Update 1 and changes the few settings that only make sense before the game starts. After setup, the game starts without it.
+The separate program players open to start the game. On first run it prepares the disc and Title Update 1; after that it is the home screen for playing and changing settings. The game can also start without it, from a Direct shortcut.
 _Avoid_: setup tool (when the GUI is meant)
+
+**Direct shortcut**:
+A shortcut the Launcher creates that starts the game straight away, without showing the Launcher, using the saved Settings file.
+_Avoid_: unattended shortcut, quick launch
 
 **Launch option**:
 A setting given when the game is started, on the command line or in the environment. It wins over the Settings file for that session and is not saved.
