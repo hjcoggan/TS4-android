@@ -5,7 +5,7 @@ namespace TopSpin4.Launcher.Tests;
 /// <summary>The Launcher holds no game art (ADR-0006): the art is read from the player's disc at run time, never bundled.</summary>
 public sealed class NoGameArtTests
 {
-    private static string LauncherRoot()
+    internal static string LauncherRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
             if (File.Exists(Path.Combine(dir.FullName, "launcher", "TopSpin4Launcher.slnx"))) return Path.Combine(dir.FullName, "launcher");

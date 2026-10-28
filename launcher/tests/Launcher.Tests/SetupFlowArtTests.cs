@@ -100,8 +100,8 @@ public sealed class SetupFlowArtTests : IDisposable
 
         Assert.Equal(RowState.Accepted, flow.Disc.State);
         Assert.Contains("nxeart", Assert.Single(_log));
-        Assert.True(DiscArtFolder.Open(ArtFolder).Has(DiscArtSlot.Logo));
-        Assert.False(DiscArtFolder.Open(ArtFolder).Has(DiscArtSlot.Background));
+        Assert.NotNull(DiscArtFolder.Open(ArtFolder).ImagePath(DiscArtSlot.Logo));
+        Assert.Null(DiscArtFolder.Open(ArtFolder).ImagePath(DiscArtSlot.Background));
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class SetupFlowArtTests : IDisposable
         var flow = await PreparedFlow(discArt: null, preparedArt: root => DiscArt.RestoreFromFolder(root, ArtFolder, _log.Add));
 
         Assert.True(DiscArtFolder.Open(ArtFolder).IsComplete);
-        Assert.Equal(flow.Prepared!.GameDataRoot, DiscArtFolder.Open(ArtFolder).Source);
+        Assert.Equal(flow.Prepared!.GameDataRoot, TestArtFolder.Source(ArtFolder));
         Assert.Empty(_log);
     }
 
@@ -147,7 +147,7 @@ public sealed class SetupFlowArtTests : IDisposable
         await PreparedFlow(iso => DiscArt.FromIso(iso, ArtFolder, _log.Add), root => DiscArt.RestoreFromFolder(root, ArtFolder, _log.Add));
 
         Assert.True(DiscArtFolder.Open(ArtFolder).IsComplete);
-        Assert.EndsWith(".iso", DiscArtFolder.Open(ArtFolder).Source);
+        Assert.EndsWith(".iso", TestArtFolder.Source(ArtFolder));
     }
 
     [Fact]

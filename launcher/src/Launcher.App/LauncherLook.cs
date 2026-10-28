@@ -10,41 +10,32 @@ namespace TopSpin4.Launcher;
 /// <summary>
 /// Puts a <see cref="LauncherTheme"/> on screen: the colours go into the brushes <c>Theme.axaml</c> declares (changed in
 /// place, so every control that uses them follows), and the art files are read into bitmaps. The Launcher itself holds no
-/// picture: every image comes from the player's art folder, and one that cannot be read counts as missing.
+/// picture: every image comes from the player's art folder. What to show is the theme's decision, not this class's: a
+/// picture that cannot be read is reported back to <see cref="LauncherTheme.From"/>, which then counts it as missing.
 /// </summary>
 internal static class LauncherLook
 {
-    private static readonly (string Key, Func<ThemePalette, string> Colour)[] Brushes =
-    [
-        ("BaseBrush", p => p.Base), ("ScrimBrush", p => p.Scrim), ("DimBrush", p => p.Dim), ("PanelBrush", p => p.Panel),
-        ("BallBrush", p => p.Accent), ("BallHotBrush", p => p.AccentHot), ("AccentTextBrush", p => p.AccentText),
-        ("CourtBrush", p => p.Secondary), ("SkyBrush", p => p.Silver),
-        ("TextBrush", p => p.Text), ("MutedBrush", p => p.Muted), ("ErrorBrush", p => p.Error),
-        ("OnAccentBrush", p => p.OnAccent), ("SecondaryFillBrush", p => p.SecondaryFill), ("SecondaryBorderBrush", p => p.SecondaryBorder),
-    ];
-
     /// <summary>Sets the declared brushes to <paramref name="palette"/>.</summary>
     public static void Apply(ThemePalette palette)
     {
         var app = Application.Current ?? throw new InvalidOperationException("The look is applied once the application exists.");
-        foreach (var (key, colour) in Brushes)
+        foreach (var (key, colour) in palette.Brushes())
         {
-            if (app.TryFindResource(key, out var resource) && resource is SolidColorBrush brush) brush.Color = Color.Parse(colour(palette));
+            if (app.TryFindResource(key, out var resource) && resource is SolidColorBrush brush) brush.Color = Color.Parse(colour);
             else throw new InvalidOperationException($"Theme.axaml declares no SolidColorBrush named {key}.");
         }
     }
 
-    /// <summary>An art file as a bitmap; null (and a log line) when it cannot be read, so the original look's resource shows instead.</summary>
-    public static Bitmap? Load(ThemeSource source, Action<string> log)
+    /// <summary>An art file as a bitmap; null (and a log line) when it cannot be read, so the theme counts it as missing.</summary>
+    public static Bitmap? Load(string path, Action<string> log)
     {
-        if (source.ArtPath is not { } path) return null;
         try
         {
             return new Bitmap(path);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException)
         {
-            log($"Art: {path} could not be drawn: {error.Message}");
+            log($"Disc art: {path} could not be drawn: {error.Message}");
             return null;
         }
     }
@@ -53,9 +44,8 @@ internal static class LauncherLook
     /// The window icon from the art folder's <c>.ico</c>: the Disc art module writes it as one PNG image, which is what is
     /// drawn. Null when there is none or it cannot be read; the window then keeps the Launcher's own icon.
     /// </summary>
-    public static WindowIcon? Icon(ThemeSource source, Action<string> log)
+    public static WindowIcon? Icon(string path, Action<string> log)
     {
-        if (source.ArtPath is not { } path) return null;
         try
         {
             if (PngInIco(File.ReadAllBytes(path)) is not { } png) throw new InvalidDataException("it holds no PNG image");
@@ -64,7 +54,7 @@ internal static class LauncherLook
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException or NotSupportedException)
         {
-            log($"Art: the icon {path} could not be used: {error.Message}");
+            log($"Disc art: the icon {path} could not be used: {error.Message}");
             return null;
         }
     }

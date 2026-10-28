@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BaseBrush}">
   <Grid>
-    <!-- The player's art, when the art folder has it (MainWindow.ApplyTheme): the page's picture, quietened on Setup and Settings. -->
+    <!-- The player's art, when the art folder has it (MainWindow.ReloadTheme): the page's picture, quietened on Setup and Settings. -->
     <Image x:Name="BackgroundImage" Stretch="UniformToFill" IsVisible="False" IsHitTestVisible="False" />
     <Border x:Name="DimLayer" Background="{StaticResource DimBrush}" IsVisible="False" IsHitTestVisible="False" />
 

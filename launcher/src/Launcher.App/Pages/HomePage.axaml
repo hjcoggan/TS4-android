@@ -5,14 +5,14 @@
   <StackPanel Spacing="18">
     <StackPanel.Styles>
       <Style Selector="Button.attention">
-        <Setter Property="Background" Value="{StaticResource CourtBrush}" />
+        <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="FontSize" Value="24" />
         <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Padding" Value="28,8" />
       </Style>
       <Style Selector="Button.attention:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="{StaticResource SkyBrush}" />
+        <Setter Property="Background" Value="{StaticResource SilverBrush}" />
         <Setter Property="Foreground" Value="{StaticResource BaseBrush}" />
       </Style>
     </StackPanel.Styles>

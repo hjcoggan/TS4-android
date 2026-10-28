@@ -41,8 +41,9 @@ public partial class MainWindow : Window
     private LauncherPage? _shownPage;
     private bool _padHeldForBinding;
     private readonly string _artFolder;
-    private LauncherTheme? _theme;
-    private Bitmap? _homeBackground, _setupBackground, _logo, _boxArt;
+    private LauncherTheme _theme = LauncherTheme.Original;
+    private bool _themeLoaded;
+    private Dictionary<string, Bitmap> _pictures = [];
     private (RowState Disc, SetupPhase Phase)? _themeKey;
 
     public MainWindow()
@@ -84,11 +85,7 @@ public partial class MainWindow : Window
         _homePage.ActionPressed += async action => await OnHomeAction(action);
         _settingsPage.BackPressed += _shell.Back;
         // The exe or the prepared folders may change while the window is open; look again when it is used.
-        Activated += (_, _) =>
-        {
-            ReloadTheme();
-            Refresh();
-        };
+        Activated += (_, _) => Refresh();
 
         // The look starts from whatever the art folder holds. If the folder is missing or incomplete the art is read again
         // from the prepared disc folder in the background (never failing the start), and the look follows when it is done.
@@ -291,39 +288,49 @@ public partial class MainWindow : Window
         Refresh();
     }
 
-    // Reads the art folder again and, if what it holds changed, redraws in the new look: the player's art where the folder
-    // has it, the original look's own resource where it does not. A picture that cannot be read counts as missing.
+    // Reads the art folder and, if it changed since the last look (LauncherTheme.ArtStamp: another disc's art under the same
+    // file names counts), builds the look from it and puts it on screen. LauncherTheme decides what shows; the window loads the
+    // pictures it is asked about, and a picture it cannot draw is reported back as missing.
     private void ReloadTheme()
     {
-        var theme = LauncherTheme.From(DiscArtFolder.Open(_artFolder));
-        if (_theme is not null && theme.SameLookAs(_theme)) return;
-        var old = new[] { _homeBackground, _setupBackground, _logo, _boxArt };
-        _homeBackground = LauncherLook.Load(theme.Source(ThemeImage.HomeBackground), Log);
-        _setupBackground = LauncherLook.Load(theme.Source(ThemeImage.SetupBackground), Log);
-        _logo = LauncherLook.Load(theme.Source(ThemeImage.Logo), Log);
-        _boxArt = LauncherLook.Load(theme.Source(ThemeImage.BoxArt), Log);
+        var art = DiscArtFolder.Open(_artFolder);
+        if (_themeLoaded && art.Stamp == _theme.ArtStamp) return;
+        var pictures = new Dictionary<string, Bitmap>();
+        WindowIcon? icon = null;
+        bool CanDraw(DiscArtSlot slot, string path)
+        {
+            if (slot == DiscArtSlot.TitleIcon) return (icon = LauncherLook.Icon(path, Log)) is not null;
+            if (LauncherLook.Load(path, Log) is not { } bitmap) return false;
+            pictures[path] = bitmap;
+            return true;
+        }
+        var theme = LauncherTheme.From(art, CanDraw);
+        var old = _pictures;
+        _pictures = pictures;
         _theme = theme;
-        // The picture that failed to load is missing, so its colours are the original look's too: decide from what is on screen.
-        var showsArt = _homeBackground is not null || _setupBackground is not null || _logo is not null || _boxArt is not null;
-        LauncherLook.Apply(showsArt ? theme.Palette : ThemePalette.Original);
-        Icon = LauncherLook.Icon(theme.Source(ThemeImage.WindowIcon), Log);
-        CreditText.Text = showsArt ? theme.CreditLine : LauncherTheme.Original.CreditLine;
-        _homePage.ShowBoxArt(_boxArt);
-        LogoImage.Source = _logo;
+        _themeLoaded = true;
+        LauncherLook.Apply(theme.Palette);
+        Icon = icon;
+        CreditText.Text = theme.CreditLine;
+        _homePage.ShowBoxArt(Picture(theme.Source(DiscArtSlot.BoxArt)));
+        LogoImage.Source = Picture(theme.Source(DiscArtSlot.Logo));
         ShowPageLook(_shell.Page);
-        foreach (var bitmap in old) bitmap?.Dispose();
+        foreach (var bitmap in old.Values) bitmap.Dispose();
     }
 
-    // The picture behind the page, and the header: the logo (large on Home, small elsewhere) or the title text.
+    private Bitmap? Picture(ThemeSource source) => source.ArtPath is { } path && _pictures.TryGetValue(path, out var bitmap) ? bitmap : null;
+
+    // What the theme says the page draws: its picture, the dimming over it, and the header (logo or title text).
     private void ShowPageLook(LauncherPage page)
     {
-        var background = page == LauncherPage.Home ? _homeBackground : _setupBackground;
+        var look = _theme.LookFor(page);
+        var background = Picture(look.Background);
         BackgroundImage.Source = background;
         BackgroundImage.IsVisible = background is not null;
-        DimLayer.IsVisible = background is not null && page != LauncherPage.Home;
-        LogoBlock.IsVisible = _logo is not null;
-        TitleText.IsVisible = _logo is null;
-        LogoImage.Height = page == LauncherPage.Home ? 110 : 52;
+        DimLayer.IsVisible = look.DimsBackground;
+        LogoBlock.IsVisible = look.ShowsLogo;
+        TitleText.IsVisible = !look.ShowsLogo;
+        LogoImage.Height = look.LogoHeight;
     }
 
     // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.

@@ -24,12 +24,12 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var art = ThemeFor(new TestArtDisc());
 
-        Assert.Equal(Path.Combine(ArtFolder, "background.jpg"), art.Source(ThemeImage.HomeBackground).ArtPath);
-        Assert.Equal(Path.Combine(ArtFolder, "setup-background.png"), art.Source(ThemeImage.SetupBackground).ArtPath);
-        Assert.Equal(Path.Combine(ArtFolder, "logo.png"), art.Source(ThemeImage.Logo).ArtPath);
-        Assert.Equal(Path.Combine(ArtFolder, "boxart.jpg"), art.Source(ThemeImage.BoxArt).ArtPath);
-        Assert.Equal(Path.Combine(ArtFolder, DiscArtFolder.IconFileName), art.Source(ThemeImage.WindowIcon).ArtPath);
-        Assert.All(Enum.GetValues<ThemeImage>(), image => Assert.True(art.Source(image).IsArt));
+        Assert.Equal(Path.Combine(ArtFolder, "background.jpg"), art.Source(DiscArtSlot.Background).ArtPath);
+        Assert.Equal(Path.Combine(ArtFolder, "setup-background.png"), art.Source(DiscArtSlot.SetupBackground).ArtPath);
+        Assert.Equal(Path.Combine(ArtFolder, "logo.png"), art.Source(DiscArtSlot.Logo).ArtPath);
+        Assert.Equal(Path.Combine(ArtFolder, "boxart.jpg"), art.Source(DiscArtSlot.BoxArt).ArtPath);
+        Assert.Equal(Path.Combine(ArtFolder, DiscArtFolder.IconFileName), art.Source(DiscArtSlot.TitleIcon).ArtPath);
+        Assert.All(Enum.GetValues<DiscArtSlot>(), image => Assert.True(art.Source(image).IsArt));
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var original = LauncherTheme.From(DiscArtFolder.Open(Path.Combine(_root, "never-written")));
 
-        Assert.All(Enum.GetValues<ThemeImage>(), image =>
+        Assert.All(Enum.GetValues<DiscArtSlot>(), image =>
         {
             Assert.False(original.Source(image).IsArt);
             Assert.Null(original.Source(image).ArtPath);
@@ -52,7 +52,7 @@ public sealed class LauncherThemeTests : IDisposable
 
         var theme = LauncherTheme.From(DiscArtFolder.Open(ArtFolder));
 
-        Assert.All(Enum.GetValues<ThemeImage>(), image => Assert.False(theme.Source(image).IsArt));
+        Assert.All(Enum.GetValues<DiscArtSlot>(), image => Assert.False(theme.Source(image).IsArt));
         Assert.Equal(ThemePalette.Original, theme.Palette);
     }
 
@@ -61,11 +61,11 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var theme = ThemeFor(new TestArtDisc(), TestArtDisc.NxeArt, TestArtDisc.Module);
 
-        Assert.False(theme.Source(ThemeImage.HomeBackground).IsArt);
-        Assert.False(theme.Source(ThemeImage.BoxArt).IsArt);
-        Assert.False(theme.Source(ThemeImage.WindowIcon).IsArt);
-        Assert.True(theme.Source(ThemeImage.Logo).IsArt);
-        Assert.True(theme.Source(ThemeImage.SetupBackground).IsArt);
+        Assert.False(theme.Source(DiscArtSlot.Background).IsArt);
+        Assert.False(theme.Source(DiscArtSlot.BoxArt).IsArt);
+        Assert.False(theme.Source(DiscArtSlot.TitleIcon).IsArt);
+        Assert.True(theme.Source(DiscArtSlot.Logo).IsArt);
+        Assert.True(theme.Source(DiscArtSlot.SetupBackground).IsArt);
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var theme = ThemeFor(new TestArtDisc(), TestArtDisc.NxeArt, TestArtDisc.PressStart);
 
-        Assert.True(theme.Source(ThemeImage.WindowIcon).IsArt);
-        Assert.False(theme.Source(ThemeImage.Logo).IsArt);
+        Assert.True(theme.Source(DiscArtSlot.TitleIcon).IsArt);
+        Assert.False(theme.Source(DiscArtSlot.Logo).IsArt);
         Assert.Equal(ThemePalette.Original, theme.Palette);
     }
 
@@ -83,9 +83,9 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var theme = ThemeFor(new TestArtDisc());
 
-        Assert.Equal(theme.Source(ThemeImage.HomeBackground), theme.BackgroundFor(LauncherPage.Home));
-        Assert.Equal(theme.Source(ThemeImage.SetupBackground), theme.BackgroundFor(LauncherPage.Setup));
-        Assert.Equal(theme.Source(ThemeImage.SetupBackground), theme.BackgroundFor(LauncherPage.Settings));
+        Assert.Equal(theme.Source(DiscArtSlot.Background), theme.LookFor(LauncherPage.Home).Background);
+        Assert.Equal(theme.Source(DiscArtSlot.SetupBackground), theme.LookFor(LauncherPage.Setup).Background);
+        Assert.Equal(theme.Source(DiscArtSlot.SetupBackground), theme.LookFor(LauncherPage.Settings).Background);
     }
 
     [Fact]
@@ -93,9 +93,9 @@ public sealed class LauncherThemeTests : IDisposable
     {
         var theme = ThemeFor(new TestArtDisc(), TestArtDisc.PressStart);
 
-        Assert.True(theme.BackgroundFor(LauncherPage.Home).IsArt);
-        Assert.False(theme.BackgroundFor(LauncherPage.Setup).IsArt);
-        Assert.False(theme.BackgroundFor(LauncherPage.Settings).IsArt);
+        Assert.True(theme.LookFor(LauncherPage.Home).Background.IsArt);
+        Assert.False(theme.LookFor(LauncherPage.Setup).Background.IsArt);
+        Assert.False(theme.LookFor(LauncherPage.Settings).Background.IsArt);
     }
 
     [Fact]
@@ -133,5 +133,167 @@ public sealed class LauncherThemeTests : IDisposable
         Assert.True(full.SameLookAs(again));
         Assert.False(full.SameLookAs(gone));
         Assert.True(gone.SameLookAs(LauncherTheme.Original));
+    }
+
+    // Item 1: the file names are always the same; what the pictures are is not.
+    [Fact]
+    public void A_second_disc_that_writes_the_same_file_names_is_a_different_look()
+    {
+        var first = ThemeFor(new TestArtDisc());
+        var names = TestArtFolder.Files(ArtFolder);
+
+        var other = new TestArtDisc();
+        other.Files[TestArtDisc.PressStart] = TestXuiz.Build(
+            ("Bitmaps\\PressStart.PNG", TestArtImages.Png(32, 18, 13)),
+            ("Bitmaps\\Logo.PNG", TestArtImages.Png(28, 9, 14)));
+        DiscArt.FromFolder(other.WriteFolder(Path.Combine(_root, "disc-b")), ArtFolder);
+        var second = LauncherTheme.From(DiscArtFolder.Open(ArtFolder));
+
+        Assert.Equal(names, TestArtFolder.Files(ArtFolder));
+        Assert.Equal(first.Source(DiscArtSlot.Logo), second.Source(DiscArtSlot.Logo));
+        Assert.False(first.SameLookAs(second));
+        Assert.NotEqual(first.ArtStamp, second.ArtStamp);
+    }
+
+    // Item 5: the theme is the one place that decides; the window only applies it.
+
+    [Fact]
+    public void An_image_that_cannot_be_drawn_counts_as_missing()
+    {
+        DiscArt.FromFolder(new TestArtDisc().WriteFolder(Path.Combine(_root, "disc")), ArtFolder);
+        var art = DiscArtFolder.Open(ArtFolder);
+
+        var theme = LauncherTheme.From(art, (slot, _) => slot != DiscArtSlot.Logo && slot != DiscArtSlot.TitleIcon);
+
+        Assert.False(theme.Source(DiscArtSlot.Logo).IsArt);
+        Assert.False(theme.Source(DiscArtSlot.TitleIcon).IsArt);
+        Assert.True(theme.Source(DiscArtSlot.Background).IsArt);
+        Assert.False(theme.LookFor(LauncherPage.Home).ShowsLogo);
+        Assert.Equal(ThemePalette.Art, theme.Palette);
+    }
+
+    [Fact]
+    public void When_no_picture_can_be_drawn_the_whole_look_is_the_original_one()
+    {
+        DiscArt.FromFolder(new TestArtDisc().WriteFolder(Path.Combine(_root, "disc")), ArtFolder);
+
+        var theme = LauncherTheme.From(DiscArtFolder.Open(ArtFolder), (slot, _) => slot == DiscArtSlot.TitleIcon);
+
+        Assert.Equal(ThemePalette.Original, theme.Palette);
+        Assert.Equal(LauncherTheme.Original.CreditLine, theme.CreditLine);
+        Assert.True(theme.Source(DiscArtSlot.TitleIcon).IsArt);
+        Assert.All(new[] { LauncherPage.Home, LauncherPage.Setup, LauncherPage.Settings }, page =>
+        {
+            var look = theme.LookFor(page);
+            Assert.False(look.Background.IsArt);
+            Assert.False(look.ShowsLogo);
+            Assert.False(look.DimsBackground);
+        });
+    }
+
+    [Fact]
+    public void The_drawing_test_is_asked_about_each_file_the_theme_would_use_and_nothing_else()
+    {
+        DiscArt.FromFolder(new TestArtDisc().WriteFolder(Path.Combine(_root, "disc")), ArtFolder);
+        var asked = new List<(DiscArtSlot Slot, string Path)>();
+
+        LauncherTheme.From(DiscArtFolder.Open(ArtFolder), (slot, path) =>
+        {
+            asked.Add((slot, path));
+            return true;
+        });
+
+        Assert.Equal(Enum.GetValues<DiscArtSlot>().Count(), asked.Count);
+        Assert.Contains((DiscArtSlot.TitleIcon, Path.Combine(ArtFolder, DiscArtFolder.IconFileName)), asked);
+        Assert.Contains((DiscArtSlot.Logo, Path.Combine(ArtFolder, "logo.png")), asked);
+    }
+
+    [Fact]
+    public void Each_page_takes_its_background_its_dimming_and_its_header_from_the_theme()
+    {
+        var theme = ThemeFor(new TestArtDisc());
+
+        var home = theme.LookFor(LauncherPage.Home);
+        var setup = theme.LookFor(LauncherPage.Setup);
+        var settings = theme.LookFor(LauncherPage.Settings);
+
+        Assert.Equal(theme.Source(DiscArtSlot.Background), home.Background);
+        Assert.False(home.DimsBackground);
+        Assert.Equal(theme.Source(DiscArtSlot.SetupBackground), setup.Background);
+        Assert.True(setup.DimsBackground);
+        Assert.Equal(settings, setup);
+        Assert.True(home.ShowsLogo);
+        Assert.True(home.LogoHeight > setup.LogoHeight);
+    }
+
+    [Fact]
+    public void A_page_with_no_picture_is_not_dimmed_and_the_original_look_shows_the_title_text()
+    {
+        var look = LauncherTheme.Original.LookFor(LauncherPage.Setup);
+
+        Assert.False(look.Background.IsArt);
+        Assert.False(look.DimsBackground);
+        Assert.False(look.ShowsLogo);
+    }
+
+    // Item 7 and 11: the brushes the window sets are the palette's, under names that say what they hold.
+
+    private static string ThemeAxaml() =>
+        File.ReadAllText(Path.Combine(NoGameArtTests.LauncherRoot(), "src", "Launcher.App", "Theme.axaml"));
+
+    [Fact]
+    public void Theme_axaml_declares_each_palette_brush_with_the_original_colour()
+    {
+        var axaml = ThemeAxaml();
+
+        foreach (var (key, colour) in ThemePalette.Original.Brushes())
+            Assert.Matches($"<SolidColorBrush x:Key=\"{key}\" Color=\"{colour}\"\\s*/>", axaml);
+    }
+
+    [Fact]
+    public void No_page_names_a_brush_the_theme_does_not_declare()
+    {
+        var declared = ThemePalette.Original.Brushes().Select(brush => brush.Key).ToHashSet();
+        var app = Path.Combine(NoGameArtTests.LauncherRoot(), "src", "Launcher.App");
+
+        var used = Directory.EnumerateFiles(app, "*.axaml", SearchOption.AllDirectories)
+            .SelectMany(file => System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(file), @"StaticResource (\w+Brush)").Select(match => match.Groups[1].Value))
+            .Distinct()
+            .Where(name => !declared.Contains(name))
+            .ToList();
+
+        Assert.Empty(used);
+    }
+
+    [Fact]
+    public void Brush_names_say_what_they_hold()
+    {
+        var keys = ThemePalette.Original.Brushes().Select(brush => brush.Key).ToList();
+
+        Assert.Equal(keys.Count, keys.Distinct().Count());
+        Assert.DoesNotContain(keys, key => key is "BallBrush" or "BallHotBrush" or "CourtBrush" or "SkyBrush");
+        Assert.Contains("AccentBrush", keys);
+        Assert.Contains("SecondaryBrush", keys);
+        Assert.Contains("SilverBrush", keys);
+    }
+
+    [Fact]
+    public void The_original_look_keeps_its_disabled_play_colours_and_the_art_look_keeps_the_text_readable()
+    {
+        Assert.Equal("#4A4E2A", ThemePalette.Original.AccentDisabled);
+        Assert.Equal("#2A2A2A", ThemePalette.Original.OnAccentDisabled);
+        Assert.True(Contrast.Ratio(ThemePalette.Art.OnAccentDisabled, ThemePalette.Art.AccentDisabled) >= 4.5);
+    }
+
+    [Fact]
+    public void Disabled_play_takes_its_colours_from_the_palette_brushes_not_from_opacity()
+    {
+        var axaml = ThemeAxaml();
+
+        var disabled = System.Text.RegularExpressions.Regex.Match(axaml, @"Button\.play:disabled[\s\S]*?</Style>").Value;
+
+        Assert.Contains("AccentDisabledBrush", disabled);
+        Assert.Contains("OnAccentDisabledBrush", disabled);
+        Assert.DoesNotContain("Opacity", disabled);
     }
 }

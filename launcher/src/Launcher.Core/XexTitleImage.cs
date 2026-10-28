@@ -28,10 +28,12 @@ internal static class XexTitleImage
 
     /// <summary>
     /// The PNG title image of the Module in <paramref name="xex"/>, or null when it carries none
-    /// (no resource for its title, or no title image in it). Throws <see cref="InvalidDataException"/>
+    /// (no resource for its title, or no title image in it). <paramref name="execution"/> is the
+    /// Module's execution info, already read from its header (<see cref="XexHeader.Parse"/>); the
+    /// title resource is named after its title id. Throws <see cref="InvalidDataException"/>
     /// when the Module is damaged, cut off or encoded in a way this does not read.
     /// </summary>
-    public static byte[]? Read(byte[] xex)
+    public static byte[]? Read(byte[] xex, XexExecutionInfo? execution)
     {
         if (xex.Length < 0x18 || !xex.AsSpan(0, 4).SequenceEqual("XEX2"u8)) throw new InvalidDataException("It is not an Xbox 360 executable.");
         var peOffset = U32(xex, 8);
@@ -41,8 +43,8 @@ internal static class XexTitleImage
         var headers = new Dictionary<uint, uint>();
         for (var i = 0; i < count; i++) headers[U32(xex, 0x18 + i * 8)] = U32(xex, 0x1C + i * 8);
 
-        if (!headers.TryGetValue(ResourceInfoKey, out var resourceInfo) || XexHeader.Parse(xex)?.Execution is not { } execution) return null;
-        if (!TryFindResource(xex, resourceInfo, execution.TitleId.ToString("X8"), out var address, out var resourceSize)) return null;
+        if (!headers.TryGetValue(ResourceInfoKey, out var resourceInfo) || execution is not { } info) return null;
+        if (!TryFindResource(xex, resourceInfo, info.TitleId.ToString("X8"), out var address, out var resourceSize)) return null;
         if (!headers.TryGetValue(FileFormatInfoKey, out var format)) throw new InvalidDataException("The executable has no file format information.");
         if (security > xex.Length - 0x160) throw new InvalidDataException("The executable's security information is damaged.");
         var imageSize = U32(xex, security + 4);

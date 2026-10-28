@@ -304,14 +304,14 @@ public sealed class DiscArtTests : IDisposable
 
         var art = DiscArtFolder.Open(Art);
 
-        Assert.False(art.Has(DiscArtSlot.Background));
+        Assert.Null(art.ImagePath(DiscArtSlot.Background));
         Assert.Null(art.ImagePath(DiscArtSlot.BoxArt));
         Assert.Equal(Path.Combine(Art, "logo.png"), art.ImagePath(DiscArtSlot.Logo));
         Assert.Equal(Path.Combine(Art, "icon.png"), art.ImagePath(DiscArtSlot.TitleIcon));
         Assert.Equal(Path.Combine(Art, "topspin4.ico"), art.IconPath);
-        Assert.Equal([DiscArtSlot.Logo, DiscArtSlot.TitleIcon, DiscArtSlot.SetupBackground], art.Found);
-        Assert.False(art.IsComplete);
-        Assert.Equal(folder, art.Source);
+        Assert.Equal([DiscArtSlot.Logo, DiscArtSlot.TitleIcon, DiscArtSlot.SetupBackground], TestArtFolder.Found(Art));
+        Assert.True(art.IsComplete, "a disc that lacks an image is read in full: nothing is left to restore");
+        Assert.Equal(folder, TestArtFolder.Source(Art));
     }
 
     [Fact]
@@ -325,17 +325,17 @@ public sealed class DiscArtTests : IDisposable
     [Fact]
     public void A_missing_folder_a_missing_index_or_a_deleted_image_leaves_slots_empty()
     {
-        Assert.Empty(DiscArtFolder.Open(Path.Combine(_root, "never-made")).Found);
+        Assert.Empty(TestArtFolder.Found(Path.Combine(_root, "never-made")));
 
         FromFolder(new TestArtDisc());
         File.Delete(Path.Combine(Art, "logo.png"));
         var art = DiscArtFolder.Open(Art);
-        Assert.False(art.Has(DiscArtSlot.Logo));
+        Assert.Null(art.ImagePath(DiscArtSlot.Logo));
         Assert.False(art.IsComplete);
-        Assert.True(art.Has(DiscArtSlot.Background));
+        Assert.NotNull(art.ImagePath(DiscArtSlot.Background));
 
         File.Delete(Path.Combine(Art, "index.txt"));
-        Assert.Empty(DiscArtFolder.Open(Art).Found);
+        Assert.Empty(TestArtFolder.Found(Art));
     }
 
     [Fact]
@@ -347,7 +347,7 @@ public sealed class DiscArtTests : IDisposable
 
         var art = DiscArtFolder.Open(Art);
 
-        Assert.False(art.Has(DiscArtSlot.Logo));
-        Assert.True(art.Has(DiscArtSlot.Background));
+        Assert.Null(art.ImagePath(DiscArtSlot.Logo));
+        Assert.NotNull(art.ImagePath(DiscArtSlot.Background));
     }
 }

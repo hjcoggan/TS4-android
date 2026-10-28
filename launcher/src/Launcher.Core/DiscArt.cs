@@ -48,12 +48,12 @@ public static class DiscArt
         {
             source = IsoFileSource.TryOpen(isoPath);
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception error)
         {
             return Failed(log, $"Disc art: the disc image {isoPath} could not be read: {error.Message}");
         }
         if (source is null) return Failed(log, $"Disc art: {isoPath} is not an Xbox 360 disc image.");
-        using (source) return Run(source, isoPath, artFolder, log);
+        using (source) return FromSource(source, isoPath, artFolder, log);
     }
 
     /// <summary>Reads the art from the prepared disc folder (the extracted game partition) and writes it to <paramref name="artFolder"/>.</summary>
@@ -61,22 +61,25 @@ public static class DiscArt
     {
         if (!Directory.Exists(discFolder)) return Failed(log, $"Disc art: the disc folder {discFolder} was not found.");
         using var source = new FolderFileSource(discFolder);
-        return Run(source, discFolder, artFolder, log);
+        return FromSource(source, discFolder, artFolder, log);
     }
 
     /// <summary>
     /// Reads the art from the prepared disc folder again when <paramref name="artFolder"/> is missing or incomplete
     /// (<see cref="DiscArtFolder.IsComplete"/>), and does nothing, returning null, when it is complete. It never
-    /// throws: whatever stops it is logged, so neither setup nor a start can fail on the art.
+    /// throws: whatever stops it is logged, so neither setup nor a start can fail on the art. The check and the read
+    /// happen under the folder's writer lock, so a restore that overlaps a disc read does not do the work twice.
     /// </summary>
     public static DiscArtResult? RestoreFromFolder(string discFolder, string artFolder, Action<string>? log = null)
     {
-        if (DiscArtFolder.Open(artFolder).IsComplete) return null;
         try
         {
-            return FromFolder(discFolder, artFolder, log);
+            lock (DiscArtFolder.WriterLock)
+            {
+                return DiscArtFolder.Open(artFolder).IsComplete ? null : FromFolder(discFolder, artFolder, log);
+            }
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception error)
         {
             return Failed(log, $"Disc art: could not read the art from {discFolder}: {error.Message}");
         }
@@ -88,7 +91,7 @@ public static class DiscArt
         return new DiscArtResult([], [problem]);
     }
 
-    private static DiscArtResult Run(IDiscFileSource disc, string origin, string artFolder, Action<string>? log)
+    internal static DiscArtResult FromSource(IDiscFileSource disc, string origin, string artFolder, Action<string>? log)
     {
         var problems = new List<string>();
         void Problem(string text)
@@ -102,8 +105,19 @@ public static class DiscArt
         ReadNxeArt(disc, images, Problem);
         ReadPressStart(disc, images, Problem);
         var module = ReadModule(disc, images, Problem);
-        var found = DiscArtFolder.Write(artFolder, images, origin, module, Problem);
-        return new DiscArtResult(found, problems);
+        // An index is written for a read that logged nothing; a read with a problem is tried again next time (DiscArtFolder.IsComplete).
+        var clean = problems.Count == 0;
+        try
+        {
+            var found = DiscArtFolder.Write(artFolder, images, origin, module, clean, Problem);
+            return new DiscArtResult(found, problems);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // The folder is as it was (DiscArtFolder.Write changes the index only after the new files are in).
+            Problem($"the art could not be written to {artFolder}: {error.Message}");
+            return new DiscArtResult([], problems);
+        }
     }
 
     // The press-start screen's package: the Top Spin 4 logo and a plain picture, in a XUI package.
@@ -116,7 +130,7 @@ public static class DiscArt
             foreach (var (slot, name) in new[] { (DiscArtSlot.Logo, "Bitmaps\\Logo.PNG"), (DiscArtSlot.SetupBackground, "Bitmaps\\PressStart.PNG") })
                 if (package.Find(name) is { } entry) Accept(images, slot, $"{PressStart}: {name}", entry, problem);
         }
-        catch (Exception error) when (error is IOException or InvalidDataException)
+        catch (Exception error)
         {
             problem($"{PressStart} is damaged: {error.Message}");
         }
@@ -130,18 +144,21 @@ public static class DiscArt
         {
             bytes = disc.Read(Module);
         }
-        catch (Exception error) when (error is IOException or InvalidDataException)
+        catch (Exception error)
         {
             problem($"{Module} could not be read: {error.Message}");
             return null;
         }
         if (bytes is null) return null;
-        var identity = XexHeader.Parse(bytes)?.Execution is { } info ? new DiscIdentity(info.MediaId, info.TitleId) : (DiscIdentity?)null;
+        DiscIdentity? identity = null;
         try
         {
-            if (XexTitleImage.Read(bytes) is { } icon) Accept(images, DiscArtSlot.TitleIcon, $"{Module}: title image", icon, problem);
+            // The header is read once: it names the disc, and the title image is found through it.
+            var execution = XexHeader.Parse(bytes)?.Execution;
+            if (execution is { } info) identity = new DiscIdentity(info.MediaId, info.TitleId);
+            if (XexTitleImage.Read(bytes, execution) is { } icon) Accept(images, DiscArtSlot.TitleIcon, $"{Module}: title image", icon, problem);
         }
-        catch (InvalidDataException error)
+        catch (Exception error)
         {
             problem($"{Module} is damaged: {error.Message}");
         }
@@ -159,7 +176,7 @@ public static class DiscArt
             foreach (var (slot, name) in new[] { (DiscArtSlot.Background, "nxebg.jpg"), (DiscArtSlot.BoxArt, "nxeslot.jpg") })
                 if (package.Find(name) is { } file) Accept(images, slot, $"{NxeArt}/{name}", package.ReadAll(file), problem);
         }
-        catch (Exception error) when (error is IOException or InvalidDataException)
+        catch (Exception error)
         {
             problem($"{NxeArt} is damaged: {error.Message}");
         }
@@ -173,7 +190,7 @@ public static class DiscArt
             ArtImageFile.Describe(bytes);
             images[slot] = bytes;
         }
-        catch (InvalidDataException error)
+        catch (Exception error)
         {
             problem($"{name} was not used: {error.Message}");
         }

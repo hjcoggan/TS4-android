@@ -27,7 +27,7 @@ public sealed class DiscArtRestoreTests : IDisposable
         Assert.NotNull(result);
         Assert.True(DiscArtFolder.Open(Art).IsComplete);
         Assert.Equal(disc.Logo, File.ReadAllBytes(DiscArtFolder.Open(Art).ImagePath(DiscArtSlot.Logo)!));
-        Assert.Equal(Disc, DiscArtFolder.Open(Art).Source);
+        Assert.Equal(Disc, TestArtFolder.Source(Art));
         Assert.Empty(_log);
     }
 
@@ -68,7 +68,7 @@ public sealed class DiscArtRestoreTests : IDisposable
         Assert.NotNull(result);
         Assert.Empty(result.Found);
         Assert.Contains("Disc art", Assert.Single(_log));
-        Assert.False(DiscArtFolder.Open(Art).Has(DiscArtSlot.Logo));
+        Assert.Null(DiscArtFolder.Open(Art).ImagePath(DiscArtSlot.Logo));
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public sealed class DiscArtRestoreTests : IDisposable
         DiscArt.RestoreFromFolder(Disc, Art, _log.Add);
 
         Assert.Contains("nxeart", Assert.Single(_log));
-        Assert.True(DiscArtFolder.Open(Art).Has(DiscArtSlot.Logo));
-        Assert.False(DiscArtFolder.Open(Art).Has(DiscArtSlot.Background));
+        Assert.NotNull(DiscArtFolder.Open(Art).ImagePath(DiscArtSlot.Logo));
+        Assert.Null(DiscArtFolder.Open(Art).ImagePath(DiscArtSlot.Background));
     }
 
     [Fact]
