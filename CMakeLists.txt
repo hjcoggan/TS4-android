@@ -36,6 +36,7 @@ set(TOPSPIN4_SOURCES
     src/settings/schema_export.cpp
     src/settings/settings_cvars.cpp
     src/settings/settings_file.cpp
+    src/settings/settings_page.cpp
     src/user_paths.cpp
 )
 
@@ -141,6 +142,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_frame_dumps.cpp
         tests/host/test_user_paths.cpp
         tests/host/test_settings.cpp
+        tests/host/test_page_model.cpp
         tests/host/test_crash_report.cpp
         tests/host/test_pad_bindings.cpp
         tests/host/test_script_input.cpp

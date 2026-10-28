@@ -20,6 +20,13 @@
 //                               its change callbacks fire as for a player
 //                               (a live change); takes no time, the next
 //                               step starts on the same poll
+//   set settings_page open|close|toggle
+//                               the Settings page (the game's `set` handler, not a cvar).
+//                               While it is open the game reads an idle pad and the page
+//                               reads this script's pad: press UP/DOWN to move, LEFT/RIGHT or
+//                               A to change a value, B to close. Wait ~300 ms after `open`
+//                               before the first press (the page ignores input until the pad
+//                               has been idle that long).
 //
 // A duration <t> is milliseconds (120) or guest frames with an 'f' suffix
 // (6f). A frame step ends when the Present count reaches its start + n; the

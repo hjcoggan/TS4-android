@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 #include <rex/cvar.h>
 #include <rex/graphics/graphics_system.h>
+#include <rex/input/input_system.h>
 #include <rex/logging.h>
 #include <rex/memory.h>
 #include <rex/platform/env.h>
@@ -27,6 +28,7 @@
 #include "settings/renderer_choice.h"
 #include "settings/schema.h"
 #include "settings/settings_file.h"
+#include "settings/settings_page.h"
 #include "user_paths.h"
 
 REXCVAR_DECLARE(std::string, user_data_root);
@@ -97,15 +99,28 @@ class TopSpin4App : public rex::ReXApp {
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
     topspin4::crash::SetSettingsFile(path);
-    const settings::LoadReport report =
-        settings::LoadSettingsFile(path, [](std::string_view key, std::string_view value) {
+    // The Settings page shows what the file holds and which settings Launch options pin.
+    settings::SessionStart session;
+    const settings::LoadReport report = settings::LoadSettingsFile(
+        path, [&session](std::string_view key, std::string_view value) {
+          session.file_values[std::string(key)] = std::string(value);
           const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
           if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
                        flag->source == rex::cvar::Source::kEnvironment)) {
+            session.pinned.insert(std::string(key));
             return true;
           }
           return rex::cvar::SetFlagByName(key, value);
         });
+    // A setting given as a Launch option but absent from the file is pinned too.
+    for (const settings::Setting& setting : settings::PlayerSettings()) {
+      const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(setting.key);
+      if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
+                   flag->source == rex::cvar::Source::kEnvironment)) {
+        session.pinned.insert(std::string(setting.key));
+      }
+    }
+    settings::BeginSession(std::move(session));
     for (const std::string& warning : report.warnings) {
       REXLOG_WARN("{}", warning);
     }
@@ -151,6 +166,9 @@ class TopSpin4App : public rex::ReXApp {
     }
   }
 
+  // The Settings page's fonts (the game's own are ticket 08).
+  void OnConfigureFonts(ImFontAtlas* atlas) override { topspin4::settings::AddFonts(atlas); }
+
   void OnPreSetup(rex::RuntimeConfig& config) override {
     topspin4::native::ApplyImageSettings();
     rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
@@ -163,7 +181,11 @@ class TopSpin4App : public rex::ReXApp {
     topspin4::InstallScriptInput(
         config, &rex::system::GuestSwapCount, [context](std::string name, std::string value) {
           context->CallInUIThread([name, value] {
-            if (rex::cvar::SetFlagByName(name, value)) {
+            // `set settings_page open|close|toggle` drives the Settings page; its pad input is
+            // the script's own pad.
+            if (topspin4::settings::RunScriptCommand(name, value)) {
+              REXLOG_INFO("script input: {} {}", name, value);
+            } else if (rex::cvar::SetFlagByName(name, value)) {
               REXLOG_INFO("script input: set {} = {}", name, value);
             } else {
               REXLOG_WARN("script input: set {} = {} was rejected", name, value);
@@ -198,6 +220,14 @@ class TopSpin4App : public rex::ReXApp {
       topspin4::crash::SetWindow(game_window->GetNativeWindowHandle());
     }
     topspin4::crash::CrashIfAsked();
+    // The Settings page (F4, or a script's `set settings_page open`), over the game. Needs the
+    // ImGui drawer and the input system, both up by now.
+    topspin4::settings::Configure(
+        imgui_drawer(), static_cast<rex::input::InputSystem*>(runtime()->input_system()),
+        topspin4::settings::SettingsPath(user_data_root()),
+        [this](std::function<void()> function) {
+          app_context().CallInUIThread(std::move(function));
+        });
   }
 
   // Closing the window hard-exits the process without OnShutdown, so the session's last
