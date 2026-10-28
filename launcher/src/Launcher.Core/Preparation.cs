@@ -40,6 +40,41 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     /// <summary>The TU1 package is still needed: the cache lacks the update data.</summary>
     public bool NeedsTitleUpdate => _updateData.Status() != SetupStatus.Done;
 
+    /// <summary>The bytes the disc's game partition comes to; the weight of the extract step.</summary>
+    public long DiscBytes => disc.TotalBytes;
+
+    /// <summary>The bytes TU1's files come to; the weight of the unpack step.</summary>
+    public long TitleUpdateBytes => titleUpdate.TotalBytes;
+
+    /// <summary>An earlier preparation stopped part way and left files that the next one resumes from.</summary>
+    public bool HasPartial => _gameData.Status() == SetupStatus.Partial || _updateData.Status() == SetupStatus.Partial;
+
+    /// <summary>Removes what an unfinished preparation left, so the next one starts from nothing. Finished folders stay.</summary>
+    public void DiscardPartial()
+    {
+        _gameData.DiscardUnfinished();
+        _updateData.DiscardUnfinished();
+    }
+
+    /// <summary>Checks the file the player picked for the disc row: a supported disc image, or the reason it can't be used.</summary>
+    public InputCheck CheckDisc(string? path, CancellationToken cancel) => InputCheck.Run(() =>
+    {
+        if (!string.IsNullOrEmpty(path) && !path.EndsWith(".iso", StringComparison.OrdinalIgnoreCase))
+            throw new SetupException(SetupError.NotAnXboxImage, $"Not a disc image (.iso): {path}", null,
+                "This is not a disc image. Choose the .iso file you made from your Top Spin 4 disc.", Path.GetFileName(path));
+        using var image = DiscSetup.Open(path);
+        new DiscSetup(disc, space).Check(image, cancel);
+        return "Top Spin 4 disc, supported edition";
+    }, cancel, "The disc image could not be read");
+
+    /// <summary>Checks the file the player picked for the Title Update 1 row.</summary>
+    public InputCheck CheckTitleUpdate(string? path, CancellationToken cancel) => InputCheck.Run(() =>
+    {
+        using var package = TitleUpdateSetup.Open(path);
+        new TitleUpdateSetup(titleUpdate, space).Check(package, cancel);
+        return "Title Update 1 for Top Spin 4";
+    }, cancel, "The file could not be read");
+
     /// <summary>The prepared data when the cache holds all of it, else null. Reads no input.</summary>
     public PreparedData? Existing() =>
         _gameData.Status() == SetupStatus.Done && _updateData.Status() == SetupStatus.Done
@@ -77,7 +112,7 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
         catch (UnauthorizedAccessException error)
         {
             throw new SetupException(SetupError.NoPermission,
-                $"Preparation is not allowed to write to {cacheRoot}. Choose a cache folder you can write to.", error);
+                $"Setup is not allowed to write to {cacheRoot}. Check that the folder can be written to, then set up again.", error);
         }
         reporter.Start(SetupStep.Done, 1, 1);
         return new PreparedData(GameDataRoot, UpdateDataRoot, Reused: false);

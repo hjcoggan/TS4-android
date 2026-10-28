@@ -15,7 +15,8 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
         if (string.IsNullOrEmpty(packagePath))
             throw new SetupException(SetupError.NoTitleUpdate, "No title update was chosen. " + WhatTitleUpdate1Is);
         if (!File.Exists(packagePath))
-            throw new SetupException(SetupError.NoTitleUpdate, $"The title update was not found: {packagePath}. " + WhatTitleUpdate1Is);
+            throw new SetupException(SetupError.NoTitleUpdate, $"The title update was not found: {packagePath}. " + WhatTitleUpdate1Is,
+                reason: "The file was not found. Choose Title Update 1 again.", details: packagePath);
         try
         {
             return StfsPackage.Open(packagePath);
@@ -23,7 +24,9 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
         catch (InvalidDataException error)
         {
             throw new SetupException(SetupError.NoTitleUpdate,
-                $"That file is not an Xbox 360 title update package: {packagePath}. " + WhatTitleUpdate1Is, error);
+                $"That file is not an Xbox 360 title update package: {packagePath}. " + WhatTitleUpdate1Is, error,
+                "This is not an Xbox 360 title update. Title Update 1 is usually named TU_1A5822P_000000C000000.0000000000083.",
+                error.Message);
         }
     }
 
@@ -41,11 +44,11 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
     public void Check(StfsPackage package, CancellationToken cancel)
     {
         if (package.TitleId != ReferenceBuild.TitleId)
-            throw WrongTitleUpdate($"it is for another game (title ID {package.TitleId:X8}).");
+            throw WrongTitleUpdate("This update is for another game, not Top Spin 4.", $"it is for another game (title ID {package.TitleId:X8}).");
         if (package.ContentType != StfsContentType.TitleUpdate)
-            throw WrongTitleUpdate($"it is Top Spin 4 content ({package.DisplayName}), but not a title update.");
+            throw WrongTitleUpdate("This is Top Spin 4 content, but not a title update. Choose Title Update 1.", $"it is Top Spin 4 content ({package.DisplayName}), but not a title update.");
         if (package.MediaId != ReferenceBuild.MediaId)
-            throw WrongTitleUpdate($"it is for another edition of the game (media ID {package.MediaId:X8}).");
+            throw WrongTitleUpdate(AnotherEdition, $"it is for another edition of the game (media ID {package.MediaId:X8}).");
         try
         {
             package.Verify(null, cancel);
@@ -53,19 +56,20 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
         catch (InvalidDataException error)
         {
             throw new SetupException(SetupError.DamagedFile,
-                "The title update package is damaged: " + error.Message + " Copy it from your console again.", error);
+                "The title update package is damaged: " + error.Message + " Copy it from your console again.", error,
+                "This file is damaged. Copy Title Update 1 from your console again.", error.Message);
         }
         foreach (var patch in ReferenceBuild.Modules.Select(ReferenceBuild.PatchOf))
         {
-            if (package.Find(patch) is not { } file) throw WrongTitleUpdate($"it has no {patch}.");
+            if (package.Find(patch) is not { } file) throw WrongTitleUpdate(NotTu1, $"it has no {patch}.");
             var header = XexHeader.Parse(package.ReadAll(file).AsSpan(0, (int)Math.Min(file.Size, XexHeader.MaxHeaderBytes)));
-            if (header?.DeltaPatch is not { } delta) throw WrongTitleUpdate($"its {patch} is not a module patch.");
+            if (header?.DeltaPatch is not { } delta) throw WrongTitleUpdate(NotTu1, $"its {patch} is not a module patch.");
             if (delta.Target != ReferenceBuild.TitleUpdateVersion)
-                throw WrongTitleUpdate($"its {patch} raises the Module to {delta.Target}, and Title Update 1 raises it to {ReferenceBuild.TitleUpdateVersion}.");
+                throw WrongTitleUpdate(NotTu1, $"its {patch} raises the Module to {delta.Target}, and Title Update 1 raises it to {ReferenceBuild.TitleUpdateVersion}.");
         }
         if (package.Files.Count != manifest.Files.Count || manifest.Files.Any(entry =>
                 package.Find(entry.Path) is not { } file || file.Size != entry.Size || Hash(package, file, cancel) != entry.Sha256))
-            throw WrongTitleUpdate("its files differ from Title Update 1's.");
+            throw WrongTitleUpdate(NotTu1, "its files differ from Title Update 1's.");
     }
 
     private static string Hash(StfsPackage package, StfsFile file, CancellationToken cancel)
@@ -75,10 +79,14 @@ internal sealed class TitleUpdateSetup(FileManifest manifest, IDiskSpace space)
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    private static SetupException WrongTitleUpdate(string reason) =>
+    private const string AnotherEdition = "This update is for another edition of Top Spin 4. Choose Title Update 1 for the supported disc.";
+    private const string NotTu1 = "This is not Title Update 1. The port needs exactly that update (usually named TU_1A5822P_000000C000000.0000000000083).";
+
+    private static SetupException WrongTitleUpdate(string plain, string reason) =>
         new(SetupError.WrongTitleUpdate,
             $"That package is not Title Update 1 for the supported Top Spin 4 disc: {reason} " +
-            "The port is built on Title Update 1 (TU_1A5822P_000000C000000.0000000000083) and needs exactly that update.");
+            "The port is built on Title Update 1 (TU_1A5822P_000000C000000.0000000000083) and needs exactly that update.",
+            reason: plain, details: $"The package {reason}");
 
     public void Unpack(StfsPackage package, PreparedFolder folder, Reporter reporter, CancellationToken cancel)
     {
