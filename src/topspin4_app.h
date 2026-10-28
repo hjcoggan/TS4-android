@@ -98,6 +98,9 @@ class TopSpin4App : public rex::ReXApp {
   // and the GPU plugin read them. A setting also given on the command line or as a REX_<NAME>
   // environment variable keeps that value.
   void OnPostInitLogging() override {
+    // The SDK's default is no GPU plugin, which draws nothing. The developer scripts pass
+    // --gpu_plugin=xenos; a player starting the exe or the Launcher passes nothing.
+    SetUnlessSetElsewhere("gpu_plugin", "xenos");
     // Top Spin 4 presents its cutaways at 30 fps. Repeating the held frame on each guest vblank
     // between them made the 360 Hz variable-refresh panel show 10 ms / 28 ms pairs through
     // every cutaway; skipping that present showed an even 33 ms, with play unchanged (PresentMon,
