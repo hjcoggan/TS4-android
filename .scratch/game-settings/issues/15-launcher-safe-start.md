@@ -12,3 +12,5 @@
 ## Comments
 
 **2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in f23ab08; review fixes in b694c42. Host or Launcher tests cover: Safe start arguments. Needs the owner's run: Safe start from the Launcher draws defaults and leaves the file unchanged. No game run was made (owner tests).
+
+**2026-10-28, superseded:** ADR-0008 and `.scratch/launcher-ux/spec.md` replace this ticket's Launcher design where they differ (home screen, every setting, no automatic search). Kept as history; new work is in `.scratch/launcher-ux/issues/`.

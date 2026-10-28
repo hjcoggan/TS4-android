@@ -15,3 +15,5 @@
 ## Comments
 
 **2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in 73fad16; review fixes in b694c42. Host or Launcher tests cover: setup states, Play arguments, pad mapping. Needs the owner's run: open the Launcher window, first-run setup on a clean user folder, controller-only use; starting topspin4.exe directly finds the prepared data (default roots added in ef38a9c). No game run was made (owner tests).
+
+**2026-10-28, superseded:** ADR-0008 and `.scratch/launcher-ux/spec.md` replace this ticket's Launcher design where they differ (home screen, every setting, no automatic search). Kept as history; new work is in `.scratch/launcher-ux/issues/`.
