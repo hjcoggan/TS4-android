@@ -78,6 +78,8 @@ struct SettingChange {
 
 struct ModelContext {
   std::string renderer{kRendererClassic};  // the renderer this session draws with
+  // Why Native was asked for but this session draws with Classic; empty when it did not fall back.
+  std::string renderer_fallback;
   // Settings given as Launch options: they win over the file and are never saved.
   std::set<std::string, std::less<>> pinned;
   bool safe_start = false;
@@ -404,6 +406,9 @@ class SettingsModel {
     }
     row.value_label = row.choices[row.choice].label;
     row.note = NoteFor(row, next);
+    if (setting.key == "ts4_renderer" && !context_.renderer_fallback.empty()) {
+      row.note = context_.renderer_fallback + (row.note.empty() ? "" : " ") + row.note;
+    }
     return row;
   }
 

@@ -24,7 +24,6 @@
 DECLARE_REX_FUNC(sub_8877B2B8);
 DECLARE_REX_FUNC(sub_8877B288);
 DECLARE_REX_FUNC(sub_881EC108);
-DECLARE_REX_FUNC(sub_881CF4C0);
 DECLARE_REX_FUNC(sub_8819A5C8);
 DECLARE_REX_FUNC(sub_8819BAD0);
 DECLARE_REX_FUNC(sub_88151AE0);
@@ -70,46 +69,16 @@ void Log(const std::string& message) {
 // Logs only the first time (per hook).
 bool FirstHit(std::atomic<bool>& seen) { return !seen.exchange(true); }
 
-// The name the game gives the scene that owns the command's node: 881CF4C0(&out, node), with the
-// node the command context's second word (the one SetTextID hands to its scene lookup). The name
-// is a guest String: a pointer to its characters. Empty if the context does not look right.
-std::string OwningSceneName(PPCContext& ctx, uint8_t* base, uint32_t command) {
-  if (!Plausible(command)) return {};
-  const uint32_t node = Load32(base, command + 4);
-  if (!Plausible(node)) return {};
-  rex::CallFrame frame(ctx);
-  frame.ctx.r1.u32 -= 0x100;
-  const uint32_t out = frame.ctx.r1.u32 + 0x80;
-  Store32(base, out, 0);
-  frame.ctx.r3.u64 = out;
-  frame.ctx.r4.u64 = node;
-  sub_881CF4C0(frame.ctx, base);
-  std::string name = ReadCString(base, Load32(base, out));
-  frame.ctx.r3.u64 = out;
-  sub_88151AE0(frame.ctx, base);
-  return name;
-}
-
 }  // namespace
 
-// IsMoveController(controller): r3 is the command context.
+// IsMoveController(controller): r3 is the command context. Answers 0, as the stub did. The first
+// run showed the route does not hold: OPTIONS never called this, and the guessed scene lookup
+// (881CF4C0 on the context's second word) crashed when Exhibition called it. Logged so a later
+// RE pass sees who calls it.
 REX_HOOK_RAW(sub_8877B2B8) {
   static std::atomic<bool> first{false};
-  static std::mutex mutex;
-  static std::set<std::string> seen;
-  const std::string scene = OwningSceneName(ctx, base, ctx.r3.u32);
-  const bool in_options = row::IsOptionsScene(scene);
-  if (FirstHit(first)) Log("options row: IsMoveController is called");
-  // Each distinct answer of the scene lookup once, so a run shows what it returns.
-  bool is_new = false;
-  {
-    std::lock_guard lock(mutex);
-    is_new = seen.size() < 16 && seen.insert(scene).second;
-  }
-  if (is_new) {
-    Log("options row: IsMoveController from scene '" + scene + "' -> " + (in_options ? "1" : "0"));
-  }
-  ctx.r3.u64 = in_options ? 1 : 0;
+  if (FirstHit(first)) Log("options row: IsMoveController is called (answers 0)");
+  ctx.r3.u64 = 0;
 }
 
 // The text resolver: r3 the UI manager, r4 the text ID (a guest String), r5 the Text it fills.
