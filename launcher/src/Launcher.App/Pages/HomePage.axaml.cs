@@ -9,6 +9,7 @@ public partial class HomePage : UserControl
 {
     private readonly HomeModel _home;
     private readonly Dictionary<HomeAction, Button> _buttons = [];
+    private IReadOnlyList<HomeAction>? _shownActions;
 
     public HomePage() : this(new HomeModel(new Preparation(Path.GetTempPath()), null)) { }
 
@@ -18,8 +19,9 @@ public partial class HomePage : UserControl
         _home = home;
         TroubleHeading.Text = HomeModel.TroubleStartingHeading;
         PlayButton.Click += (_, _) => PlayPressed?.Invoke();
-        foreach (var action in home.Actions) ActionsHost.Children.Add(Button(action));
-        foreach (var action in home.TroubleStartingActions) TroubleHost.Children.Add(Button(action));
+        foreach (var action in Enum.GetValues<HomeAction>()) Button(action);
+        foreach (var action in home.TroubleStartingActions) TroubleHost.Children.Add(_buttons[action]);
+        ShowActions();
     }
 
     public event Action? PlayPressed;
@@ -30,6 +32,8 @@ public partial class HomePage : UserControl
     private static string Label(HomeAction action) => action switch
     {
         HomeAction.Settings => "Settings",
+        HomeAction.CreateShortcut => "Create shortcut",
+        HomeAction.OpenCrashReport => "Open crash report",
         HomeAction.Help => "Help",
         HomeAction.OpenLogs => "Open logs",
         _ => "Safe start",
@@ -51,7 +55,28 @@ public partial class HomePage : UserControl
         StatusText.Text = _home.StatusLine;
         NoteText.Text = _home.Note;
         NoteText.IsVisible = _home.Note is not null;
-        if (_buttons.TryGetValue(HomeAction.SafeStart, out var safe)) safe.IsEnabled = _home.CanPlay;
+        ShowActions();
+        var safe = _buttons[HomeAction.SafeStart];
+        safe.IsEnabled = _home.CanPlay;
+        // Safe start is the way back into the game after a failure: it moves up under the note.
+        var host = _home.SafeStartProminent ? ProminentHost : TroubleHost;
+        if (safe.Parent != host)
+        {
+            (safe.Parent as Panel)?.Children.Remove(safe);
+            host.Children.Add(safe);
+            if (_home.SafeStartProminent) safe.Classes.Add("attention");
+            else safe.Classes.Remove("attention");
+        }
+    }
+
+    // The labelled actions; the crash report joins them after a crash. Rebuilt only when the list changes, so focus stays put.
+    private void ShowActions()
+    {
+        var wanted = _home.Actions;
+        if (_shownActions is not null && _shownActions.SequenceEqual(wanted)) return;
+        _shownActions = wanted;
+        ActionsHost.Children.Clear();
+        foreach (var action in wanted) ActionsHost.Children.Add(_buttons[action]);
     }
 
     public void FocusFirst() => EntryControl.Focus(NavigationMethod.Tab);

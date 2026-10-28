@@ -236,9 +236,8 @@ public sealed class SettingsStoreTests : IDisposable
     public void The_gpu_failure_exit_code_maps_to_the_switch_renderer_message()
     {
         Assert.Equal(0x47505546, GameExitReport.GpuFailureExitCode);
-        Assert.Contains("Switch the renderer", GameExitReport.Describe(0x47505546));
-        Assert.Null(GameExitReport.Describe(0));
-        Assert.Null(GameExitReport.Describe(1));
+        Assert.Contains("Switch the renderer", GameExitReport.FromExit(0x47505546, null).Message);
+        Assert.Equal(GameExitKind.Closed, GameExitReport.FromExit(0, null).Kind);
     }
 
     [Fact]

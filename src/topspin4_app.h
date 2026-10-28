@@ -29,6 +29,7 @@
 #include "settings/schema.h"
 #include "settings/session.h"
 #include "settings/settings_page.h"
+#include "not_set_up.h"
 #include "user_paths.h"
 
 REXCVAR_DECLARE(std::string, user_data_root);
@@ -91,6 +92,14 @@ class TopSpin4App : public rex::ReXApp {
     const auto use_prepared = [&](std::filesystem::path& root, const auto& folder) {
       root = user_paths::PreparedFolder(root, recorded, user_paths::DefaultPreparedDataRoot(), folder);
     };
+    // Not set up (no folders given, the prepared disc or TU1 not found): the Launcher opens on
+    // its setup page with the reason, and the game ends here (src/not_set_up.h).
+    if (const auto reason = user_paths::SetupNeededReason(
+            paths.game_data_root, paths.update_data_root, recorded, user_paths::DefaultPreparedDataRoot())) {
+      topspin4::ReportNotSetUp(*reason, REXCVAR_GET(user_data_root).empty()
+                                            ? std::filesystem::path()
+                                            : paths.user_data_root);
+    }
     use_prepared(paths.game_data_root, user_paths::kGameDataFolder);
     use_prepared(paths.update_data_root, user_paths::kUpdateDataFolder);
   }

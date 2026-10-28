@@ -83,7 +83,7 @@ public sealed class HomeModelTests : IDisposable
     {
         var home = new HomeModel(PreparedCache(), GameExe());
 
-        Assert.Equal([HomeAction.Settings, HomeAction.Help, HomeAction.OpenLogs], home.Actions);
+        Assert.Equal([HomeAction.Settings, HomeAction.CreateShortcut, HomeAction.Help, HomeAction.OpenLogs], home.Actions);
         Assert.Equal([HomeAction.SafeStart], home.TroubleStartingActions);
         Assert.Equal("Trouble starting?", HomeModel.TroubleStartingHeading);
     }
@@ -106,15 +106,123 @@ public sealed class HomeModelTests : IDisposable
         Assert.Equal(Path.Combine(_root, "README.md"), HelpDocument.Find(_root));
     }
 
+    private string LogsFolder => Path.Combine(_root, "game", "logs");
+
+    // A session log the game wrote, with the "crash report: saved" line and the zip it names.
+    private string WriteCrashReport()
+    {
+        Directory.CreateDirectory(LogsFolder);
+        var zip = Path.Combine(LogsFolder, "crash-20261028-120000.zip");
+        File.WriteAllText(zip, "zip");
+        File.WriteAllText(Path.Combine(LogsFolder, "topspin4_001.log"),
+            $"[error] crash: unhandled exception 0xC0000005; writing a crash report{Environment.NewLine}" +
+            $"[error] crash report: saved {zip}{Environment.NewLine}");
+        return zip;
+    }
+
     [Fact]
-    public void A_gpu_failure_exit_is_noted_on_the_home_screen_and_a_normal_exit_is_not()
+    public void After_a_normal_exit_the_home_screen_is_ready_with_no_note_and_safe_start_stays_small()
     {
         var home = new HomeModel(PreparedCache(), GameExe());
 
         home.SessionEnded(0);
+
+        Assert.Equal(HomeStatus.Ready, home.Status);
         Assert.Null(home.Note);
+        Assert.False(home.SafeStartProminent);
+        Assert.Null(home.CrashReportPath);
+        Assert.DoesNotContain(HomeAction.OpenCrashReport, home.Actions);
+    }
+
+    [Fact]
+    public void After_a_gpu_failure_exit_the_status_says_switch_renderer_and_safe_start_is_prominent()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe());
 
         home.SessionEnded(GameExitReport.GpuFailureExitCode);
-        Assert.Contains("Settings", home.Note);
+
+        Assert.Equal(HomeStatus.LastSessionGpuFailure, home.Status);
+        Assert.True(home.CanPlay);
+        Assert.Contains("Switch the renderer", home.Note);
+        Assert.True(home.SafeStartProminent);
+        Assert.Null(home.CrashReportPath);
+        Assert.DoesNotContain(HomeAction.OpenCrashReport, home.Actions);
+    }
+
+    [Fact]
+    public void After_a_crash_exit_the_status_says_so_safe_start_is_prominent_and_the_crash_report_is_offered()
+    {
+        var zip = WriteCrashReport();
+        var home = new HomeModel(PreparedCache(), GameExe());
+
+        home.SessionEnded(unchecked((int)0xC0000005));
+
+        Assert.Equal(HomeStatus.LastSessionCrashed, home.Status);
+        Assert.True(home.CanPlay);
+        Assert.Contains("crashed", home.Note);
+        Assert.True(home.SafeStartProminent);
+        Assert.Equal(zip, home.CrashReportPath);
+        Assert.Contains(HomeAction.OpenCrashReport, home.Actions);
+    }
+
+    [Fact]
+    public void A_crash_with_no_report_on_disk_is_still_a_crash_but_offers_no_report()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe());
+
+        home.SessionEnded(unchecked((int)0xC0000005));
+
+        Assert.Equal(HomeStatus.LastSessionCrashed, home.Status);
+        Assert.True(home.SafeStartProminent);
+        Assert.Null(home.CrashReportPath);
+        Assert.DoesNotContain(HomeAction.OpenCrashReport, home.Actions);
+    }
+
+    [Fact]
+    public void A_crash_report_the_log_names_but_that_is_gone_is_not_offered()
+    {
+        var zip = WriteCrashReport();
+        File.Delete(zip);
+        var home = new HomeModel(PreparedCache(), GameExe());
+
+        home.SessionEnded(unchecked((int)0xC0000005));
+
+        Assert.Null(home.CrashReportPath);
+    }
+
+    [Fact]
+    public void A_nonzero_exit_that_is_not_a_crash_code_is_still_reported_as_the_game_stopping()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe());
+
+        home.SessionEnded(1);
+
+        Assert.Equal(HomeStatus.LastSessionCrashed, home.Status);
+        Assert.Contains("exit code 1", home.Note);
+    }
+
+    [Fact]
+    public void A_later_normal_exit_clears_the_failure()
+    {
+        WriteCrashReport();
+        var home = new HomeModel(PreparedCache(), GameExe());
+        home.SessionEnded(unchecked((int)0xC0000005));
+
+        home.SessionEnded(0);
+
+        Assert.Equal(HomeStatus.Ready, home.Status);
+        Assert.Null(home.Note);
+        Assert.False(home.SafeStartProminent);
+        Assert.Null(home.CrashReportPath);
+    }
+
+    [Fact]
+    public void A_missing_game_exe_outranks_the_last_session_in_the_status()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe(exists: false));
+
+        home.SessionEnded(GameExitReport.GpuFailureExitCode);
+
+        Assert.Equal(HomeStatus.GameExeMissing, home.Status);
     }
 }

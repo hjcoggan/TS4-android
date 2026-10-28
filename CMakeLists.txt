@@ -11,6 +11,7 @@ include(cmake/rexglue.cmake)
 set(TOPSPIN4_SOURCES
     src/main.cpp
     src/crash_report.cpp
+    src/not_set_up.cpp
     src/d3d/census.cpp
     src/d3d/host.cpp
     src/fault_log.cpp

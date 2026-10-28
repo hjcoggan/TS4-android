@@ -93,6 +93,24 @@ inline std::filesystem::path PreparedFolder(const std::filesystem::path& command
   return std::filesystem::is_directory(prepared, error) ? prepared : std::filesystem::path();
 }
 
+// Why the game is not set up, as the Launcher reads it from its --not-set-up argument
+// (launcher/src/Launcher.Core/NotSetUp.cs; keep the tokens equal).
+inline constexpr std::string_view kNotSetUpDisc = "disc";
+inline constexpr std::string_view kNotSetUpTitleUpdate = "title-update";
+inline constexpr std::string_view kNotSetUpBoth = "disc-and-title-update";
+
+// The not-set-up decision: nothing when both prepared folders are found (a command line folder
+// counts as found, so the developer scripts are never held up), else the reason to open the
+// Launcher with. The game folder is the disc, the update folder is Title Update 1.
+inline std::optional<std::string_view> SetupNeededReason(
+    const std::filesystem::path& command_line_game, const std::filesystem::path& command_line_update,
+    const std::optional<std::filesystem::path>& recorded_root, const std::filesystem::path& default_root) {
+  const bool disc = !PreparedFolder(command_line_game, recorded_root, default_root, kGameDataFolder).empty();
+  const bool update = !PreparedFolder(command_line_update, recorded_root, default_root, kUpdateDataFolder).empty();
+  if (disc && update) return std::nullopt;
+  return !disc && !update ? kNotSetUpBoth : !disc ? kNotSetUpDisc : kNotSetUpTitleUpdate;
+}
+
 // The shader and pipeline cache: beside the launcher's prepared data under the local app data
 // folder (the same XDG folder under Proton), as it is large and derivable again.
 std::filesystem::path DefaultCacheRoot();

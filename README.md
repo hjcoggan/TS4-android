@@ -42,6 +42,12 @@ In the Settings page, press A (or Enter) on a row to change it. To remap a key o
 
 Open the Launcher and use **Safe start** under "Trouble starting?". It runs one session on the default settings and leaves your settings file unchanged.
 
+After a crash or a graphics failure the Launcher comes back with Safe start up front, and after a crash with **Open crash report** to attach to your issue.
+
+### Starting without the Launcher
+
+**Create shortcut** on the Launcher's home screen puts "Top Spin 4" on your Desktop and in the Start menu. It starts the game directly with your saved settings, and creating it again replaces the old one. If setup is missing or the game files were moved away, the game opens the Launcher on the setup page and says why.
+
 ### Logs
 
 The Launcher's **Open logs** button opens the `logs` folder beside the game. Attach the newest log when you report a problem.

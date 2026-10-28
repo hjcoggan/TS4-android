@@ -3,9 +3,9 @@ using Avalonia;
 namespace TopSpin4.Launcher;
 
 /// <summary>What the command line changes: scripts and tests point the Launcher at other folders.</summary>
-internal sealed record LauncherOptions(string? CacheRoot = null, string? GameExe = null, string? UserDataRoot = null)
+internal sealed record LauncherOptions(string? CacheRoot = null, string? GameExe = null, string? UserDataRoot = null, string? NotSetUp = null)
 {
-    public const string Usage = "Usage: topspin4-launcher [--cache <folder>] [--game-exe <topspin4.exe>] [--user-data <folder>]";
+    public const string Usage = "Usage: topspin4-launcher [--cache <folder>] [--game-exe <topspin4.exe>] [--user-data <folder>] [--not-set-up <reason>]";
 
     public static LauncherOptions Parse(string[] args)
     {
@@ -18,6 +18,8 @@ internal sealed record LauncherOptions(string? CacheRoot = null, string? GameExe
                 case "--cache" when value is not null: options = options with { CacheRoot = value }; i++; break;
                 case "--game-exe" when value is not null: options = options with { GameExe = value }; i++; break;
                 case "--user-data" when value is not null: options = options with { UserDataRoot = value }; i++; break;
+                // The game started without setup done (src/not_set_up.h) says why.
+                case "--not-set-up" when value is not null: options = options with { NotSetUp = value }; i++; break;
                 default: throw new ArgumentException($"Unknown or incomplete option: {args[i]}\n{Usage}");
             }
         }

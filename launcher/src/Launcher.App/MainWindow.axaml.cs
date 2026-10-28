@@ -72,6 +72,9 @@ public partial class MainWindow : Window
         // The exe or the prepared folders may change while the window is open; look again when it is used.
         Activated += (_, _) => Refresh();
 
+        // The game started without setup done: the setup page says why (or the home page, if this Launcher finds the files).
+        if (App.Options.NotSetUp is { } reason) Say(NotSetUp.Describe(reason));
+
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         _padTimer.Tick += (_, _) => PollPad();
         Opened += (_, _) => _padTimer.Start();
@@ -87,8 +90,14 @@ public partial class MainWindow : Window
                 _shell.OpenSettings();
                 await _settingsPage.OpenAsync();
                 break;
+            case HomeAction.CreateShortcut:
+                CreateShortcut();
+                break;
             case HomeAction.Help:
                 OpenHelp();
+                break;
+            case HomeAction.OpenCrashReport:
+                OpenCrashReport();
                 break;
             case HomeAction.OpenLogs:
                 OpenLogs();
@@ -143,6 +152,35 @@ public partial class MainWindow : Window
         }
     }
 
+    // "Top Spin 4" on the Desktop and in the Start menu, running the game exe with no arguments (DirectShortcut).
+    private void CreateShortcut()
+    {
+        if (!File.Exists(_gameExe))
+        {
+            _home.Say($"{LaunchArguments.GameExeName} was not found next to the Launcher, so there is nothing to make a shortcut to.");
+            Refresh();
+            return;
+        }
+        try
+        {
+            var shortcut = new DirectShortcut(new ShellLinkWriter(),
+                [Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.Programs)]);
+            shortcut.Create(_gameExe);
+            _home.Say("Created the Top Spin 4 shortcut on your Desktop and in the Start menu. It starts the game with your saved settings.");
+        }
+        catch (IOException error)
+        {
+            Log("Create shortcut: " + error.Message);
+            _home.Say(error.Message);
+        }
+        Refresh();
+    }
+
+    private void OpenCrashReport()
+    {
+        if (_home.CrashReportPath is { } report) Open(report);
+    }
+
     private void OpenLogs()
     {
         if (_home.LogsFolder is { } logs)
@@ -167,8 +205,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Starts the game exe with Play's arguments (Safe start's, with <c>--safe</c>, when
-    /// <paramref name="safe"/>) and waits for it. A normal exit closes the Launcher; the game's GPU
-    /// failure exit code brings the Launcher back with a note to switch renderer.
+    /// <paramref name="safe"/>), hides the Launcher and waits for it. The home screen comes back
+    /// when the game exits, saying how it ended (<see cref="HomeModel.SessionEnded"/>).
     /// </summary>
     private async Task StartGame(bool safe = false)
     {
@@ -194,17 +232,14 @@ public partial class MainWindow : Window
             await game.WaitForExitAsync();
             _gameRunning = false;
             _home.SessionEnded(game.ExitCode);
-            if (_home.Note is not null)
-            {
-                Show();
-                Refresh();
-                return;
-            }
-            Close();
+            Show();
+            Activate();
+            Refresh();
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             _gameRunning = false;
+            Show();
             _home.Say("The game could not be started: " + error.Message);
             Refresh();
         }

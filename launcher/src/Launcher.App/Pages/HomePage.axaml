@@ -3,9 +3,25 @@
              x:Class="TopSpin4.Launcher.Pages.HomePage">
   <!-- After setup: PLAY with a status line, the labelled actions, and Safe start under "Trouble starting?". Drawn from HomeModel. -->
   <StackPanel Spacing="18">
+    <StackPanel.Styles>
+      <Style Selector="Button.attention">
+        <Setter Property="Background" Value="{StaticResource CourtBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Padding" Value="28,8" />
+      </Style>
+      <Style Selector="Button.attention:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource SkyBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource Navy}" />
+      </Style>
+    </StackPanel.Styles>
     <Button x:Name="PlayButton" Classes="play" Content="PLAY" IsDefault="True" />
     <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Center" />
-    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Center" IsVisible="False" />
+    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Center" IsVisible="False"
+               AutomationProperties.LiveSetting="Assertive" />
+    <!-- Safe start moves here after a GPU failure or a crash. -->
+    <StackPanel x:Name="ProminentHost" HorizontalAlignment="Center" />
 
     <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
 

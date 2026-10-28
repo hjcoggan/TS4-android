@@ -125,3 +125,53 @@ TEST_CASE("The location file holds one absolute path, which the Launcher writes"
   CHECK_FALSE(ReadLocationFile(file));
   CHECK(topspin4::user_paths::kLocationFileName == "game-files-location.txt");
 }
+
+namespace {
+
+using topspin4::user_paths::SetupNeededReason;
+
+}  // namespace
+
+TEST_CASE("Started with nothing prepared and no folders given, the reason is both") {
+  Places places;
+
+  const auto reason = SetupNeededReason({}, {}, std::nullopt, places.default_root);
+
+  REQUIRE(reason);
+  CHECK(*reason == "disc-and-title-update");
+}
+
+TEST_CASE("A missing disc or a missing TU1 each name themselves as the reason") {
+  Places places;
+  fs::create_directories(places.default_root / "gamedata");
+  CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "title-update");
+
+  fs::remove_all(places.default_root);
+  fs::create_directories(places.default_root / "updatedata");
+  CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "disc");
+}
+
+TEST_CASE("With both prepared folders found there is nothing to do") {
+  Places places;
+  fs::create_directories(places.default_root / "gamedata");
+  fs::create_directories(places.default_root / "updatedata");
+  fs::create_directories(places.other_root);
+
+  CHECK_FALSE(SetupNeededReason({}, {}, std::nullopt, places.default_root));
+  // The recorded place is the one used, so an empty one is not set up even beside a full default.
+  CHECK(SetupNeededReason({}, {}, places.other_root, places.default_root) == "disc-and-title-update");
+}
+
+TEST_CASE("Folders given on the command line mean the developer's run goes ahead as before") {
+  Places places;
+
+  CHECK_FALSE(SetupNeededReason(places.command_line, places.root / "dev" / "updatedata", std::nullopt,
+                                places.default_root));
+}
+
+TEST_CASE("One folder on the command line leaves the other one to be found") {
+  Places places;
+
+  CHECK(SetupNeededReason(places.command_line, {}, std::nullopt, places.default_root) == "title-update");
+  CHECK(SetupNeededReason({}, places.command_line, std::nullopt, places.default_root) == "disc");
+}
