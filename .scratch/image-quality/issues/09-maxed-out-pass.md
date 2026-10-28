@@ -30,3 +30,4 @@
   - Box 4: Edge at `draw_resolution_scale` 2 works. Its frame fails the tile rule against Native 2x in every crop, also after a 2 px shift, and Native 1x fails against it as much. It was recorded and compared as the box asks; the result is that the frames don't match pixel for pixel.
   - The research doc's cost numbers are corrected (CPU 1.04 ms at defaults, +4.6 to +5.8 ms GPU).
   - Blocked on the machine: the PC lost every audio endpoint after the Edge runs, and the port then hangs at boot (pc-port ticket 32). No game runs are possible until audio is back.
+- 2026-10-28 (owner, via Claude): measure the CAS cost once in a RenderDoc capture and add it to the cost table (no new timer). The two Edge results (AF16 not separated at 1028x578; the 2 px offset at `draw_resolution_scale` 2) stand as recorded notes.

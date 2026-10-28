@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** needs-triage
+**Status:** resolved
 
 - [ ] The shader whose pipeline crashed is identified (pipeline cache key or the last shader hash logged before the crash)
 - [ ] That shader's pipeline is built at 1x, 2x, 4x and 8x without a crash, several times, on the AMD driver
@@ -13,3 +13,4 @@
 ## Comments
 
 - 2026-10-27 (Claude): opened from the QA of 70a727b (ticket 08 fixes).
+- 2026-10-28 (owner, via Claude): resolved as not reproduced. The crash hit a first form of xenosrecomp 0009; the rewrite passed every 8x run since, including all six scenes at maximum (ticket 09). Evidence kept in `analysis/scenes/iq08/exhibition-match-msaa8-b-crash/`. Reopen if it recurs.

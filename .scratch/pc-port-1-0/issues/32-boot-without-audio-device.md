@@ -14,3 +14,4 @@
 ## Comments
 
 - 2026-10-27 (Claude): opened from image-quality ticket 09's finding. The machine lost every audio endpoint after three Edge runs (`Get-PnpDevice -Class AudioEndpoint`: all not present; Audiosrv running).
+- 2026-10-28 (owner, via Claude): booting and playing silently with no audio device is a 1.0 requirement. First prove the missing device caused the hang (audio endpoints are back as of 2026-10-28), then fix.

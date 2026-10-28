@@ -15,3 +15,4 @@
 ## Comments
 
 - 2026-10-27 (Claude): opened from the QA of 70a727b. QA confirmed the numbering itself: in `analysis/scenes/iq06b` the shown frame went up by exactly 1 on 4988 of 4989 presents.
+- 2026-10-28 (owner, via Claude): fix both gaps on this branch before the merge. Delete the unreachable "frame before" fallback rather than make it reachable. Tests in `tests/host/test_swap_choice.cpp`.
