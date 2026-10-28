@@ -66,7 +66,12 @@ struct Places {
 
   Places() { fs::remove_all(root); fs::create_directories(root); }
   ~Places() { std::error_code error; fs::remove_all(root, error); }
-  static void Prepared(const fs::path& place) { fs::create_directories(place / "gamedata"); }
+  // A folder the Launcher finished: its completion marker is there (PreparedFolder.MarkerFileName).
+  static void Finished(const fs::path& folder) {
+    fs::create_directories(folder);
+    std::ofstream(folder / ".topspin4-prepared", std::ios::binary) << "manifest_version=1\n";
+  }
+  static void Prepared(const fs::path& place) { Finished(place / "gamedata"); }
 };
 
 }  // namespace
@@ -106,6 +111,38 @@ TEST_CASE("A place with no prepared folder gives nothing, so setup is seen to be
   CHECK(PreparedFolder({}, std::nullopt, places.other_root, "gamedata").empty());
 }
 
+TEST_CASE("A prepared folder without the Launcher's completion marker is not set up") {
+  using topspin4::user_paths::SetupNeededReason;
+  Places places;
+  fs::create_directories(places.default_root / "gamedata");
+  fs::create_directories(places.default_root / "updatedata");
+
+  CHECK(PreparedFolder({}, std::nullopt, places.default_root, "gamedata").empty());
+  CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "disc-and-title-update");
+
+  Places::Finished(places.default_root / "gamedata");
+  CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "title-update");
+  // A marker that does not name a manifest version is not the Launcher's.
+  std::ofstream(places.default_root / "updatedata" / ".topspin4-prepared", std::ios::binary) << "junk";
+  CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "title-update");
+  CHECK(topspin4::user_paths::kPreparedMarkerFile == ".topspin4-prepared");
+}
+
+TEST_CASE("A location file in UTF-8 gives a place whose name is outside the ANSI code page") {
+  Places places;
+  fs::create_directories(places.root);
+  const auto file = places.root / std::string(topspin4::user_paths::kLocationFileName);
+  // The Launcher writes UTF-8 (GameFilesLocation.cs). Bytes spelled out so the source encoding
+  // does not matter: "D:\Spiele\a-umlaut" then a Japanese "ni" character (U+65E5).
+  const std::string utf8 = "D:\\Spiele\\\xC3\xA4\xE6\x97\xA5\n";
+  std::ofstream(file, std::ios::binary) << utf8;
+
+  const auto place = ReadLocationFile(file);
+
+  REQUIRE(place);
+  CHECK(*place == fs::path(L"D:\\Spiele\\\u00E4\u65E5"));
+}
+
 TEST_CASE("The location file holds one absolute path, which the Launcher writes") {
   Places places;
   fs::create_directories(places.root);
@@ -143,18 +180,18 @@ TEST_CASE("Started with nothing prepared and no folders given, the reason is bot
 
 TEST_CASE("A missing disc or a missing TU1 each name themselves as the reason") {
   Places places;
-  fs::create_directories(places.default_root / "gamedata");
+  Places::Finished(places.default_root / "gamedata");
   CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "title-update");
 
   fs::remove_all(places.default_root);
-  fs::create_directories(places.default_root / "updatedata");
+  Places::Finished(places.default_root / "updatedata");
   CHECK(SetupNeededReason({}, {}, std::nullopt, places.default_root) == "disc");
 }
 
 TEST_CASE("With both prepared folders found there is nothing to do") {
   Places places;
-  fs::create_directories(places.default_root / "gamedata");
-  fs::create_directories(places.default_root / "updatedata");
+  Places::Finished(places.default_root / "gamedata");
+  Places::Finished(places.default_root / "updatedata");
   fs::create_directories(places.other_root);
 
   CHECK_FALSE(SetupNeededReason({}, {}, std::nullopt, places.default_root));

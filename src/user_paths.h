@@ -13,6 +13,8 @@
 #include <string>
 #include <string_view>
 
+#include "native/host_paths.h"
+
 namespace topspin4::user_paths {
 
 inline constexpr std::string_view kFolderName = "TopSpin4Recomp";
@@ -72,25 +74,43 @@ inline std::optional<std::filesystem::path> ReadLocationFile(const std::filesyst
     const auto first = line.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) continue;
     line = line.substr(first, line.find_last_not_of(" \t\r\n") - first + 1);
-    std::filesystem::path place(line);
+    // The Launcher writes the file in UTF-8, so it is decoded as UTF-8, not the ANSI code page.
+    const auto place = native::TextPath(line);
     if (place.is_absolute()) return place;
     return std::nullopt;
   }
   return std::nullopt;
 }
 
+// The file the Launcher writes into a prepared folder as the last step, just before it renames the
+// partial folder into place (PreparedFolder.MarkerFileName); its one line is "manifest_version=<v>".
+// A folder without it was not finished. The game checks only that, not the manifest's files and
+// sizes the Launcher also compares.
+inline constexpr std::string_view kPreparedMarkerFile = ".topspin4-prepared";
+inline constexpr std::string_view kPreparedMarkerKey = "manifest_version=";
+
+inline bool HasCompletionMarker(const std::filesystem::path& folder) {
+  std::ifstream input(folder / std::string(kPreparedMarkerFile), std::ios::binary);
+  std::string text(kPreparedMarkerKey.size(), '\0');
+  input.read(text.data(), static_cast<std::streamsize>(text.size()));
+  return input.gcount() == static_cast<std::streamsize>(text.size()) && text == kPreparedMarkerKey;
+}
+
 // Where the game finds one prepared folder ("gamedata" or "updatedata"): the command line's folder
 // when it gave one, else the place the location file records, else the default prepared-data
 // folder. A recorded place is the one the Launcher uses, so a folder missing there is not looked
-// for in the default place. Empty when the folder is not there: the game is not set up.
+// for in the default place. Empty when the folder is not there or the Launcher did not finish it
+// (no completion marker): the game is not set up.
 inline std::filesystem::path PreparedFolder(const std::filesystem::path& command_line,
                                                const std::optional<std::filesystem::path>& recorded_root,
                                                const std::filesystem::path& default_root,
                                                std::string_view folder) {
   if (!command_line.empty()) return command_line;
-  const auto prepared = (recorded_root ? *recorded_root : default_root) / folder;
+  const auto prepared = (recorded_root ? *recorded_root : default_root) / std::string(folder);
   std::error_code error;
-  return std::filesystem::is_directory(prepared, error) ? prepared : std::filesystem::path();
+  return std::filesystem::is_directory(prepared, error) && HasCompletionMarker(prepared)
+             ? prepared
+             : std::filesystem::path();
 }
 
 // Why the game is not set up, as the Launcher reads it from its --not-set-up argument
