@@ -1,0 +1,96 @@
+diff --git a/include/rex/ui/present_pacing.h b/include/rex/ui/present_pacing.h
+index 7d393f9..fb3b591 100644
+--- a/include/rex/ui/present_pacing.h
++++ b/include/rex/ui/present_pacing.h
+@@ -144,12 +144,17 @@ struct SwapLogRow {
+   unsigned long long shown_id = 0;
+   long long shown_us = 0;
+   long long shown_after_present_us = 0;
++  // The present hold (present_hold.h); empty when the present was not held.
++  bool held = false;
++  long long hold_us = 0;               // the hold point after the guest vblank
++  long long done_after_vblank_us = 0;  // when the frame's GPU work (its paint) completed
+ };
+ 
+ inline const char* SwapLogHeader() {
+   return "present_us,interval_us,repeated_vblanks,arrival_after_vblank_us,latency_us,"
+          "guest_vblank,frames_replaced,external_sequence,"
+-         "present_id,wait_us,unshown,shown_id,shown_us,shown_after_present_us\n";
++         "present_id,wait_us,unshown,shown_id,shown_us,shown_after_present_us,hold_us,"
++         "done_after_vblank_us\n";
+ }
+ 
+ inline std::string FormatSwapLogRow(const SwapLogRow& r) {
+@@ -171,6 +176,11 @@ inline std::string FormatSwapLogRow(const SwapLogRow& r) {
+   } else {
+     line += ",,";
+   }
++  if (r.held) {
++    line += ',' + std::to_string(r.hold_us) + ',' + std::to_string(r.done_after_vblank_us);
++  } else {
++    line += ",,";
++  }
+   return line + '\n';
+ }
+ 
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index 9d5bc34..94dd031 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -1117,6 +1117,7 @@ class Presenter {
+   pacing::PresentHold present_hold_;
+   std::chrono::steady_clock::time_point present_hold_vblank_{};
+   std::chrono::steady_clock::time_point present_hold_until_{};
++  long long present_hold_last_done_us_ = -1;  // this present's completion after its vblank
+   // steady_clock ticks when the pending frame was submitted, for the pacing log.
+   std::atomic<int64_t> guest_output_paced_frame_arrival_{0};
+   std::atomic<uint32_t> guest_output_paced_frames_replaced_{0};
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index cb15536..7a478f3 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -875,16 +875,20 @@ void Presenter::GuestOutputPacingThread() {
+     // Where the display shows a present as it arrives (variable refresh, host clock), present
+     // the frame once its GPU work is done, at the same point after every vblank (present_hold.h).
+     const bool hold = display_every == 0 && REXCVAR_GET(present_hold);
++    long long hold_us = 0, done_after_vblank_us = -1;
+     if (hold) {
+       const Clock::time_point frame_vblank = target - offset;
+       std::lock_guard hold_lock(present_hold_mutex_);
++      hold_us = present_hold_.HoldUs(us(offset), us(period));
+       present_hold_vblank_ = frame_vblank;
+-      present_hold_until_ =
+-          frame_vblank + std::chrono::microseconds(present_hold_.HoldUs(us(offset), us(period)));    }
++      present_hold_until_ = frame_vblank + std::chrono::microseconds(hold_us);
++      present_hold_last_done_us_ = -1;
++    }
+     PresentLatestGuestOutput();
+     if (hold) {
+       std::lock_guard hold_lock(present_hold_mutex_);
+       present_hold_until_ = {};
++      done_after_vblank_us = present_hold_last_done_us_;
+     }
+     const Clock::time_point presented = Clock::now();
+     std::optional<pacing::PresentWaiter::Shown> shown;
+@@ -935,6 +939,9 @@ void Presenter::GuestOutputPacingThread() {
+         row.shown_us = us(shown->shown - log_origin);
+         row.shown_after_present_us = us(shown->shown - shown->presented);
+       }
++      row.held = hold && done_after_vblank_us >= 0;
++      row.hold_us = hold_us;
++      row.done_after_vblank_us = done_after_vblank_us;
+       std::fputs(pacing::FormatSwapLogRow(row).c_str(), log);
+       last_logged_present = presented;
+     }
+@@ -998,8 +1005,9 @@ void Presenter::PresentHoldCompleted(std::chrono::steady_clock::time_point done)
+   if (present_hold_until_ == std::chrono::steady_clock::time_point{}) {
+     return;
+   }
+-  present_hold_.Completed(
+-      std::chrono::duration_cast<std::chrono::microseconds>(done - present_hold_vblank_).count());
++  present_hold_last_done_us_ =
++      std::chrono::duration_cast<std::chrono::microseconds>(done - present_hold_vblank_).count();
++  present_hold_.Completed(present_hold_last_done_us_);
+ }
+ 
+ void Presenter::PresentLatestGuestOutput() {
