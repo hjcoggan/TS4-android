@@ -1,16 +1,20 @@
 // Saving one setting into the flat TOML settings file without touching the rest of the file,
 // unlike the SDK's SaveConfig, which rewrites every non-default cvar (debug and command-line
-// values included). Adapted from WWE All Stars' settings/config_file.h (ADR-0004), without its
-// migrations.
+// values included). Adapted from WWE All Stars' settings/config_file.h (ADR-0004). The file
+// carries a top-level `version` and an ordered list of migrations (below).
 
 #pragma once
 
+#include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 namespace topspin4::settings {
 
@@ -27,12 +31,12 @@ inline std::string Utf8(const std::filesystem::path& path) {
   return std::string(text.begin(), text.end());
 }
 
-// The text with key set to the TOML literal value: its line replaced (keeping the line end), or
-// appended if the text has none.
-inline std::string SetTomlKey(std::string_view text, std::string_view key, std::string_view value) {
-  const std::string line = std::string(key) + " = " + std::string(value);
-  std::string out;
-  bool found = false;
+namespace detail {
+
+// The text's lines, each split into its body and its line end ("\n", "\r\n" or nothing at the
+// end of the text). fn(body, ending) returns false to stop.
+template <typename Fn>
+inline void ForEachLine(std::string_view text, Fn&& fn) {
   size_t start = 0;
   while (start < text.size()) {
     size_t end = text.find('\n', start);
@@ -44,24 +48,42 @@ inline std::string SetTomlKey(std::string_view text, std::string_view key, std::
     } else if (current.ends_with('\n')) {
       ending = "\n";
     }
-    std::string_view body = current.substr(0, current.size() - ending.size());
-    const size_t first = body.find_first_not_of(" \t");
-    std::string_view rest = first == std::string_view::npos ? "" : body.substr(first);
-    bool match = false;
-    if (!found && rest.starts_with(key)) {
-      std::string_view after = rest.substr(key.size());
-      const size_t equals = after.find_first_not_of(" \t");
-      match = equals != std::string_view::npos && after[equals] == '=';
-    }
-    if (match) {
+    if (!fn(current.substr(0, current.size() - ending.size()), ending)) return;
+    start = end;
+  }
+}
+
+// Whether the line is `key = ...` (blanks before the key allowed); rest is what follows the
+// equals sign.
+inline bool IsKeyLine(std::string_view body, std::string_view key, std::string_view* rest = nullptr) {
+  const size_t first = body.find_first_not_of(" \t");
+  if (first == std::string_view::npos || !body.substr(first).starts_with(key)) return false;
+  std::string_view after = body.substr(first + key.size());
+  const size_t equals = after.find_first_not_of(" \t");
+  if (equals == std::string_view::npos || after[equals] != '=') return false;
+  if (rest) *rest = after.substr(equals + 1);
+  return true;
+}
+
+}  // namespace detail
+
+// The text with key set to the TOML literal value: its line replaced (keeping the line end), or
+// appended if the text has none.
+inline std::string SetTomlKey(std::string_view text, std::string_view key, std::string_view value) {
+  const std::string line = std::string(key) + " = " + std::string(value);
+  std::string out;
+  bool found = false;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view ending) {
+    if (!found && detail::IsKeyLine(body, key)) {
       out += line;
       out += ending;
       found = true;
     } else {
-      out += current;
+      out += body;
+      out += ending;
     }
-    start = end;
-  }
+    return true;
+  });
   if (!found) {
     if (!out.empty() && out.back() != '\n') {
       out += '\n';
@@ -70,6 +92,100 @@ inline std::string SetTomlKey(std::string_view text, std::string_view key, std::
     out += '\n';
   }
   return out;
+}
+
+// The text with the line of key `from` renamed to `to`, keeping its value and the rest of the
+// line. If the text already has `to`, the old line is dropped instead, so the newer key wins.
+// For migrations (below).
+inline std::string RenameTomlKey(std::string_view text, std::string_view from, std::string_view to) {
+  bool has_target = false;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view) {
+    has_target = detail::IsKeyLine(body, to);
+    return !has_target;
+  });
+  std::string out;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view ending) {
+    std::string_view rest;
+    if (detail::IsKeyLine(body, from, &rest)) {
+      if (has_target) return true;
+      out += std::string(to) + " =";
+      out += rest;
+    } else {
+      out += body;
+    }
+    out += ending;
+    return true;
+  });
+  return out;
+}
+
+// The settings file's version: the top-level integer `version`. Empty if the file has none (an
+// unversioned file counts as version 1) or it is not an integer.
+inline std::optional<long long> FileVersion(std::string_view text) {
+  std::optional<long long> version;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view) {
+    std::string_view rest;
+    if (!detail::IsKeyLine(body, "version", &rest)) return true;
+    const size_t first = rest.find_first_not_of(" \t");
+    if (first == std::string_view::npos) return false;
+    rest = rest.substr(first);
+    long long value = 0;
+    const auto [end, error] = std::from_chars(rest.data(), rest.data() + rest.size(), value);
+    if (error != std::errc{}) return false;
+    const size_t after = rest.substr(end - rest.data()).find_first_not_of(" \t\r");
+    if (after == std::string_view::npos || rest[(end - rest.data()) + after] == '#') version = value;
+    return false;
+  });
+  return version;
+}
+
+// Sets the file's version: the `version` line replaced, or added first (a top-level key must
+// come before any table).
+inline std::string WithFileVersion(std::string_view text, long long version) {
+  bool has_line = false;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view) {
+    has_line = detail::IsKeyLine(body, "version");
+    return !has_line;
+  });
+  if (has_line) return SetTomlKey(text, "version", std::to_string(version));
+  return "version = " + std::to_string(version) + "\n" + std::string(text);
+}
+
+// Settings migrations, in order: the one at index i takes a file of version i + 1 to version
+// i + 2 (text in, text out, with RenameTomlKey and the like), so a renamed or removed setting
+// never misreads an old file. The file's version is the build's after them. The list starts
+// empty: no setting has been renamed yet.
+using Migration = std::function<std::string(std::string_view text)>;
+
+inline const std::vector<Migration>& Migrations() {
+  static const std::vector<Migration> migrations;
+  return migrations;
+}
+
+// The version this build writes: one more than its migrations.
+inline long long CurrentVersion(const std::vector<Migration>& migrations = Migrations()) {
+  return 1 + static_cast<long long>(migrations.size());
+}
+
+// Whether the file was written by a newer build. Such a file is read as well as possible and
+// never rewritten.
+inline bool IsNewerThanBuild(std::string_view text,
+                             const std::vector<Migration>& migrations = Migrations()) {
+  return FileVersion(text).value_or(1) > CurrentVersion(migrations);
+}
+
+// The text brought to this build's version: its migrations run from the file's version on, and
+// the version line is set. A file of a newer build is returned as it is.
+inline std::string MigrateSettingsText(std::string_view text,
+                                       const std::vector<Migration>& migrations = Migrations()) {
+  long long version = FileVersion(text).value_or(1);
+  if (version < 1) version = 1;
+  if (version > CurrentVersion(migrations)) return std::string(text);
+  std::string migrated(text);
+  for (size_t i = static_cast<size_t>(version - 1); i < migrations.size(); ++i) {
+    migrated = migrations[i](migrated);
+  }
+  return WithFileVersion(migrated, CurrentVersion(migrations));
 }
 
 // Reads text, or empty if the file cannot be read.
@@ -108,10 +224,17 @@ inline bool WriteTextAtomically(const std::filesystem::path& path, const std::st
   return true;
 }
 
-// Writes key = value (a TOML literal) into the settings file.
+// Writes key = value (a TOML literal) into the settings file, which carries this build's version
+// (a new file is created at it; an older one is migrated first). Only that line changes
+// otherwise. A file of a newer build is left alone: false.
 inline bool SaveSetting(const std::filesystem::path& path, std::string_view key,
-                        std::string_view value) {
-  return WriteTextAtomically(path, SetTomlKey(ReadText(path), key, value));
+                        std::string_view value,
+                        const std::vector<Migration>& migrations = Migrations()) {
+  const std::string text = ReadText(path);
+  if (IsNewerThanBuild(text, migrations)) {
+    return false;
+  }
+  return WriteTextAtomically(path, SetTomlKey(MigrateSettingsText(text, migrations), key, value));
 }
 
 }  // namespace topspin4::settings

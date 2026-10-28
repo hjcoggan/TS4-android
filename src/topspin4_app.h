@@ -10,11 +10,13 @@
 #include <rex/runtime.h>
 #include <rex/system/guest_swaps.h>
 #include <rex/system/host_gpu_loss.h>
+#include <rex/ui/keybinds.h>
 #include <rex/ui/vulkan/provider.h>
 #include <rex/ui/window.h>
 
 #include "crash_report.h"
 #include "d3d/host.h"
+#include "developer_build.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
 #include "native/native_renderer.h"
@@ -23,6 +25,7 @@
 #include "script_input.h"
 #include "settings/config_file.h"
 #include "settings/renderer_choice.h"
+#include "settings/schema.h"
 #include "settings/settings_file.h"
 #include "user_paths.h"
 
@@ -38,6 +41,9 @@ class TopSpin4App : public rex::ReXApp {
     // First: in the crash report's dump helper (a second copy of the game), this writes the
     // dump and exits.
     topspin4::crash::Install();
+    // The launcher's headless export of the settings list: prints and exits before any window,
+    // the runtime or game data.
+    topspin4::settings::PrintSchemaAndExitIfAsked();
     topspin4::fault_log::Install();
     return std::unique_ptr<TopSpin4App>(new TopSpin4App(ctx, "topspin4", PPCImageConfig));
   }
@@ -115,7 +121,10 @@ class TopSpin4App : public rex::ReXApp {
       }
     }
     if (report.file == settings::LoadReport::File::kLoaded) {
-      REXLOG_INFO("Settings: {}", settings::Utf8(path));
+      REXLOG_INFO("Settings: {} (version {})", settings::Utf8(path), report.file_version);
+      if (report.rewritten) {
+        REXLOG_INFO("Settings: brought up to version {}", settings::CurrentVersion());
+      }
     }
     const settings::RendererChoice renderer =
         settings::ChooseRenderer(REXCVAR_GET(ts4_renderer), true);
@@ -130,6 +139,15 @@ class TopSpin4App : public rex::ReXApp {
     if (const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(name);
         flag && flag->source == rex::cvar::Source::kDefault) {
       rex::cvar::SetFlagByName(name, value);
+    }
+  }
+
+  // The SDK has just bound its overlays (F3 debug, backtick console, F6 cvar settings, F7
+  // achievements). A release build drops F6: players have the settings page instead.
+  void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
+    rex::ReXApp::OnCreateDialogs(drawer);
+    if (!topspin4::kDeveloperBuild) {
+      rex::ui::UnregisterBind("bind_settings");
     }
   }
 

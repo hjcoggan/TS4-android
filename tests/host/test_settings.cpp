@@ -7,11 +7,14 @@
 #include <fstream>
 #include <random>
 #include <map>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "settings/config_file.h"
 #include "settings/registry.h"
 #include "settings/renderer_choice.h"
+#include "settings/schema.h"
 #include "settings/settings_file.h"
 
 namespace fs = std::filesystem;
@@ -72,7 +75,8 @@ TEST_CASE("A saved setting is written whole, through a temporary file") {
   CHECK(path == folder.path / "topspin4.settings.toml");
   REQUIRE(SaveSetting(path, "ts4_renderer", "\"native\""));
   REQUIRE(SaveSetting(path, "mnk_mode", "true"));
-  CHECK(ReadText(path) == "ts4_renderer = \"native\"\nmnk_mode = true\n");
+  // A new file is written at this build's version.
+  CHECK(ReadText(path) == "version = 1\nts4_renderer = \"native\"\nmnk_mode = true\n");
   CHECK_FALSE(fs::exists(path.string() + ".tmp"));
 }
 
@@ -241,3 +245,245 @@ TEST_CASE("Resolution scale and MSAA are Native only; every other setting is ava
   CHECK_FALSE(FindSetting("ts4_resolution_scale")->AvailableOn(kRendererClassic));
   CHECK_FALSE(FindSetting("ts4_msaa")->AvailableOn(kRendererClassic));
 }
+
+// --- The file version and migrations (ticket 01) ---
+
+namespace {
+
+// A migration that exists only for the tests: ts4_renderer used to be called old_renderer.
+const std::vector<Migration> kRenameMigration = {
+    [](std::string_view text) { return RenameTomlKey(text, "old_renderer", "ts4_renderer"); }};
+
+}  // namespace
+
+TEST_CASE("A file with no version loads as version 1, keeps its values and is versioned") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "# mine\nts4_renderer = \"native\"\n");
+  Loaded loaded(path);
+  CHECK(loaded.report.file_version == 1);
+  CHECK(loaded.values == std::map<std::string, std::string>{{"ts4_renderer", "native"}});
+  CHECK(loaded.report.rewritten);
+  CHECK(ReadText(path) == "version = 1\n# mine\nts4_renderer = \"native\"\n");
+  // Once versioned it is left alone.
+  Loaded again(path);
+  CHECK_FALSE(again.report.rewritten);
+  CHECK(again.values == loaded.values);
+}
+
+TEST_CASE("A migration renames a key and keeps its value") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "version = 1\nold_renderer = \"native\"  # kept\nmnk_mode = true\n");
+  const LoadReport report = LoadSettingsFile(
+      path, [](std::string_view, std::string_view) { return true; }, kRenameMigration);
+  CHECK(report.rewritten);
+  CHECK(ReadText(path) == "version = 2\nts4_renderer = \"native\"  # kept\nmnk_mode = true\n");
+  std::map<std::string, std::string> values;
+  LoadSettingsFile(path,
+                   [&](std::string_view key, std::string_view value) {
+                     values[std::string(key)] = std::string(value);
+                     return true;
+                   },
+                   kRenameMigration);
+  CHECK(values == std::map<std::string, std::string>{{"mnk_mode", "true"},
+                                                     {"ts4_renderer", "native"}});
+  // An unversioned file starts at version 1, so it gets the migration too.
+  WriteFile(path, "old_renderer = \"native\"\n");
+  LoadSettingsFile(path, [](std::string_view, std::string_view) { return true; }, kRenameMigration);
+  CHECK(ReadText(path) == "version = 2\nts4_renderer = \"native\"\n");
+}
+
+TEST_CASE("A saved setting migrates an older file first") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "version = 1\nold_renderer = \"native\"\n");
+  REQUIRE(SaveSetting(path, "mnk_mode", "true", kRenameMigration));
+  CHECK(ReadText(path) == "version = 2\nts4_renderer = \"native\"\nmnk_mode = true\n");
+}
+
+TEST_CASE("A file of a newer build is read as well as possible and never rewritten") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  const std::string newer = "version = 99\nts4_renderer = \"native\"\nfuture_setting = 1\n";
+  WriteFile(path, newer);
+  Loaded loaded(path);
+  CHECK(loaded.report.newer_than_build);
+  CHECK(loaded.report.file_version == 99);
+  CHECK_FALSE(loaded.report.rewritten);
+  CHECK(loaded.values == std::map<std::string, std::string>{{"ts4_renderer", "native"}});
+  CHECK(loaded.report.warnings.size() == 1);
+  CHECK_FALSE(SaveSetting(path, "mnk_mode", "true"));
+  CHECK(ReadText(path) == newer);
+}
+
+TEST_CASE("Saving one key rewrites only that line, keeping the version and every other line") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  const std::string before = "version = 1\r\n# mine\r\nts4_renderer = \"classic\"\r\nother = 1\r\n";
+  WriteFile(path, before);
+  REQUIRE(SaveSetting(path, "ts4_renderer", "\"native\""));
+  CHECK(ReadText(path) == "version = 1\r\n# mine\r\nts4_renderer = \"native\"\r\nother = 1\r\n");
+  CHECK_FALSE(fs::exists(path.string() + ".tmp"));
+}
+
+TEST_CASE("The file version reads only an integer `version` key") {
+  CHECK(FileVersion("version = 3\n") == 3);
+  CHECK(FileVersion("a = 1\n  version=4 # note\n") == 4);
+  CHECK_FALSE(FileVersion("a = 1\n").has_value());
+  CHECK_FALSE(FileVersion("version = \"2\"\n").has_value());
+  CHECK_FALSE(FileVersion("version_old = 2\n").has_value());
+  // A version that is not an integer is replaced, not added to: the file stays valid TOML.
+  CHECK(WithFileVersion("version = \"2\"\na = 1\n", 1) == "version = 1\na = 1\n");
+}
+
+// --- The registry's page data and the settings export (ticket 02) ---
+
+TEST_CASE("Every setting has a section, a label and an order, and the page order is stable") {
+  for (const Setting& setting : PlayerSettings()) {
+    CAPTURE(setting.key);
+    CHECK_FALSE(SectionName(setting.section).empty());
+    CHECK_FALSE(setting.label.empty());
+    CHECK(setting.order > 0);
+  }
+  std::map<std::pair<Section, int>, std::string_view> places;
+  for (const Setting& setting : PlayerSettings()) {
+    CAPTURE(setting.key);
+    CHECK(places.emplace(std::make_pair(setting.section, setting.order), setting.key).second);
+  }
+  const std::vector<const Setting*> ordered = SettingsInPageOrder();
+  REQUIRE(ordered.size() == PlayerSettings().size());
+  CHECK(ordered.front()->key == "ts4_renderer");
+  CHECK(ordered[1]->key == "ts4_resolution_scale");
+  CHECK(FindSetting("keybind_lstick_up")->label == "Keys: left stick up");
+  CHECK(FindSetting("keybind_a")->label == "Keys: A");
+  CHECK(FindSetting("ts4_pad_ls")->label == "Pad: LS click");
+}
+
+TEST_CASE("When a setting applies is its cvar's lifecycle, and its help text says the same") {
+  size_t checked = 0;
+  for (const Setting& setting : PlayerSettings()) {
+    CAPTURE(setting.key);
+    const std::optional<Applies> applies = AppliesFromCvar(setting.key);
+    if (!applies) continue;  // an SDK cvar this test does not link
+    ++checked;
+    const bool help_says_next_start = setting.help.find("next start") != std::string_view::npos;
+    CHECK(help_says_next_start == (*applies == Applies::kNextStart));
+  }
+  CHECK(checked >= 5 + 16);
+  CHECK(*AppliesFromCvar("ts4_renderer") == Applies::kNextStart);
+  CHECK(*AppliesFromCvar("ts4_pad_a") == Applies::kNextStart);
+  CHECK(*AppliesFromCvar("ts4_msaa") == Applies::kNow);
+  CHECK(*AppliesFromCvar("ts4_sharpening") == Applies::kNow);
+}
+
+namespace {
+
+// Just enough JSON to read the export back: objects, arrays, strings and integers.
+struct Json {
+  std::string text;
+  std::vector<Json> items;           // an array
+  std::vector<std::string> names;    // an object's member names...
+  std::vector<Json> members;         // ...and their values
+  const Json& at(std::string_view key) const {
+    for (size_t i = 0; i < names.size(); ++i) {
+      if (names[i] == key) return members[i];
+    }
+    FAIL("no member " << key);
+    return *this;
+  }
+};
+
+Json ParseJson(std::string_view& in) {
+  const auto skip = [&] {
+    while (!in.empty() && (in[0] == ' ' || in[0] == '\n' || in[0] == ',' || in[0] == ':')) {
+      in.remove_prefix(1);
+    }
+  };
+  skip();
+  Json value;
+  if (in[0] == '"') {
+    in.remove_prefix(1);
+    while (in[0] != '"') {
+      if (in[0] == '\\') {
+        in.remove_prefix(1);
+        value.text += in[0] == 'n' ? '\n' : in[0] == 't' ? '\t' : in[0] == 'r' ? '\r' : in[0];
+      } else {
+        value.text += in[0];
+      }
+      in.remove_prefix(1);
+    }
+    in.remove_prefix(1);
+  } else if (in[0] == '[' || in[0] == '{') {
+    const char close = in[0] == '[' ? ']' : '}';
+    const bool object = close == '}';
+    in.remove_prefix(1);
+    for (skip(); in[0] != close; skip()) {
+      if (object) {
+        value.names.push_back(ParseJson(in).text);
+        value.members.push_back(ParseJson(in));
+      } else {
+        value.items.push_back(ParseJson(in));
+      }
+    }
+    in.remove_prefix(1);
+  } else {
+    while (!in.empty() && in[0] != ',' && in[0] != '}' && in[0] != ']' && in[0] != '\n') {
+      value.text += in[0];
+      in.remove_prefix(1);
+    }
+  }
+  return value;
+}
+
+}  // namespace
+
+TEST_CASE("The settings export reads back as the same registry") {
+  const std::string text = SchemaJson();
+  std::string_view in = text;
+  const Json root = ParseJson(in);
+  CHECK(root.at("format").text == "1");
+  REQUIRE(root.at("sections").items.size() == std::size(kSections));
+  for (size_t i = 0; i < std::size(kSections); ++i) {
+    CHECK(root.at("sections").items[i].text == SectionName(kSections[i]));
+  }
+  const std::vector<Setting>& registry = PlayerSettings();
+  const Json& settings = root.at("settings");
+  REQUIRE(settings.items.size() == registry.size());
+  for (size_t i = 0; i < registry.size(); ++i) {
+    const Setting& setting = registry[i];
+    const Json& row = settings.items[i];
+    CAPTURE(setting.key);
+    CHECK(row.at("key").text == setting.key);
+    CHECK(row.at("kind").text == KindName(setting.kind));
+    CHECK(row.at("default").text == setting.default_value);
+    REQUIRE(row.at("choices").items.size() == setting.choices.size());
+    for (size_t c = 0; c < setting.choices.size(); ++c) {
+      CHECK(row.at("choices").items[c].text == setting.choices[c]);
+    }
+    const std::optional<Applies> applies = AppliesFromCvar(setting.key);
+    CHECK(row.at("applies_when").text == AppliesName(applies.value_or(Applies::kNextStart)));
+    CHECK(row.at("renderers").text ==
+          (setting.renderers == Setting::Renderers::kBoth ? "both" : "native"));
+    CHECK(row.at("section").text == SectionName(setting.section));
+    CHECK(row.at("label").text == setting.label);
+    CHECK(row.at("order").text == std::to_string(setting.order));
+    CHECK(row.at("help").text == setting.help);
+  }
+}
+
+TEST_CASE("The export takes applies_when from the lookup, and the switch is found on the command line") {
+  const std::string text = SchemaJson([](std::string_view key) -> std::optional<Applies> {
+    return key == "ts4_msaa" ? std::optional(Applies::kNow) : std::nullopt;
+  });
+  CHECK(text.find("\"key\": \"ts4_msaa\", \"kind\": \"choice\", \"default\": \"original\", "
+                  "\"choices\": [\"original\", \"4\", \"8\"], \"applies_when\": \"now\"") !=
+        std::string::npos);
+  CHECK(text.find("\"key\": \"ts4_renderer\", \"kind\": \"choice\", \"default\": \"classic\", "
+                  "\"choices\": [\"classic\", \"native\"], \"applies_when\": \"next_start\"") !=
+        std::string::npos);
+  CHECK(SchemaRequested({"topspin4.exe", "--print-settings-schema"}));
+  CHECK_FALSE(SchemaRequested({"topspin4.exe", "--print-settings-schema-now"}));
+  CHECK(JsonString("a\"b\\c\n") == "\"a\\\"b\\\\c\\n\"");
+}
+
