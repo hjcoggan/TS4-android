@@ -1,6 +1,7 @@
 param(
     # Codegen translates the Modules to C++ in generated/ (needs the player's game files).
-    # Launcher publishes the preparation front end (topspin4-setup) to out/launcher/publish;
+    # Launcher publishes the preparation console tool (topspin4-setup) to out/launcher/publish
+    # and the Avalonia Launcher (topspin4-launcher) to out/launcher/publish-app;
     # LauncherTest runs the launcher's xUnit tests. Neither needs game data.
     # Check runs every test that needs no game data: pytest, the host unit tests (Test), then
     # LauncherTest; with generated code present, also scripts/d3d_callsites.py. Run it before
@@ -44,6 +45,12 @@ if ($Action -in 'Launcher', 'LauncherTest') {
             '-o', "$projectRoot/out/launcher/publish", "-maxcpucount:$Jobs") `
             -WorkingDirectory "$projectRoot/launcher" -LogPath "$projectRoot/analysis/build-launcher.log"
         Write-Output "Launcher: $projectRoot/out/launcher/publish/topspin4-setup.exe"
+        # The Avalonia Launcher (setup and Play), one self-contained exe that sits beside topspin4.exe.
+        Invoke-Hidden $dotnet @('publish', 'src/Launcher.App/Launcher.App.csproj', '-c', 'Release', '-r', 'win-x64',
+            '--self-contained', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none',
+            '-o', "$projectRoot/out/launcher/publish-app", "-maxcpucount:$Jobs") `
+            -WorkingDirectory "$projectRoot/launcher" -LogPath "$projectRoot/analysis/build-launcher-app.log"
+        Write-Output "Launcher app: $projectRoot/out/launcher/publish-app/topspin4-launcher.exe"
     } else {
         try {
             Invoke-Hidden $dotnet @('test', 'tests/Launcher.Tests/Launcher.Tests.csproj', '-c', 'Release', "-maxcpucount:$Jobs") `

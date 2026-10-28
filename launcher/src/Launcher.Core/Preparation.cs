@@ -34,6 +34,12 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     public string GameDataRoot => _gameData.Directory;
     public string UpdateDataRoot => _updateData.Directory;
 
+    /// <summary>The disc image is still needed: the cache lacks the game data.</summary>
+    public bool NeedsDisc => _gameData.Status() != SetupStatus.Done;
+
+    /// <summary>The TU1 package is still needed: the cache lacks the update data.</summary>
+    public bool NeedsTitleUpdate => _updateData.Status() != SetupStatus.Done;
+
     /// <summary>The prepared data when the cache holds all of it, else null. Reads no input.</summary>
     public PreparedData? Existing() =>
         _gameData.Status() == SetupStatus.Done && _updateData.Status() == SetupStatus.Done
@@ -49,8 +55,8 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     {
         if (Existing() is { } existing) return existing;
         var reporter = new Reporter(progress, time);
-        var needDisc = _gameData.Status() != SetupStatus.Done;
-        var needUpdate = _updateData.Status() != SetupStatus.Done;
+        var needDisc = NeedsDisc;
+        var needUpdate = NeedsTitleUpdate;
 
         if (needDisc) reporter.Start(SetupStep.CheckingDisc, 0);
         using var image = needDisc ? DiscSetup.Open(discImage) : null;

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Avalonia Launcher: first-run disc and TU1 setup, then Play. Views over Launcher.Core.
+       Copied from WWE All Stars' launcher and cut down (ADR-0004). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>TopSpin4.Launcher</RootNamespace>
+    <AssemblyName>topspin4-launcher</AssemblyName>
+    <AssemblyTitle>Top Spin 4 Recomp launcher</AssemblyTitle>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Bundled display and body fonts (SIL Open Font License); never loaded from C:/Windows/Fonts. -->
+    <AvaloniaResource Include="Assets/Fonts/*.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Launcher.Core/Launcher.Core.csproj" />
+  </ItemGroup>
+</Project>
