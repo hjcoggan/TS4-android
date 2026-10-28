@@ -3,11 +3,14 @@
              x:Class="TopSpin4.Launcher.Pages.HomePage">
   <!-- After setup: PLAY with a status line, the labelled actions, and Safe start under "Trouble starting?". Drawn from HomeModel. -->
   <StackPanel Spacing="18">
-    <Button x:Name="PlayButton" Classes="play" Content="PLAY" IsDefault="True" />
-    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Center" />
-    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Center" IsVisible="False" />
+    <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
+    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" AutomationProperties.LiveSetting="Polite" />
+    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Left" IsVisible="False" AutomationProperties.LiveSetting="Assertive" />
 
     <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
+
+    <!-- "Game files are in … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
+    <StackPanel x:Name="LocationHost" />
 
     <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18" Margin="0,16,0,0">
       <StackPanel Spacing="8">

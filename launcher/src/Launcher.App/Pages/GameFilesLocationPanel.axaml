@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TopSpin4.Launcher.Pages.GameFilesLocationPanel">
+  <!-- "Game files go to … [Change…]" with the free space, and the progress of a move. Drawn from GameFilesLocationModel;
+       the setup page and the home screen each hold one. -->
+  <StackPanel Spacing="6">
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+        <TextBlock x:Name="PathText" Classes="body" TextAlignment="Left" TextWrapping="Wrap" />
+        <TextBlock x:Name="SpaceText" Classes="small" TextAlignment="Left" />
+      </StackPanel>
+      <Button x:Name="ChangeButton" Grid.Column="1" Classes="secondary" Content="Change…" Margin="12,0,0,0" />
+    </Grid>
+    <TextBlock x:Name="WarningText" Classes="error" TextAlignment="Left" IsVisible="False" />
+    <TextBlock x:Name="MessageText" Classes="small" TextAlignment="Left" IsVisible="False" />
+    <StackPanel x:Name="MoveProgressPanel" Spacing="6" IsVisible="False">
+      <ProgressBar x:Name="MoveProgressBar" Minimum="0" Maximum="1" Height="14" />
+      <TextBlock x:Name="MoveProgressText" Classes="small" TextAlignment="Left" />
+      <Button x:Name="StopMoveButton" Classes="secondary" Content="Stop" HorizontalAlignment="Left" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

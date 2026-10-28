@@ -33,6 +33,17 @@ internal sealed class PreparedFolder(string directory, FileManifest manifest)
     }
 
     /// <summary>
+    /// The bytes still to write: nothing when done, else the manifest's size less the files an
+    /// earlier, unfinished preparation left at their right size (not re-hashed here).
+    /// </summary>
+    public long PendingBytes()
+    {
+        if (Status() == SetupStatus.Done) return 0;
+        return manifest.Files.Sum(entry =>
+            Path.Combine(Partial, entry.Path) is var path && File.Exists(path) && new FileInfo(path).Length == entry.Size ? 0 : entry.Size);
+    }
+
+    /// <summary>
     /// Starts or resumes writing: a folder that is not done becomes the partial folder, whose
     /// files that verify are kept and everything else deleted. Returns the manifest entries still to write.
     /// </summary>

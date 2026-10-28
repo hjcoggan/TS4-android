@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using TopSpin4.Launcher.Core;
 
 namespace TopSpin4.Launcher.Pages;
@@ -24,6 +26,7 @@ public partial class SettingsPage : UserControl
     private readonly Dictionary<string, Button> _rowButtons = [];
     private string? _focusAfterDraw;
     private string? _captureKey;
+    private bool _focusKeyboard;
 
     public SettingsPage() : this(() => Task.FromResult(SettingsPageModel.Unavailable(""))) { }
 
@@ -63,7 +66,12 @@ public partial class SettingsPage : UserControl
     {
         _error = change == SettingChange.Saved ? null : SettingsStore.Describe(change);
         _notice = null;
+        // Every change draws the tab again, which drops the control that was just pressed: put focus back on its twin.
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as RadioButton;
+        var key = focused?.Tag as string;
+        var keyboard = focused?.Classes.Contains(":focus-visible") == true;
         Draw();
+        if (key is not null) Dispatcher.UIThread.Post(() => RestoreFocus(key, keyboard), DispatcherPriority.Background);
     }
 
     /// <summary>Whether a binding row is waiting for a key or pad button (the window then routes input here, not to the focus).</summary>
@@ -75,7 +83,11 @@ public partial class SettingsPage : UserControl
         var waiting = _capture.Waiting;
         var captured = _capture.KeyDown(e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Control),
             e.KeyModifiers.HasFlag(KeyModifiers.Alt), e.KeyModifiers.HasFlag(KeyModifiers.Shift));
-        if (waiting) Finish(captured);
+        if (waiting)
+        {
+            _focusKeyboard = true;
+            Finish(captured);
+        }
         return waiting;
     }
 
@@ -86,7 +98,11 @@ public partial class SettingsPage : UserControl
     {
         var waiting = _capture.Waiting;
         var captured = _capture.PadChanged(state);
-        if (waiting) Finish(captured);
+        if (waiting)
+        {
+            _focusKeyboard = true;
+            Finish(captured);
+        }
         return waiting;
     }
 
@@ -115,6 +131,13 @@ public partial class SettingsPage : UserControl
         Draw();
     }
 
+    // The radio button with this identity in the tab as drawn now; the outline shows only for a keyboard or pad player.
+    private void RestoreFocus(string key, bool keyboard)
+    {
+        var twin = Tabs.GetVisualDescendants().OfType<RadioButton>().FirstOrDefault(radio => radio.Tag as string == key);
+        twin?.Focus(keyboard ? NavigationMethod.Directional : NavigationMethod.Pointer);
+    }
+
     private void Draw()
     {
         if (_model is not { } model) return;
@@ -133,7 +156,10 @@ public partial class SettingsPage : UserControl
         Tabs.SelectedIndex = tabs.Count == 0 ? -1 : Math.Clamp(selected, 0, tabs.Count - 1);
         // The rows are drawn again from the file, so put the focus back on the row the player was using.
         if (_focusAfterDraw is { } key && _rowButtons.TryGetValue(key, out var button))
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => button.Focus(NavigationMethod.Tab), Avalonia.Threading.DispatcherPriority.Background);
+        {
+            var method = _focusKeyboard ? NavigationMethod.Directional : NavigationMethod.Pointer;   // the outline shows only for a keyboard or pad player
+            Dispatcher.UIThread.Post(() => button.Focus(method), DispatcherPriority.Background);
+        }
         _focusAfterDraw = null;
     }
 
@@ -154,6 +180,7 @@ public partial class SettingsPage : UserControl
             AutomationProperties.SetName(reset, row.Label);
             reset.Click += (_, _) =>
             {
+                _focusKeyboard = reset.Classes.Contains(":focus-visible");
                 _capture.Cancel();
                 var change = model.Choose(row, "");
                 _error = change == SettingChange.Saved ? null : SettingsStore.Describe(change);
@@ -173,6 +200,7 @@ public partial class SettingsPage : UserControl
             AutomationProperties.SetName(change, "Change " + row.Label);
             change.Click += (_, _) =>
             {
+                _focusKeyboard = change.Classes.Contains(":focus-visible");
                 // A second press cancels, so the pad and mouse can back out as well as Esc.
                 if (_capture.Waiting && _capture.Row?.Key == row.Key) _capture.Cancel();
                 else
@@ -194,7 +222,11 @@ public partial class SettingsPage : UserControl
             var options = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
             foreach (var option in row.Options)
             {
-                var radio = new RadioButton { Content = option.Label, GroupName = row.Key, IsChecked = option.Value == row.Value };
+                var radio = new RadioButton
+                {
+                    Content = option.Label, GroupName = row.Key, IsChecked = option.Value == row.Value,
+                    Tag = row.Key + "=" + option.Value,
+                };
                 radio.Click += (_, _) => Apply(model.Choose(row, option.Value));
                 options.Children.Add(radio);
             }

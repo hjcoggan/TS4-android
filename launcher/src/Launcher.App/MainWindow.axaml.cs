@@ -14,7 +14,9 @@ namespace TopSpin4.Launcher;
 /// game: <see cref="LauncherShell"/> says which page shows, and each page draws its model
 /// (<see cref="SetupFlow"/>, <see cref="HomeModel"/>, <see cref="SettingsPageModel"/>). Everything
 /// is reachable with a pad: the pad is polled (<see cref="XInputPad"/>) and mapped to focus moves
-/// and presses (<see cref="PadNavigator"/>), and the keyboard's arrow keys do the same.
+/// and presses (<see cref="PadNavigator"/>, <see cref="LauncherInput"/>); the keyboard reaches
+/// everything with Tab, Enter, arrows and Esc, and pad hints show only after pad input
+/// (<see cref="InputHints"/>).
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -27,7 +29,13 @@ public partial class MainWindow : Window
     private readonly SetupPage _setupPage;
     private readonly HomePage _homePage;
     private readonly SettingsPage _settingsPage;
+    private readonly GameFilesLocationModel _location;
+    private readonly GameFilesLocationPanel _setupLocation;
+    private readonly GameFilesLocationPanel _homeLocation;
     private readonly PadNavigator _pad = new();
+    private readonly InputHints _hints = new();
+    private Avalonia.Point _pointerAt;
+    private bool _pressing;
     private readonly DispatcherTimer _padTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private LauncherPage? _shownPage;
     private bool _gameRunning;
@@ -36,9 +44,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? UserDirectories.PreparedDataRoot());
+        // The command line wins, then the place the player moved the game files to (the location file the
+        // game reads too), then the default folder.
+        var userRoot = Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot());
+        var locationFile = new GameFilesLocation(userRoot);
+        var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? locationFile.Current(UserDirectories.PreparedDataRoot()));
         var preparation = new Preparation(cacheRoot);
-        _settingsPath = SettingsFile.PathIn(Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot()));
+        _location = new GameFilesLocationModel(preparation, locationFile);
+        _settingsPath = SettingsFile.PathIn(userRoot);
         _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
         _home = new HomeModel(preparation, _gameExe);
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
@@ -48,6 +61,11 @@ public partial class MainWindow : Window
         _setupPage = new SetupPage(_flow);
         _homePage = new HomePage(_home);
         _settingsPage = new SettingsPage(LoadSettingsPage);
+        _setupLocation = new GameFilesLocationPanel(_location);
+        _homeLocation = new GameFilesLocationPanel(_location);
+        _setupPage.LocationHost.Children.Add(_setupLocation);
+        _homePage.LocationHost.Children.Add(_homeLocation);
+        _location.Changed += () => Dispatcher.UIThread.Post(Refresh);
         PageHost.Children.Add(_setupPage);
         PageHost.Children.Add(_homePage);
         PageHost.Children.Add(_settingsPage);
@@ -60,8 +78,13 @@ public partial class MainWindow : Window
         // The exe or the prepared folders may change while the window is open; look again when it is used.
         Activated += (_, _) => Refresh();
 
+        // Arrow keys and pad moves both go through XYFocus, so focus follows the layout.
+        XYFocus.SetNavigationModes(this, XYFocusNavigationModes.Enabled);
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, (_, e) => _settingsPage.OfferKeyUp(e), RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, (_, _) => _hints.Used(InputSource.Mouse), RoutingStrategies.Tunnel);
+        _hints.Changed += Refresh;
         _padTimer.Tick += (_, _) => PollPad();
         Opened += (_, _) => _padTimer.Start();
         Closed += (_, _) => _padTimer.Stop();
@@ -161,7 +184,8 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task StartGame(bool safe = false)
     {
-        if (_home.Prepared is not { } prepared || _gameRunning) return;
+        // Not while the game files are being moved: the old copy is removed at the end of the move.
+        if (_home.Prepared is not { } prepared || _gameRunning || _location.Moving) return;
         if (!_home.CanPlay)
         {
             Refresh();
@@ -207,12 +231,15 @@ public partial class MainWindow : Window
         _settingsPage.IsVisible = page == LauncherPage.Settings;
         _setupPage.Refresh();
         _homePage.Refresh();
-        HintText.Text = page switch
-        {
-            LauncherPage.Setup => "D-pad or stick: move      A: select      B: stop setup",
-            LauncherPage.Settings => "D-pad or stick: move      A: select      B: back",
-            _ => "D-pad or stick: move      A: select",
-        };
+        _setupPage.PrepareButton.IsEnabled = _location.AllowsSetup(_flow);
+        _setupLocation.Refresh();
+        _homeLocation.Refresh();
+        if (_location.Moving) _homePage.PlayButton.IsEnabled = false;
+        HintText.Text = InputHints.Text(page, _flow.Busy);
+        HintText.IsVisible = _hints.Visible;
+        // Enter triggers the default button anywhere in the window, so only the page on show has one.
+        _homePage.SetDefault(page == LauncherPage.Home);
+        _setupPage.SetDefault(page == LauncherPage.Setup);
 
         if (page == _shownPage) return;
         _shownPage = page;
@@ -243,56 +270,79 @@ public partial class MainWindow : Window
         if (_padHeldForBinding)
         {
             _padHeldForBinding = state.Buttons != 0;
+            if (_padHeldForBinding) _hints.Used(InputSource.Pad);
             _pad.Update(default, Environment.TickCount64);
             return;
         }
-        Act(_pad.Update(state, Environment.TickCount64));
+        var action = _pad.Update(state, Environment.TickCount64);
+        if (action == PadAction.None) return;
+        _hints.Used(InputSource.Pad);
+        Act(action);
     }
 
+    // Esc is Back. Tab, Enter and the arrows are Avalonia's own: arrows move focus through XYFocus, set on the window.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (!_pressing) _hints.Used(InputSource.Keyboard);
         // A binding row waiting for a key takes every key, Esc cancelling it, so none moves the focus or goes back.
-        if (_settingsPage.OfferKeyDown(e))
+        // (A pad press that presses a button arrives as a made-up Enter: not a key the player pressed.)
+        if (!_pressing && _settingsPage.OfferKeyDown(e))
         {
             e.Handled = true;
             return;
         }
-        var action = e.Key switch
-        {
-            Key.Up => PadAction.Up,
-            Key.Down => PadAction.Down,
-            Key.Left => PadAction.Left,
-            Key.Right => PadAction.Right,
-            Key.Escape => PadAction.Back,
-            _ => PadAction.None,
-        };
-        if (action == PadAction.None) return;
+        if (e.Key != Key.Escape) return;
         e.Handled = true;
-        Act(action);
+        Act(PadAction.Back);
+    }
+
+    // A real mouse move, not the move Avalonia repeats when content scrolls under a still pointer.
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var at = e.GetPosition(this);
+        if (at == _pointerAt) return;
+        _pointerAt = at;
+        _hints.Used(InputSource.Mouse);
     }
 
     private void Act(PadAction action)
     {
-        switch (action)
+        switch (LauncherInput.Route(action, _shell.Page, _flow.Busy))
         {
-            case PadAction.Up or PadAction.Left:
-                MoveFocus(NavigationDirection.Previous);
+            case InputCommand.FocusUp: MoveFocus(NavigationDirection.Up); break;
+            case InputCommand.FocusDown: MoveFocus(NavigationDirection.Down); break;
+            case InputCommand.FocusLeft: MoveFocus(NavigationDirection.Left); break;
+            case InputCommand.FocusRight: MoveFocus(NavigationDirection.Right); break;
+            case InputCommand.Press: PressFocused(); break;
+            case InputCommand.GoBack: _shell.Back(); break;
+            case InputCommand.StopSetup: _setupPage.Stop(); break;
+        }
+    }
+
+    // A presses what has focus. Enter makes Button, RadioButton and an Expander's header do exactly what a click does;
+    // a tab header is selected directly.
+    private void PressFocused()
+    {
+        switch (FocusManager?.GetFocusedElement())
+        {
+            case TabItem tab:
+                tab.IsSelected = true;
                 break;
-            case PadAction.Down or PadAction.Right:
-                MoveFocus(NavigationDirection.Next);
-                break;
-            case PadAction.Accept:
-                if (FocusManager?.GetFocusedElement() is Button { IsEnabled: true } button)
-                    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                break;
-            case PadAction.Back:
-                _setupPage.Stop();
-                _shell.Back();
+            case Button { IsEnabled: true } button:
+                _pressing = true;
+                try
+                {
+                    button.RaiseEvent(new KeyEventArgs { RoutedEvent = KeyDownEvent, Key = Key.Enter, Source = button });
+                }
+                finally
+                {
+                    _pressing = false;
+                }
                 break;
         }
     }
 
-    // Every page is a short list of controls, so previous and next are enough for all four directions.
+    // Directional focus: to the control that is visually next to the focused one, as XYFocus finds it.
     private void MoveFocus(NavigationDirection direction)
     {
         if (FocusManager?.GetFocusedElement() is not InputElement current)
@@ -302,9 +352,9 @@ public partial class MainWindow : Window
                 LauncherPage.Home => _homePage.EntryControl,
                 LauncherPage.Settings => _settingsPage.EntryControl,
                 _ => _setupPage.EntryControl,
-            }).Focus(NavigationMethod.Tab);
+            }).Focus(NavigationMethod.Directional);
             return;
         }
-        KeyboardNavigationHandler.GetNext(current, direction)?.Focus(NavigationMethod.Tab);
+        KeyboardNavigationHandler.GetNext(current, direction)?.Focus(NavigationMethod.Directional);
     }
 }
