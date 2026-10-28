@@ -79,5 +79,8 @@ public partial class HomePage : UserControl
         foreach (var action in wanted) ActionsHost.Children.Add(_buttons[action]);
     }
 
+    /// <summary>PLAY answers Enter only while this page is the one on show.</summary>
+    public void SetDefault(bool isDefault) => PlayButton.IsDefault = isDefault;
+
     public void FocusFirst() => EntryControl.Focus(NavigationMethod.Tab);
 }

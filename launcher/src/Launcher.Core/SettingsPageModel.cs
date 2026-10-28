@@ -3,15 +3,25 @@ namespace TopSpin4.Launcher.Core;
 /// <summary>One choice of a setting, with the label the player sees.</summary>
 public sealed record SettingOption(string Value, string Label);
 
-public enum SettingRowKind { Setting, Preset }
+public enum SettingRowKind { Setting, Preset, Action }
 
 /// <summary>
-/// One row of the Settings page: a setting or the Graphics Preset row, with its label, current
-/// value, help and choices. A row that does nothing on the chosen renderer is not available, and
-/// <see cref="Note"/> says why; a binding row is shown, not editable here.
+/// One row of the Settings page: a setting, the Graphics Preset row or the Reset controls action,
+/// with its label, current value, help and choices. A row that does nothing on the chosen renderer
+/// is not available, and <see cref="Note"/> says why. A binding row has no choices to pick from;
+/// it is <see cref="Remappable"/>: the player presses the key or pad button to use (BindingCapture).
 /// </summary>
 public sealed record SettingRow(string Key, SettingRowKind Kind, string Label, string Help, string Value, string ValueLabel,
-    IReadOnlyList<SettingOption> Options, bool Available, bool Editable, string? Note, BindingDescription? Binding);
+    IReadOnlyList<SettingOption> Options, bool Available, bool Editable, bool Remappable, string? Note, BindingDescription? Binding);
+
+/// <summary>
+/// What a remap did: the write, and one line for each other binding of the same device it clashed
+/// with (a pad button another binding used swaps with it; a key another binding used is taken from it).
+/// </summary>
+public sealed record BindingResult(SettingChange Change, IReadOnlyList<string> Clashes)
+{
+    public static BindingResult Of(SettingChange change) => new(change, []);
+}
 
 /// <summary>One tab of the Settings page: a section of the game's Settings page and its rows.</summary>
 public sealed record SettingsTab(string Name, IReadOnlyList<SettingRow> Rows);
@@ -25,6 +35,9 @@ public sealed class SettingsPageModel
 {
     /// <summary>The key of the Preset row (the game's <c>kPresetKey</c>). It names no setting and is never saved.</summary>
     public const string PresetKey = "graphics_preset";
+
+    /// <summary>The key of the Reset controls row (the game's <c>kResetControlsKey</c>). It names no setting.</summary>
+    public const string ResetControlsKey = "reset_controls";
 
     private const string CustomPreset = "custom";
 
@@ -85,6 +98,7 @@ public sealed class SettingsPageModel
                 if (section == _schema.PresetSection && _schema.Presets.Count > 0) rows.Add(PresetRow(values, renderer));
                 rows.AddRange(_schema.Settings.Where(setting => setting.Section == section).OrderBy(setting => setting.Order)
                     .Select(setting => Row(setting, values[setting.Key], renderer)));
+                if (rows.Any(row => row.Binding is not null)) rows.Add(ResetControlsRow());
                 return new SettingsTab(section, rows);
             }).ToList();
         }
@@ -94,6 +108,8 @@ public sealed class SettingsPageModel
     public SettingChange Choose(SettingRow row, string value)
     {
         if (_schema is null || _store is null) return SettingChange.NotWritten;
+        if (row.Kind == SettingRowKind.Action) return row.Key == ResetControlsKey ? ResetControls() : SettingChange.Refused;
+        if (row.Binding is not null) return Bind(row, value).Change;
         if (row.Kind == SettingRowKind.Setting)
             return _schema.Settings.FirstOrDefault(setting => setting.Key == row.Key) is { } setting
                 ? _store.Set(setting, value)
@@ -112,6 +128,69 @@ public sealed class SettingsPageModel
     /// <summary>Writes every setting's default into the Settings file.</summary>
     public SettingChange ResetToDefaults() => _store?.ResetToDefaults() ?? SettingChange.NotWritten;
 
+    /// <summary>
+    /// Writes the default of every pad and key binding, and nothing else: keyboard and mouse on or
+    /// off is not a binding and stays (SettingsModel::ResetControls in src/settings/page_model.h).
+    /// </summary>
+    public SettingChange ResetControls()
+    {
+        if (_schema is null || _store is null) return SettingChange.NotWritten;
+        foreach (var setting in _schema.Settings.Where(setting => setting.Binding is not null))
+        {
+            var change = _store.Set(setting, setting.Default);
+            if (change != SettingChange.Saved) return change;
+        }
+        return SettingChange.Saved;
+    }
+
+    /// <summary>
+    /// Binds a binding row to a pad input (its name as the game's choices have it: "a", "lt") or to one
+    /// key ("Shift+W", as the game's key names go, replacing the keys the row had), writing it to the
+    /// Settings file. The game's clash rules apply (SettingsModel::Change and BindKey in
+    /// src/settings/page_model.h), and each clash is reported: a pad button another binding uses swaps
+    /// with it, so nothing is left unbound; a key another binding uses is taken from it, and a binding
+    /// left with no key takes this row's old keys.
+    /// </summary>
+    public BindingResult Bind(SettingRow row, string value)
+    {
+        if (_schema is null || _store is null) return BindingResult.Of(SettingChange.NotWritten);
+        if (row.Binding is not { } binding || _schema.Settings.FirstOrDefault(candidate => candidate.Key == row.Key) is not { } setting
+            || !setting.Allows(value) || (binding.Device == "keyboard" && value.Length == 0))
+            return BindingResult.Of(SettingChange.Refused);
+        var values = _store.Values();
+        var old = values[setting.Key];
+        if (old == value) return BindingResult.Of(SettingChange.Saved);   // already so: nothing to write, no clash
+        var change = _store.Set(setting, value);
+        if (change != SettingChange.Saved) return BindingResult.Of(change);
+        var clashes = new List<string>();
+        foreach (var other in _schema.Settings.Where(other => other.Key != setting.Key && other.Binding?.Device == binding.Device))
+        {
+            var (replacement, said) = binding.Device == "pad"
+                ? PadClash(other, values[other.Key], value, old)
+                : KeyClash(other, values[other.Key], value, old);
+            if (replacement is null) continue;
+            change = _store.Set(other, replacement);
+            if (change != SettingChange.Saved) return new BindingResult(change, clashes);
+            clashes.Add(said!);
+        }
+        return new BindingResult(SettingChange.Saved, clashes);
+    }
+
+    // Another pad binding on the same button takes the old button of the one that was just bound.
+    private static (string? Replacement, string? Said) PadClash(SettingDescription other, string current, string value, string old) =>
+        current != value ? (null, null)
+            : (old, $"{other.Label} had {other.LabelOf(value)}; it now has {other.LabelOf(old)}.");
+
+    // Another key binding with the same key loses it; with no key left it takes the old keys of the one just bound.
+    private static (string? Replacement, string? Said) KeyClash(SettingDescription other, string current, string value, string old)
+    {
+        var keys = current.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!keys.Remove(value)) return (null, null);
+        var rest = string.Join(',', keys);
+        var replacement = rest.Length == 0 ? old : rest;
+        return (replacement, $"{other.Label} had {value}; it now has {replacement.Replace(",", ", ")}.");
+    }
+
     private static string RendererIn(IReadOnlyDictionary<string, string> values) =>
         values.TryGetValue(SettingsSchema.RendererKey, out var renderer) ? renderer : "classic";
 
@@ -121,7 +200,7 @@ public sealed class SettingsPageModel
         var options = (setting.IsBool ? new[] { "false", "true" } : setting.Choices.ToArray())
             .Select(choice => new SettingOption(choice, LabelOf(setting, choice))).ToList();
         return new SettingRow(setting.Key, SettingRowKind.Setting, setting.Label, setting.Help, value, LabelOf(setting, value), options,
-            available, Editable: available && setting.Binding is null && !setting.IsText,
+            available, Editable: available && setting.Binding is null && !setting.IsText, Remappable: available && setting.Binding is not null,
             Note: available ? null : "Only the Native renderer uses this setting; the renderer is set to Classic.",
             setting.Binding);
     }
@@ -160,8 +239,14 @@ public sealed class SettingsPageModel
                 : " need the Native renderer and do not count on Classic.");
         return new SettingRow(PresetKey, SettingRowKind.Preset, schema.PresetLabel, schema.PresetHelp, active,
             options.FirstOrDefault(option => option.Value == active)?.Label ?? "Custom", options,
-            Available: true, Editable: true, Note: note, Binding: null);
+            Available: true, Editable: true, Remappable: false, Note: note, Binding: null);
     }
+
+    // The game's Reset controls row (ResetRow in src/settings/page_model.h), worded the same.
+    private static SettingRow ResetControlsRow() =>
+        new(ResetControlsKey, SettingRowKind.Action, "Reset controls",
+            "Put every controller and keyboard binding back to the original layout.", "", "", [],
+            Available: true, Editable: false, Remappable: false, Note: null, Binding: null);
 
     private static string LabelOf(SettingDescription setting, string value) =>
         ChoiceLabels.TryGetValue((setting.Key, value), out var label) ? label : setting.LabelOf(value);

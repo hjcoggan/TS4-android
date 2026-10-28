@@ -13,7 +13,7 @@ public enum PadAction
 }
 
 /// <summary>One reading of the first pad, in XInput's layout.</summary>
-public readonly record struct PadState(ushort Buttons, short LeftX, short LeftY)
+public readonly record struct PadState(ushort Buttons, short LeftX, short LeftY, byte LeftTrigger = 0, byte RightTrigger = 0)
 {
     public const ushort DPadUp = 0x0001, DPadDown = 0x0002, DPadLeft = 0x0004, DPadRight = 0x0008;
     public const ushort A = 0x1000, B = 0x2000;

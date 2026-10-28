@@ -27,7 +27,7 @@ public sealed class SettingsPageModelTests : IDisposable
         Assert.Equal(
             ["graphics_preset", "ts4_renderer", "ts4_resolution_scale", "ts4_msaa", "ts4_anisotropic_filtering", "ts4_sharpening"],
             page.Tabs[0].Rows.Select(row => row.Key));
-        Assert.Equal(["mnk_mode", "ts4_pad_a", "keybind_a"], page.Tabs[1].Rows.Select(row => row.Key));
+        Assert.Equal(["mnk_mode", "ts4_pad_a", "keybind_a", "reset_controls"], page.Tabs[1].Rows.Select(row => row.Key));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class SettingsPageModelTests : IDisposable
         Assert.Equal(("Graphics preset", "original", "Original"), (preset.Label, preset.Value, preset.ValueLabel));
         Assert.Equal(["Original", "Enhanced"], preset.Options.Select(option => option.Label));
         Assert.Equal("Original: defaults. Enhanced: best look.", preset.Help);
-        Assert.All(Page().Tabs[1].Rows, row => Assert.Equal(SettingRowKind.Setting, row.Kind));
+        Assert.All(Page().Tabs[1].Rows.Where(row => row.Key != "reset_controls"), row => Assert.Equal(SettingRowKind.Setting, row.Kind));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class SettingsPageModelTests : IDisposable
     }
 
     [Fact]
-    public void Binding_rows_are_shown_read_only_with_their_device_and_action()
+    public void Binding_rows_carry_their_device_and_action_and_have_no_list_of_choices_to_pick_from()
     {
         var page = Page();
         var pad = Row(page, "ts4_pad_a");

@@ -16,10 +16,9 @@
         <Setter Property="Foreground" Value="{StaticResource Navy}" />
       </Style>
     </StackPanel.Styles>
-    <Button x:Name="PlayButton" Classes="play" Content="PLAY" IsDefault="True" />
-    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Center" />
-    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Center" IsVisible="False"
-               AutomationProperties.LiveSetting="Assertive" />
+    <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
+    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" AutomationProperties.LiveSetting="Polite" />
+    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Left" IsVisible="False" AutomationProperties.LiveSetting="Assertive" />
     <!-- Safe start moves here after a GPU failure or a crash. -->
     <StackPanel x:Name="ProminentHost" HorizontalAlignment="Center" />
 

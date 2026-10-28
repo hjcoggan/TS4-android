@@ -74,7 +74,7 @@
       <Button x:Name="CancelButton" Classes="secondary" Content="Stop" HorizontalAlignment="Center" />
     </StackPanel>
 
-    <Button x:Name="PrepareButton" Classes="play" Content="SET UP THE GAME" IsDefault="True" IsEnabled="False" />
+    <Button x:Name="PrepareButton" Classes="play" Content="SET UP THE GAME" IsEnabled="False" />
     <Button x:Name="StartOverButton" Classes="secondary" Content="Start over" HorizontalAlignment="Center" IsVisible="False" />
   </StackPanel>
 </UserControl>
