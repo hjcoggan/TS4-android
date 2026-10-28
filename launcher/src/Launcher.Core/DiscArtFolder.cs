@@ -8,8 +8,9 @@ namespace TopSpin4.Launcher.Core;
 /// per slot, stored as it came off the disc (a PNG stays a PNG, a JPEG a JPEG), the title icon
 /// again as <c>topspin4.ico</c>, and <c>index.txt</c>, which names what was found and the disc it
 /// came from. The index is written after the files it names and before the files it no longer
-/// names are removed, so a folder is always either the earlier disc's or the new one's, and one
-/// without an index counts as empty. This type writes the folder and, opened later, says which
+/// names are removed, so the index never names a file that is gone (a write that stops half way
+/// can leave some files already replaced under the earlier index), and a folder without an index
+/// counts as empty. This type writes the folder and, opened later, says which
 /// images exist.
 /// </summary>
 /// <remarks>
@@ -136,8 +137,8 @@ public sealed class DiscArtFolder
     /// <summary>
     /// Writes <paramref name="images"/> to <paramref name="folder"/> and returns the slots it holds now. The files go in first,
     /// each by writing a uniquely named temporary file beside it and renaming; then the index; then the files the new
-    /// disc has no use for are removed. A write that stops half way leaves the earlier index and the files it names, so the
-    /// folder never lists a file that is gone. One writer at a time (<see cref="WriterLock"/>).
+    /// disc has no use for are removed. A write that stops half way leaves the earlier index, and every file it names still exists
+    /// (some may already hold the new disc's bytes), so the folder never lists a file that is gone. One writer at a time (<see cref="WriterLock"/>).
     /// </summary>
     /// <param name="cleanRead">The read that produced <paramref name="images"/> logged no problem; only then does the index say <c>read=complete</c>.</param>
     internal static IReadOnlyList<DiscArtSlot> Write(string folder, IReadOnlyDictionary<DiscArtSlot, byte[]> images, string source,

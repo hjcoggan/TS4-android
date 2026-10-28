@@ -172,9 +172,9 @@ wrote the `0x8000` PNG, which is identical to the one the Python XDBF walk produ
    encrypted image key.
 3. **Session key.** AES-128-CBC decrypt the 16 bytes at security `+0x150` with IV = 0 and the
    retail key `20 B1 85 A5 9D 28 FD C3 40 58 3F BB 08 96 BF 91`. Fall back to the devkit key
-   (16 zero bytes) when the first block's hash fails. Here the result is
-   `06 BF 87 5F 4D 2A E9 F6 7C 0B CB 99 ED 91 80 03`, the "Encryption Key" that
-   `analysis/xex/default.xextool.txt` prints. .NET: `Aes.Create()`, `Key = retail`,
+   (16 zero bytes) when the first block's hash fails. The result is the "Encryption Key" that
+   `analysis/xex/default.xextool.txt` prints (not recorded here: it is derived from the
+   game's executable). .NET: `Aes.Create()`, `Key = retail`,
    `DecryptCbc(span, new byte[16], PaddingMode.None)`.
 4. **Decrypt the image data.** Everything from the PE data offset to the end of the file,
    rounded down to 16 bytes, AES-128-CBC with the session key and IV = 0, in one pass (the
