@@ -21,3 +21,11 @@ Evidence (2026-10-28):
 - The game refuses an unwritable exe folder (`kNotSetUpUnwritable`, opens the Launcher) only when `--user_data_root` is not given; this path has no automated test beyond `IsWritableFolder`.
 
 Not verified (owner run): the published Launcher in a fresh folder with no `gamedata` (set up, play, nothing new under `%APPDATA%` / `%LOCALAPPDATA%`); the refusal on the setup page in a real read-only folder (tests use a path under a file); the game's own start from such a folder.
+
+Real runs on the published build (2026-10-28, 23:19–23:23), in a fresh copy of the build folder at `analysis/portable-run/` (git-ignored):
+- `topspin4-setup.exe --disc … --tu …` from that folder prepared `gamedata\` and `updatedata\` beside the exe (7 s).
+- `topspin4.exe --headless --window_hidden=true` with no folder flags: did not report "not set up", ran 30 s alive, wrote `cache\shader-topup\…` and `logs\` beside the exe.
+- `topspin4-launcher.exe` from that folder: opened on Home, "Ready to play.", "Game files are in …\portable-run", and wrote the disc art to `userdata\art\` (index `read=complete`).
+- `%APPDATA%\TopSpin4Recomp` and `%LOCALAPPDATA%\TopSpin4Recomp`: 717 files listed with size and write time before the runs, identical after them (0 differences).
+- Write-denied copy (folder ACL deny create files/folders for the user): `topspin4.exe --headless` printed "Top Spin 4 is not set up (folder-not-writable) and no game folders were given." and exited 2; without `--headless` it exited 0 and started the Launcher from that folder, whose setup page (read through UI Automation) showed "This folder can't be written to: …\portable-readonly. Move the game folder somewhere you can write to, such as your Documents or a games drive, and start the Launcher again." with "SET UP THE GAME" disabled.
+- Not observed: a save written to `userdata\` (needs a played match), and the refusal line sits below the first screen of the setup page, so a player has to scroll to see it.
