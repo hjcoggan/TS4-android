@@ -1,44 +1,80 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TopSpin4.Launcher.Pages.SetupPage">
-  <!-- First run: prepare the disc and Title Update 1. Drawn from SetupFlow. -->
+  <!-- First run: two numbered rows, each checked the moment its file is picked. Drawn from SetupFlow. -->
+  <UserControl.Styles>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource SkyBrush}" />
+      <Setter Property="FontSize" Value="19" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </UserControl.Styles>
   <StackPanel Spacing="14">
-    <TextBlock Classes="body" TextAlignment="Center"
-               Text="To play, you need a disc image (.iso) of your own Top Spin 4 Xbox 360 disc and its Title Update 1. Setup checks both and copies the game files once. It never changes your disc image or update file." />
+    <TextBlock Classes="body" TextAlignment="Left"
+               Text="Setup needs two files from your own copy of the game. Each one is checked as soon as you pick it, and setup never changes either file." />
 
-    <Border x:Name="DiscPanel" Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
+    <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
       <StackPanel Spacing="8">
-        <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" Text="Disc image" />
-        <TextBlock x:Name="DiscPathText" Classes="small" Text="No disc image chosen" />
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <Button x:Name="ChooseDiscButton" Classes="secondary" Content="Choose disc image…" />
-          <Button x:Name="NextDiscButton" Classes="secondary" Content="Next one found" IsVisible="False" />
+          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource BallBrush}" Text="1" />
+          <TextBlock FontSize="24" FontWeight="Bold" Foreground="White" Text="Disc" />
         </StackPanel>
+        <TextBlock Classes="small" TextAlignment="Left"
+                   Text="A disc image (.iso) made from your own Top Spin 4 Xbox 360 disc, often named Top Spin 4.iso." />
+        <TextBlock x:Name="DiscPathText" Classes="small" Text="No file chosen" />
+        <Button x:Name="ChooseDiscButton" Classes="secondary" HorizontalAlignment="Left" Content="Choose disc image…" />
+        <TextBlock x:Name="DiscResult" Classes="body" TextAlignment="Left" IsVisible="False"
+                   AutomationProperties.LiveSetting="Polite" />
+        <Expander x:Name="DiscDetails" Header="Details" IsVisible="False">
+          <SelectableTextBlock x:Name="DiscDetailsText" Classes="small" TextAlignment="Left" />
+        </Expander>
       </StackPanel>
     </Border>
 
-    <Border x:Name="TitleUpdatePanel" Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
+    <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
       <StackPanel Spacing="8">
-        <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" Text="Title Update 1" />
-        <TextBlock x:Name="TitleUpdatePathText" Classes="small" Text="No Title Update 1 chosen" />
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <Button x:Name="ChooseTitleUpdateButton" Classes="secondary" Content="Choose Title Update 1…" />
-          <Button x:Name="NextTitleUpdateButton" Classes="secondary" Content="Next one found" IsVisible="False" />
+          <TextBlock FontSize="26" FontWeight="Bold" Foreground="{StaticResource BallBrush}" Text="2" />
+          <TextBlock FontSize="24" FontWeight="Bold" Foreground="White" Text="Title Update 1" />
         </StackPanel>
+        <TextBlock Classes="small" TextAlignment="Left"
+                   Text="The free update Top Spin 4 got on Xbox 360, a file named TU_1A5822P_000000C000000.0000000000083 with no extension." />
+        <TextBlock x:Name="TitleUpdatePathText" Classes="small" Text="No file chosen" />
+        <Button x:Name="ChooseTitleUpdateButton" Classes="secondary" HorizontalAlignment="Left" Content="Choose Title Update 1…" />
+        <TextBlock x:Name="TitleUpdateResult" Classes="body" TextAlignment="Left" IsVisible="False"
+                   AutomationProperties.LiveSetting="Polite" />
+        <Expander x:Name="TitleUpdateDetails" Header="Details" IsVisible="False">
+          <SelectableTextBlock x:Name="TitleUpdateDetailsText" Classes="small" TextAlignment="Left" />
+        </Expander>
       </StackPanel>
     </Border>
+
+    <Button x:Name="HelpButton" Classes="link" Content="How do I get these files?" />
 
     <!-- "Game files go to … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
     <StackPanel x:Name="LocationHost" />
 
-    <TextBlock x:Name="SetupMessage" Classes="error" TextAlignment="Center" IsVisible="False" />
+    <TextBlock x:Name="SetupMessage" Classes="error" TextAlignment="Left" IsVisible="False"
+               AutomationProperties.LiveSetting="Assertive" />
+    <Expander x:Name="MessageDetails" Header="Details" IsVisible="False">
+      <SelectableTextBlock x:Name="MessageDetailsText" Classes="small" TextAlignment="Left" />
+    </Expander>
 
     <StackPanel x:Name="ProgressPanel" Spacing="8" IsVisible="False">
       <ProgressBar x:Name="SetupProgressBar" Minimum="0" Maximum="1" Height="14" />
-      <TextBlock x:Name="SetupProgressText" Classes="body" TextAlignment="Center" />
+      <TextBlock x:Name="SetupProgressText" Classes="body" TextAlignment="Center"
+                 AutomationProperties.LiveSetting="Polite" />
       <Button x:Name="CancelButton" Classes="secondary" Content="Stop" HorizontalAlignment="Center" />
     </StackPanel>
 
-    <Button x:Name="PrepareButton" Classes="play" Content="SET UP" IsEnabled="False" />
+    <Button x:Name="PrepareButton" Classes="play" Content="SET UP THE GAME" IsDefault="True" IsEnabled="False" />
+    <Button x:Name="StartOverButton" Classes="secondary" Content="Start over" HorizontalAlignment="Center" IsVisible="False" />
   </StackPanel>
 </UserControl>

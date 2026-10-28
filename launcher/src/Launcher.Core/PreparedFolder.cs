@@ -72,6 +72,14 @@ internal sealed class PreparedFolder(string directory, FileManifest manifest)
         return manifest.Files.Where(entry => !kept.Contains(entry.Path)).ToList();
     }
 
+    /// <summary>Deletes the partial folder and a folder that is not done; a done folder is left alone.</summary>
+    public void DiscardUnfinished()
+    {
+        if (Status() == SetupStatus.Done) return;
+        if (System.IO.Directory.Exists(Partial)) System.IO.Directory.Delete(Partial, recursive: true);
+        if (System.IO.Directory.Exists(Directory)) System.IO.Directory.Delete(Directory, recursive: true);
+    }
+
     /// <summary>Refuses to start writing <paramref name="pending"/> when the drive lacks the room.</summary>
     public void CheckSpace(IDiskSpace space, IReadOnlyList<ManifestEntry> pending, long spare, string what)
     {
@@ -80,7 +88,7 @@ internal sealed class PreparedFolder(string directory, FileManifest manifest)
         if (free < needed)
             throw new SetupException(SetupError.DiskFull,
                 $"Not enough disk space for {what}: it needs {needed / 1e9:0.0} GB free on {Path.GetPathRoot(Directory)} " +
-                $"and only {free / 1e9:0.0} GB is free. Free some space or choose another cache folder.");
+                $"and only {free / 1e9:0.0} GB is free. Free some space on that drive, then set up again.");
     }
 
     /// <summary>

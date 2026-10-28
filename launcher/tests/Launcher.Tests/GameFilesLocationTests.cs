@@ -36,8 +36,8 @@ public sealed class GameFilesLocationTests : IDisposable
     {
         var (disc, titleUpdate) = WriteInputs();
         var flow = new SetupFlow(preparation);
-        flow.ChooseDisc(disc);
-        flow.ChooseTitleUpdate(titleUpdate);
+        await flow.ChooseDisc(disc);
+        await flow.ChooseTitleUpdate(titleUpdate);
         await flow.PrepareAsync(TestContext.Current.CancellationToken);
         Assert.Equal(SetupPhase.Ready, flow.Phase);
         return flow;
@@ -56,19 +56,20 @@ public sealed class GameFilesLocationTests : IDisposable
     }
 
     [Fact]
-    public void Not_enough_free_space_is_reported_before_setup_starts()
+    public async Task Not_enough_free_space_is_reported_before_setup_starts()
     {
         _space.Free = 100L << 20;
         var preparation = Preparation();
         var model = Model(preparation);
         var (disc, titleUpdate) = WriteInputs();
         var flow = new SetupFlow(preparation);
-        flow.ChooseDisc(disc);
-        flow.ChooseTitleUpdate(titleUpdate);
+        await flow.ChooseDisc(disc);
+        await flow.ChooseTitleUpdate(titleUpdate);
 
         Assert.False(model.EnoughSpace);
         Assert.NotNull(model.Warning);
-        Assert.False(flow.CanPrepare, "Setup must not start on a drive that cannot hold the files.");
+        Assert.True(flow.CanPrepare);
+        Assert.False(model.AllowsSetup(flow), "Setup must not be offered on a drive that cannot hold the files.");
         Assert.False(Directory.Exists(Default), "Nothing may be written before the warning.");
     }
 

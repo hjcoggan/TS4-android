@@ -49,6 +49,12 @@ public sealed class GameFilesLocationModel(Preparation preparation, GameFilesLoc
         }
     }
 
+    /// <summary>
+    /// "Set up the game" is on offer: the flow can start and the drive has the room. Setup that is
+    /// started anyway still stops with a disk-full message before writing (<see cref="SetupError.DiskFull"/>).
+    /// </summary>
+    public bool AllowsSetup(SetupFlow flow) => flow.CanPrepare && EnoughSpace;
+
     /// <summary>A warning, shown before setup starts, when the drive cannot hold the game files; else null.</summary>
     public string? Warning => EnoughSpace ? null
         : $"Not enough free space on {System.IO.Path.GetPathRoot(Path)}: setup needs about {preparation.NeededBytes / Gigabyte:0.#} GB " +

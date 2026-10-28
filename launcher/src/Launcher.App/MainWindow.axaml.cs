@@ -44,20 +44,15 @@ public partial class MainWindow : Window
         var locationFile = new GameFilesLocation(userRoot);
         var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? locationFile.Current(UserDirectories.PreparedDataRoot()));
         var preparation = new Preparation(cacheRoot);
-        _flow = new SetupFlow(preparation);
-        _shell = new LauncherShell(_flow);
         _location = new GameFilesLocationModel(preparation, locationFile);
         _settingsPath = SettingsFile.PathIn(userRoot);
         _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
         _home = new HomeModel(preparation, _gameExe);
+        // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
+        _flow = new SetupFlow(preparation, log: Log);
+        _shell = new LauncherShell(_flow);
 
-        var folders = InputFinder.DefaultFolders(_launcherDirectory);
-        var discs = InputFinder.DiscImages(folders);
-        var titleUpdates = InputFinder.TitleUpdates(folders);
-        if (_flow.NeedsDisc && discs.Count > 0) _flow.ChooseDisc(discs[0]);
-        if (_flow.NeedsTitleUpdate && titleUpdates.Count > 0) _flow.ChooseTitleUpdate(titleUpdates[0]);
-
-        _setupPage = new SetupPage(_flow, discs, titleUpdates);
+        _setupPage = new SetupPage(_flow);
         _homePage = new HomePage(_home);
         _settingsPage = new SettingsPage(LoadSettingsPage);
         _setupLocation = new GameFilesLocationPanel(_location);
@@ -70,6 +65,7 @@ public partial class MainWindow : Window
         PageHost.Children.Add(_settingsPage);
 
         _shell.Changed += () => Dispatcher.UIThread.Post(Refresh);
+        _setupPage.HelpPressed += OpenHelp;
         _homePage.PlayPressed += async () => await StartGame();
         _homePage.ActionPressed += async action => await OnHomeAction(action);
         _settingsPage.BackPressed += _shell.Back;
@@ -121,8 +117,30 @@ public partial class MainWindow : Window
     private void OpenHelp()
     {
         if (HelpDocument.Find(_launcherDirectory) is { } readme) Open(readme);
-        else _home.Say($"{HelpDocument.FileName} was not found next to the Launcher.");
+        else Say($"{HelpDocument.FileName} was not found next to the Launcher.");
         Refresh();
+    }
+
+    // A line for the page the player is on: the setup page has its own message line, the home screen the note.
+    private void Say(string note)
+    {
+        if (_shell.Page == LauncherPage.Setup) _flow.Notice(note);
+        else _home.Say(note);
+    }
+
+    // The technical text behind a refused file or a failed setup goes to logs/launcher.log beside the game, with the game's logs.
+    private void Log(string line)
+    {
+        try
+        {
+            if (_home.LogsFolder is not { } folder) return;
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(Path.Combine(folder, "launcher.log"), $"{DateTime.Now:s} {line}{Environment.NewLine}");
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // The log is a convenience; a folder that can't be written to is not worth a message.
+        }
     }
 
     private void OpenLogs()
@@ -142,7 +160,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            _home.Say("Could not open it: " + error.Message);
+            Say("Could not open it: " + error.Message);
             Refresh();
         }
     }
@@ -201,6 +219,7 @@ public partial class MainWindow : Window
         _settingsPage.IsVisible = page == LauncherPage.Settings;
         _setupPage.Refresh();
         _homePage.Refresh();
+        _setupPage.PrepareButton.IsEnabled = _location.AllowsSetup(_flow);
         _setupLocation.Refresh();
         _homeLocation.Refresh();
         if (_location.Moving) _homePage.PlayButton.IsEnabled = false;

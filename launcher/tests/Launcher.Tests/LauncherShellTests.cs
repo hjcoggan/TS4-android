@@ -42,8 +42,8 @@ public sealed class LauncherShellTests : IDisposable
         Directory.CreateDirectory(input);
         var disc = Path.Combine(input, "Top Spin 4.iso");
         _disc.WriteImage(disc);
-        flow.ChooseDisc(disc);
-        flow.ChooseTitleUpdate(TestTitleUpdate.Package().WriteTo(Path.Combine(input, "TU_1A5822P_000000C000000.0000000000083")));
+        await flow.ChooseDisc(disc);
+        await flow.ChooseTitleUpdate(TestTitleUpdate.Package().WriteTo(Path.Combine(input, "TU_1A5822P_000000C000000.0000000000083")));
 
         await flow.PrepareAsync(TestContext.Current.CancellationToken);
 
