@@ -102,17 +102,38 @@ at 6900
 press A
 """
 
+# label and crops: what scripts/scene_runner_shots.py shows on its before-and-after page
+# (crop boxes are fractions of the frame: x, y, width, height).
 [[capture]]  # player select, four players
 frame = 2200
+label = "player select, four players"
+crops = [
+  { name = "player faces", box = [0.34, 0.17, 0.32, 0.29] },
+  { name = "player cards", box = [0.19, 0.17, 0.14, 0.33] },
+]
 [[capture]]  # venue selection
 frame = 2950
+label = "venue selection"
 [[capture]]  # King of the Court rules card
 frame = 3700
+label = "King of the Court rules card"
 [[capture]]  # standings and the first match-up
 frame = 3850
+label = "standings and the first match-up"
 [[capture]]  # the first match
 frame = 4300
+label = "the first match"
+crops = [
+  { name = "net", box = [0.17, 0.32, 0.31, 0.12] },
+  { name = "far baseline and banners", box = [0.25, 0.04, 0.31, 0.14] },
+  { name = "server and racket", box = [0.60, 0.46, 0.10, 0.38] },
+  { name = "court line and shadow edge", box = [0.07, 0.65, 0.25, 0.21] },
+  { name = "stand shadows", box = [0.0, 0.26, 0.18, 0.29] },
+  { name = "scoreboard", box = [0.05, 0.055, 0.11, 0.12] },
+]
 [[capture]]  # standings after the first match
 frame = 6400
+label = "standings after the first match"
 [[capture]]  # the second match
 frame = 7000
+label = "the second match"

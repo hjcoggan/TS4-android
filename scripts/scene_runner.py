@@ -127,6 +127,29 @@ class Scene:
     frames: list
     check: dict = field(default_factory=lambda: dict(DEFAULTS))
     log: list = field(default_factory=list)  # text every run's runtime.log must contain
+    labels: dict = field(default_factory=dict)  # frame -> what the capture shows
+    crops: dict = field(default_factory=dict)   # frame -> close-ups [{"name", "box": [x, y, w, h]}]
+
+
+def load_crops(name, frame, crops):
+    """A capture's close-up crops, each a name and a box of fractions of the frame (x, y, w, h)."""
+    where = f"scene '{name}' frame {frame}"
+    if not isinstance(crops, list):
+        raise SceneError(f"{where}: 'crops' must be a list of {{ name, box }} tables")
+    loaded = []
+    for crop in crops:
+        label = crop.get("name") if isinstance(crop, dict) else None
+        if not isinstance(label, str) or not label:
+            raise SceneError(f"{where}: every crop needs a non-empty name")
+        box = crop.get("box")
+        numbers = (isinstance(box, list) and len(box) == 4 and
+                   all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in box))
+        if not numbers or not (0 <= box[0] < 1 and 0 <= box[1] < 1 and box[2] > 0 and box[3] > 0 and
+                               box[0] + box[2] <= 1 and box[1] + box[3] <= 1):
+            raise SceneError(f"{where}: crop '{label}' needs box = [x, y, width, height] as "
+                             "fractions of the frame, inside it")
+        loaded.append({"name": label, "box": [float(v) for v in box]})
+    return loaded
 
 
 def load_scene(text):
@@ -145,12 +168,18 @@ def load_scene(text):
     captures = data.get("capture")
     if not isinstance(captures, list) or not captures:
         raise SceneError(f"scene '{name}': needs at least one [[capture]] with a frame")
-    frames = []
+    frames, labels, crops = [], {}, {}
     for capture in captures:
         frame = capture.get("frame") if isinstance(capture, dict) else None
         if not isinstance(frame, int) or isinstance(frame, bool) or frame < 0:
             raise SceneError(f"scene '{name}': every [[capture]] needs frame = <guest frame >= 0>")
         frames.append(frame)
+        label = capture.get("label", f"frame {frame}")
+        if not isinstance(label, str) or not label:
+            raise SceneError(f"scene '{name}' frame {frame}: 'label' must be a non-empty string")
+        labels[frame] = label
+        if capture.get("crops"):
+            crops[frame] = load_crops(name, frame, capture["crops"])
     check = dict(DEFAULTS)
     for key, value in data.get("check", {}).items():
         if key not in DEFAULTS:
@@ -165,7 +194,7 @@ def load_scene(text):
     log = data.get("log", [])
     if not isinstance(log, list) or not all(isinstance(line, str) and line for line in log):
         raise SceneError(f"scene '{name}': 'log' must be a list of non-empty strings")
-    return Scene(name, script, sorted(set(frames)), check, log)
+    return Scene(name, script, sorted(set(frames)), check, log, labels, crops)
 
 
 def log_failures(log_text, expected):

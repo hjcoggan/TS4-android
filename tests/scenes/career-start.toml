@@ -112,15 +112,34 @@ at 7100
 press A
 """
 
+# label and crops: what scripts/scene_runner_shots.py shows on its before-and-after page
+# (crop boxes are fractions of the frame: x, y, width, height).
 [[capture]]  # Player Creator, the player in 3D
 frame = 2880
+label = "Player Creator, the player in 3D"
+crops = [
+  { name = "head and shirt", box = [0.617, 0.14, 0.14, 0.28] },
+  { name = "racket and shorts", box = [0.61, 0.53, 0.14, 0.31] },
+  { name = "floor shadows", box = [0.78, 0.76, 0.22, 0.13] },
+  { name = "menu text", box = [0.10, 0.33, 0.30, 0.38] },
+]
 [[capture]]  # save slots
 frame = 3600
+label = "save slots"
 [[capture]]  # player to load
 frame = 4500
+label = "player to load"
 [[capture]]  # welcome to the career
 frame = 5250
+label = "welcome to the career"
 [[capture]]  # Career main screen
 frame = 6900
+label = "Career main screen"
+crops = [
+  { name = "player panel text", box = [0.195, 0.18, 0.28, 0.29] },
+  { name = "news picture", box = [0.52, 0.23, 0.28, 0.23] },
+  { name = "button prompts", box = [0.19, 0.88, 0.28, 0.06] },
+]
 [[capture]]  # season calendar with its tutorial
 frame = 7200
+label = "season calendar with its tutorial"

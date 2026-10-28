@@ -39,6 +39,40 @@ TEST_CASE("dump files are named by the six-digit guest frame") {
   CHECK(DumpFileName(1234567) == "frame-1234567.png");
 }
 
+TEST_CASE("the presented frame of a dump has its own file name, next to the dump's") {
+  CHECK(PresentedFileName(480) == "frame-000480-presented.png");
+  CHECK(PresentedFileName(1234567) == "frame-1234567-presented.png");
+}
+
+TEST_CASE("an output size is width x height, both in pixels") {
+  OutputSize size;
+  REQUIRE(ParseOutputSize("2560x1440", size));
+  CHECK(size.width == 2560);
+  CHECK(size.height == 1440);
+  REQUIRE(ParseOutputSize(" 3840X2160 ", size));
+  CHECK(size.width == 3840);
+  CHECK(size.height == 2160);
+}
+
+TEST_CASE("an empty output size means no presented dumps") {
+  OutputSize size{1, 1};
+  REQUIRE(ParseOutputSize("", size));
+  CHECK(size.width == 0);
+  CHECK(size.height == 0);
+}
+
+TEST_CASE("an output size that is not two positive numbers is rejected and gives no size") {
+  OutputSize size{1, 1};
+  for (const char* bad : {"2560", "2560x", "x1440", "2560x1440x2", "0x720", "1280x0", "-1x720",
+                          "abcxdef", "2560 1440", "99999x720"}) {
+    CAPTURE(bad);
+    CHECK_FALSE(ParseOutputSize(bad, size));
+    CHECK(size.width == 0);
+    CHECK(size.height == 0);
+    size = {1, 1};
+  }
+}
+
 TEST_CASE("the PNG is signed, sized, and ends with IEND") {
   const uint32_t w = 3, h = 2;
   const std::vector<uint8_t> rgb(w * h * 3, 0x7F);

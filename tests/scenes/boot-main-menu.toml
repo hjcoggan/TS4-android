@@ -28,7 +28,20 @@ at 1100
 press START
 """
 
+# label and crops: what scripts/scene_runner_shots.py shows on its before-and-after page
+# (crop boxes are fractions of the frame: x, y, width, height).
 [[capture]]  # title screen, "Press START button"
 frame = 480
+label = "title screen"
+crops = [
+  { name = "logo", box = [0.29, 0.165, 0.42, 0.22] },
+  { name = "Press START text", box = [0.39, 0.775, 0.22, 0.055] },
+]
 [[capture]]  # main menu, GAME MODES highlighted
 frame = 1400
+label = "main menu"
+crops = [
+  { name = "logo", box = [0.40, 0.325, 0.20, 0.10] },
+  { name = "menu text", box = [0.295, 0.47, 0.41, 0.09] },
+  { name = "button prompts", box = [0.32, 0.885, 0.36, 0.045] },
+]

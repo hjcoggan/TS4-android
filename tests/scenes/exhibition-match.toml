@@ -127,11 +127,46 @@ at 9000
 press A
 """
 
+# label and crops: what scripts/scene_runner_shots.py shows on its before-and-after page
+# (crop boxes are fractions of the frame: x, y, width, height). The three match frames share a
+# camera, so they share their crops.
 [[capture]]  # player select, Federer v Nadal
 frame = 2400
+label = "player select, Federer v Nadal"
+crops = [
+  { name = "player faces", box = [0.34, 0.17, 0.32, 0.29] },
+  { name = "Federer's portrait", box = [0.195, 0.21, 0.135, 0.21] },
+  { name = "attribute text", box = [0.195, 0.53, 0.135, 0.23] },
+]
 [[capture]]  # the match, first point
 frame = 3600
-[[capture]]
+label = "the match, first point"
+crops = [
+  { name = "far baseline and banners", box = [0.30, 0.04, 0.31, 0.14] },
+  { name = "net", box = [0.19, 0.32, 0.31, 0.12] },
+  { name = "near player and racket", box = [0.58, 0.62, 0.11, 0.28] },
+  { name = "far player", box = [0.335, 0.115, 0.07, 0.09] },
+  { name = "court line and shadow edge", box = [0.08, 0.65, 0.24, 0.21] },
+  { name = "stand shadows", box = [0.0, 0.26, 0.18, 0.29] },
+  { name = "scoreboard", box = [0.05, 0.055, 0.12, 0.12] },
+]
+[[capture]]  # the match, later
 frame = 4200
-[[capture]]
+label = "the match, later"
+crops = [
+  { name = "far baseline and banners", box = [0.30, 0.04, 0.31, 0.14] },
+  { name = "net", box = [0.19, 0.32, 0.31, 0.12] },
+  { name = "near player and racket", box = [0.58, 0.62, 0.11, 0.28] },
+  { name = "court line and shadow edge", box = [0.08, 0.65, 0.24, 0.21] },
+  { name = "scoreboard", box = [0.05, 0.055, 0.12, 0.12] },
+]
+[[capture]]  # the match, a point in
 frame = 4800
+label = "the match, a point in"
+crops = [
+  { name = "far baseline and banners", box = [0.30, 0.04, 0.31, 0.14] },
+  { name = "net", box = [0.19, 0.32, 0.31, 0.12] },
+  { name = "near player and racket", box = [0.58, 0.62, 0.11, 0.28] },
+  { name = "court line and shadow edge", box = [0.08, 0.65, 0.24, 0.21] },
+  { name = "scoreboard", box = [0.05, 0.055, 0.12, 0.12] },
+]

@@ -3,6 +3,14 @@
 //
 //   --ts4_dump_frames=300,1100   guest frames to save, each as <dump_dir>/frame-NNNNNN.png
 //   --ts4_dump_dir=<dir>         where they go (created if missing)
+//   --ts4_dump_presented=WxH     also save each dumped frame as the presenter shows it in an
+//                                output of that size, as frame-NNNNNN-presented.png, and name it
+//                                in the report's dump entry (presented_file, presented_width,
+//                                presented_height). Needs rex::ui::Presenter::
+//                                CapturePresentedOutput(RawImage&, width, height): the guest
+//                                output painted as PaintAndPresent would for a width x height
+//                                window (fit, bilinear or CAS effect, no UI), read back as
+//                                RGBA8. Without it the run logs an error and dumps no such file.
 //   --ts4_exit_after_frame=N     after frame N is shown (and dumped), write the session report
 //                                and exit with code 0
 //   --ts4_session_report=<file>  the session report (JSON), written on that exit
@@ -57,6 +65,40 @@ inline bool ParseFrameList(std::string_view list, std::set<uint64_t>& out) {
 }
 
 inline std::string DumpFileName(uint64_t frame) { return fmt::format("frame-{:06}.png", frame); }
+
+// The same frame as the presenter shows it in the output (--ts4_dump_presented).
+inline std::string PresentedFileName(uint64_t frame) {
+  return fmt::format("frame-{:06}-presented.png", frame);
+}
+
+struct OutputSize {
+  uint32_t width = 0;
+  uint32_t height = 0;
+};
+
+// "2560x1440" (either case of x, spaces around allowed); an empty text is no size (0x0). False,
+// and no size, when it is not two positive numbers of at most 16384.
+inline bool ParseOutputSize(std::string_view text, OutputSize& out) {
+  out = {};
+  while (!text.empty() && text.front() == ' ') text.remove_prefix(1);
+  while (!text.empty() && text.back() == ' ') text.remove_suffix(1);
+  if (text.empty()) return true;
+  const size_t x = text.find_first_of("xX");
+  if (x == std::string_view::npos) return false;
+  uint32_t parts[2] = {};
+  const std::string_view pieces[2] = {text.substr(0, x), text.substr(x + 1)};
+  for (int i = 0; i < 2; ++i) {
+    const std::string_view piece = pieces[i];
+    const auto [ptr, error] =
+        std::from_chars(piece.data(), piece.data() + piece.size(), parts[i]);
+    if (piece.empty() || error != std::errc() || ptr != piece.data() + piece.size() ||
+        parts[i] == 0 || parts[i] > 16384) {
+      return false;
+    }
+  }
+  out = {parts[0], parts[1]};
+  return true;
+}
 
 // An 8-bit RGB PNG with uncompressed (stored) deflate blocks: no compression library needed,
 // and the files are only screenshots. Copied from WWE All Stars' frame_capture.h.

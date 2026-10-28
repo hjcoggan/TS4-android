@@ -39,6 +39,46 @@ def test_a_valid_scene_has_its_frames_in_order_and_the_default_checks():
     assert scene.check == DEFAULTS
 
 
+LABELLED = GOOD + """
+[[capture]]
+frame = 700
+label = "the match, first point"
+crops = [
+  { name = "net", box = [0.19, 0.32, 0.31, 0.12] },
+  { name = "far baseline", box = [0.3, 0.04, 0.3, 0.14] },
+]
+"""
+
+
+def test_a_capture_may_name_itself_and_its_close_up_crops():
+    scene = load_scene(LABELLED)
+    assert scene.frames == [350, 700, 1300]
+    assert scene.labels[700] == "the match, first point"
+    assert scene.labels[350] == "frame 350"  # no label: named by its frame
+    assert [c["name"] for c in scene.crops[700]] == ["net", "far baseline"]
+    assert scene.crops[700][0]["box"] == [0.19, 0.32, 0.31, 0.12]
+    assert 350 not in scene.crops
+
+
+@pytest.mark.parametrize("crop, says", [
+    ('{ box = [0, 0, 0.5, 0.5] }', "name"),
+    ('{ name = "x", box = [0, 0, 0.5] }', "box"),
+    ('{ name = "x", box = [0, 0, "a", 0.5] }', "box"),
+    ('{ name = "x", box = [0.6, 0, 0.5, 0.5] }', "box"),
+    ('{ name = "x", box = [0, 0, 0, 0.5] }', "box"),
+])
+def test_a_bad_crop_says_what_is_wrong(crop, says):
+    text = GOOD + f"\n[[capture]]\nframe = 700\ncrops = [{crop}]\n"
+    with pytest.raises(SceneError, match=says):
+        load_scene(text)
+
+
+def test_the_scenes_in_the_repo_name_valid_captures():
+    for path in (ROOT / "tests/scenes").glob("*.toml"):
+        scene = load_scene(path.read_text(encoding="utf-8"))
+        assert set(scene.labels) == set(scene.frames), path.name
+
+
 def test_check_overrides_one_value_and_keeps_the_rest():
     scene = load_scene(GOOD + "\n[check]\ntile_hot_max = 80\n")
     assert scene.check["tile_hot_max"] == 80
