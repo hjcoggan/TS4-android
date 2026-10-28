@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (Settings page tracer bullet), 10 (RE: OPTIONS scene data and the Xbox 3D row)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] A scene run reaches OPTIONS, finds the PC SETTINGS row with its label, selects it, and the Settings page opens
 - [ ] Closing the page returns to OPTIONS, and the game's menu still works
@@ -18,3 +18,5 @@
 - Text resolver `881EC108`: after the original, answers "PC SETTINGS" for `PS3MoveCalibrate` (`8819A5C8`, `8819BAD0`, `88151AE0`).
 - `ForceMoveRecalibrate` `8877B288`: holds the game's input at once and opens the page on the UI thread.
 - To confirm the route on a run, look in the log for `options row:` lines: `IsMoveController is called`, `IsMoveController from scene '<name>' -> 0|1` (once per distinct name, up to 16), `the label PS3MoveCalibrate is resolved`, `ForceMoveRecalibrate is called`, then `settings page: opened from the OPTIONS row`. The scene-name lookup and `*(r3+4)` as the node are the medium-confidence parts: if the scene line shows an empty or unexpected name, the row never appears and that line says why.
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in cea0404; review fixes in b694c42. Host or Launcher tests cover: label/scene-name helpers. Needs the owner's run: reach OPTIONS, find PC SETTINGS, select it, page opens, close returns; check the log for the 'options row:' first-hit lines (route is medium confidence); Oracle match apart from the new row. No game run was made (owner tests).

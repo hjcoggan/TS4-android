@@ -4,8 +4,12 @@
 
 **Blocked by:** 03 (Settings page tracer bullet)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] Model tests: defaults read Original; choosing Enhanced sets its four settings; changing one gives Custom; returning to the Preset's values gives the Preset back; Classic behaves as above
 - [ ] A run picks Enhanced on Native, and the frame and the Settings file show all four values
 - [ ] The session report lists the Preset (Original, Enhanced or Custom)
+
+## Comments
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in ef38a9c; review fixes in b694c42. Host or Launcher tests cover: Original default, Enhanced sets four values, Custom and back, Classic rules. Needs the owner's run: pick Enhanced on Native and check frame + file; session report settings.preset. No game run was made (owner tests).

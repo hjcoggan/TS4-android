@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] A new Settings file is written with `version = 1`
 - [ ] A file with no version loads as version 1, and its values are kept
@@ -13,3 +13,7 @@
 - [ ] Saving one key still rewrites only that line, atomically
 - [ ] Existing settings tests (defaults, invalid values, corrupt file) still pass
 - [ ] One player-style run (no `--user_data_root`) with an old unversioned file shows the values applied and the file versioned
+
+## Comments
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in 891f4a6; review fixes in b694c42. Host or Launcher tests cover: versioned new file, unversioned file loads as 1, test migration rename, newer file not rewritten. Needs the owner's run: a player-style start with an old unversioned file. No game run was made (owner tests).

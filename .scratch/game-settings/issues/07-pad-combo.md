@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (Settings page tracer bullet)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] Evidence, cited in Comments, that the chosen combo triggers nothing in game (menus, match, pause)
 - [ ] A scene run opens the page with the combo mid-match and closes it again
@@ -28,3 +28,5 @@ Static evidence of the game's input use (Swing_DLL, generated code):
 - `HoldGuestInput` now only holds while the page is open (`g.hold`); the filter calls the page through `SetOpenComboHandler`.
 - Host tests: `tests/host/test_options_row.cpp` (chord, hold pass-through, tap replay, masking only those bits). Unit tests pass; no game run.
 - Not verified: a real pad (SDL and XInput) and a scripted `press back+start`; the keyboard-and-mouse driver is not filtered (F4 opens the page there); a lone Start held past 100 ms reaches the game 100 ms late, which may matter for pause timing. Any pad on the driver can open the page, not just player 1.
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in cea0404, combo filter reworked in b694c42; review fixes in b694c42. Host or Launcher tests cover: chord, hold pass-through, tap replay, masking only Back/Start. Needs the owner's run: Back+Start opens the page mid-match and nothing reaches the game; quick Start taps still work in menus; static evidence shows the game reads Back and Start, so box 1 needs run evidence. No game run was made (owner tests).

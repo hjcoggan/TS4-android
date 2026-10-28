@@ -6,7 +6,7 @@ Copy WWE All Stars' ImGui page and page model (ADR-0004, ADR-0007), with the row
 
 **Blocked by:** 02 (Settings export)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] Model unit tests: rows, values, choices and descriptions for given registry and file values; a change yields the cvar to set and the value to save
 - [ ] F4 opens and closes the page on Classic and on Native
@@ -14,3 +14,7 @@ Copy WWE All Stars' ImGui page and page model (ADR-0004, ADR-0007), with the row
 - [ ] Pad input sent while the page is open doesn't reach the game (scene run)
 - [ ] Native-only rows show as unavailable on Classic, with the reason
 - [ ] All-default scenes still match the Oracle
+
+## Comments
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in cfcbcb7; review fixes in b694c42. Host or Launcher tests cover: model rows, values, choices, help, change result. Needs the owner's run: F4 opens/closes the page on Classic and Native; live change applies and is saved; pad held while open (script: set settings_page open, then press UP/DOWN/LEFT/RIGHT/A/B). No game run was made (owner tests).

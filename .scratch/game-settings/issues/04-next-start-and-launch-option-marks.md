@@ -4,8 +4,12 @@
 
 **Blocked by:** 03 (Settings page tracer bullet)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] Model tests: a next-start change is saved, pending and not applied; a pinned setting is marked and not saved when changed
 - [ ] A run changes the renderer on the page: the file holds it, this session keeps its renderer, and the next start uses the new one
 - [ ] A run started with `--ts4_anisotropic_filtering=16` shows that row as set by launch options, and the Settings file is unchanged afterwards
+
+## Comments
+
+**2026-10-28, implementation (/implement-spec, branch `game-settings`):** Implemented in cfcbcb7; review fixes in b694c42. Host or Launcher tests cover: next-start saved and pending, pinned not saved. Needs the owner's run: renderer change on the page; --ts4_anisotropic_filtering=16 shows the launch-option mark and leaves the file unchanged. No game run was made (owner tests).

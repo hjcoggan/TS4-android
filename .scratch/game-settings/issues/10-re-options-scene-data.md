@@ -6,10 +6,14 @@ Decompress the OPTIONS scenes from the player's own archives (PAM-LZX) and read 
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The OPTIONS scenes' row layout and data binding are described, with evidence
 - [ ] Whether a 3D row exists and how it is gated is answered with evidence
 - [ ] A route is recommended, with the hook addresses confirmed in Ghidra
 - [ ] Whether `.actions` files are Lua source or bytecode is answered
 - [ ] No game data or decompressed scenes are committed (ADR-0006)
+
+## Comments
+
+**2026-10-28:** Answered in Addendum 2 of `docs/research/game-settings.md` (071da5a): OPTIONS has no Xbox 3D row; the route reuses the hidden PS3 Move calibration row (hooks 8877B2B8, 881EC108, 8877B288). Both boxes met by the decompressed scene evidence cited there.
