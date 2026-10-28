@@ -35,6 +35,7 @@
 #include <rex/ui/vulkan/util.h>
 #include <rex/ui/presenter.h>
 
+#include "native/clear_plan.h"
 #include "native/core_dynamic_state.h"
 #include "native/depth_staging.h"
 #include "native/debug_labels.h"
@@ -1512,7 +1513,15 @@ RenderTarget& SingleSample(RenderTarget& target) {
 
 // Begins dynamic rendering into the guest's current render targets unless it
 // is already active with them.
-bool EnsureRendering(const uint8_t* d3d, bool need_depth) {
+// Clears made as the pass's load operations (clear_plan.h): a fast clear on AMD.
+struct PassClears {
+  bool color = false, depth = false, stencil = false;
+  VkClearColorValue color_value = {};
+  VkClearDepthStencilValue depth_stencil = {};
+};
+
+// With clears, the pass is begun again whatever is active, clearing those aspects as it loads.
+bool EnsureRendering(const uint8_t* d3d, bool need_depth, const PassClears* clears = nullptr) {
   RenderTarget* color = CurrentColorTarget(d3d, true);
   if (!color) {
     return false;
@@ -1523,7 +1532,7 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth) {
   // blends in linear and encodes on write as Xenos does.
   const bool gamma =
       color->gamma_view && ColorTargetIsGamma((ReadReg(d3d, RB_COLOR_INFO) >> 16) & 0xF);
-  if (g.rendering && g.active_color == color && g.active_gamma == gamma &&
+  if (!clears && g.rendering && g.active_color == color && g.active_gamma == gamma &&
       (!need_depth || g.active_depth == depth)) {
     return true;
   }
@@ -1537,12 +1546,27 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth) {
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  if (clears && clears->color) {
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.clearValue.color = clears->color_value;
+  }
+  // Depth and stencil load apart: a guest clear may clear one and keep the other.
   VkRenderingAttachmentInfo depth_attachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  VkRenderingAttachmentInfo stencil_attachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   if (depth) {
     depth_attachment.imageView = depth->view;
     depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    stencil_attachment = depth_attachment;
+    if (clears && clears->depth) {
+      depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      depth_attachment.clearValue.depthStencil = clears->depth_stencil;
+    }
+    if (clears && clears->stencil) {
+      stencil_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      stencil_attachment.clearValue.depthStencil = clears->depth_stencil;
+    }
   }
   VkRenderingInfo rendering_info = {VK_STRUCTURE_TYPE_RENDERING_INFO};
   rendering_info.renderArea = {{0, 0}, {color->width, color->height}};
@@ -1550,7 +1574,7 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth) {
   rendering_info.colorAttachmentCount = 1;
   rendering_info.pColorAttachments = &color_attachment;
   rendering_info.pDepthAttachment = depth ? &depth_attachment : nullptr;
-  rendering_info.pStencilAttachment = depth ? &depth_attachment : nullptr;
+  rendering_info.pStencilAttachment = depth ? &stencil_attachment : nullptr;
   if (NamingWork()) {
     BeginWork(gpu_timer::Span::kPass,
               PassName({color->width, color->height, color->format, gamma, depth != nullptr}));
@@ -2280,6 +2304,25 @@ void OnClear(const uint8_t* base, uint32_t device, uint32_t flags, const int32_t
   const uint8_t* d3d = base + device;
   const bool clear_color = (flags & 0xF) != 0;
   const bool clear_depth_stencil = (flags & 0x30) != 0;
+  // A clear of the whole target is made as the pass's load operations (clear_plan.h).
+  if (const RenderTarget* target = CurrentColorTarget(d3d, true);
+      target && ClearRect::Of(rect, target->scale, target->width, target->height).covers_target) {
+    PassClears clears;
+    clears.color = clear_color;
+    for (uint32_t i = 0; i < 4; ++i) {
+      clears.color_value.float32[i] = color ? LoadBEFloat(base + color + i * 4) : 0.0f;
+    }
+    clears.depth = (flags & 0x10) != 0;
+    clears.stencil = (flags & 0x20) != 0;
+    clears.depth_stencil = {depth, stencil & 0xFF};
+    if (!EnsureRendering(d3d, clear_depth_stencil, &clears)) {
+      return;
+    }
+    ++g.stats.clears;
+    TRACE("clear (load op) flags {:X} colour {} depth {}", flags,
+          color ? LoadBEFloat(base + color) : -1.0f, depth);
+    return;
+  }
   if (!EnsureRendering(d3d, clear_depth_stencil)) {
     return;
   }
@@ -2306,17 +2349,10 @@ void OnClear(const uint8_t* base, uint32_t device, uint32_t flags, const int32_t
     return;
   }
   const RenderTarget& target = *g.active_color;
+  const ClearRect r = ClearRect::Of(rect, target.scale, target.width, target.height);
   VkClearRect clear_rect = {};
   clear_rect.layerCount = 1;
-  const int32_t s = int32_t(target.scale);
-  const int32_t left = rect[0] * s, top = rect[1] * s;
-  const int32_t right = std::min<int32_t>(rect[2] * s, int32_t(target.width));
-  const int32_t bottom = std::min<int32_t>(rect[3] * s, int32_t(target.height));
-  if (right > left && bottom > top && left >= 0 && top >= 0) {
-    clear_rect.rect = {{left, top}, {uint32_t(right - left), uint32_t(bottom - top)}};
-  } else {
-    clear_rect.rect = {{0, 0}, {target.width, target.height}};
-  }
+  clear_rect.rect = {{r.x, r.y}, {r.width, r.height}};
   g_vk.dfn->vkCmdClearAttachments(g.slot->main_cb, count, attachments, 1, &clear_rect);
 }
 
