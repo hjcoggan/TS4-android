@@ -39,7 +39,14 @@ public sealed class SettingsSchema
 
     public IReadOnlyList<SettingDescription> Settings { get; }
 
-    private SettingsSchema(IReadOnlyList<SettingDescription> settings) => Settings = settings;
+    /// <summary>The version the game writes into the Settings file (<c>settings_file_version</c>); the fallback when the export has none.</summary>
+    public long FileVersion { get; }
+
+    private SettingsSchema(IReadOnlyList<SettingDescription> settings, long fileVersion)
+    {
+        Settings = settings;
+        FileVersion = fileVersion;
+    }
 
     /// <summary>
     /// The settings that only make sense before the game starts, in page order: those the export
@@ -77,7 +84,10 @@ public sealed class SettingsSchema
                     item.GetProperty("order").GetInt32(),
                     item.GetProperty("help").GetString()!));
             }
-            return new SettingsSchema(settings);
+            var fileVersion = root.TryGetProperty("settings_file_version", out var version) && version.TryGetInt64(out var number) && number >= 1
+                ? number
+                : SettingsFile.FallbackVersion;
+            return new SettingsSchema(settings, fileVersion);
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {

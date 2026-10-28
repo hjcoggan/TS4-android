@@ -21,7 +21,7 @@ TEST_CASE("The row answers only for the OPTIONS scene and the Move calibration l
   CHECK_FALSE(options_row::IsMoveLabelId("MainButtonTextTwoD"));
 }
 
-TEST_CASE("The pad combo is Back and Start together, and fires once per press") {
+TEST_CASE("The pad combo is Back and Start together") {
   using topspin4::pad::kButtonA;
   using topspin4::pad::kButtonBack;
   using topspin4::pad::kButtonStart;
@@ -30,13 +30,111 @@ TEST_CASE("The pad combo is Back and Start together, and fires once per press") 
   CHECK_FALSE(OpenComboDown(kButtonStart));
   CHECK(OpenComboDown(kButtonBack | kButtonStart));
   CHECK(OpenComboDown(kButtonBack | kButtonStart | kButtonA));
+}
 
-  OpenComboLatch latch;
-  CHECK_FALSE(latch.Update(kButtonStart));
-  CHECK(latch.Update(kButtonStart | kButtonBack));
-  CHECK_FALSE(latch.Update(kButtonStart | kButtonBack));  // still held
-  CHECK_FALSE(latch.Update(kButtonStart));
-  CHECK(latch.Update(kButtonStart | kButtonBack));        // pressed again
+TEST_CASE("The chord opens the page once, and the game sees neither button") {
+  using topspin4::pad::kButtonBack;
+  using topspin4::pad::kButtonStart;
+  OpenComboFilter filter;
+
+  auto r = filter.Update(kButtonStart, 1000);
+  CHECK(r.game_buttons == 0);
+  CHECK_FALSE(r.open);
+  r = filter.Update(kButtonStart, 1050);
+  CHECK(r.game_buttons == 0);
+  r = filter.Update(kButtonStart | kButtonBack, 1080);
+  CHECK(r.game_buttons == 0);
+  CHECK(r.open);
+  r = filter.Update(kButtonStart | kButtonBack, 1100);
+  CHECK_FALSE(r.open);  // once per press
+  r = filter.Update(kButtonBack, 1200);
+  CHECK(r.game_buttons == 0);  // masked until both are up
+  CHECK_FALSE(r.open);
+  r = filter.Update(0, 1300);
+  CHECK(r.game_buttons == 0);
+
+  // Pressed again after release: opens again.
+  filter.Update(kButtonBack, 2000);
+  CHECK(filter.Update(kButtonBack | kButtonStart, 2010).open);
+  filter.Update(0, 2100);
+
+  // Both in the same poll.
+  r = filter.Update(kButtonBack | kButtonStart, 2500);
+  CHECK(r.open);
+  CHECK(r.game_buttons == 0);
+}
+
+TEST_CASE("A button held past the window passes through, and a late partner opens nothing") {
+  using topspin4::pad::kButtonBack;
+  using topspin4::pad::kButtonStart;
+  OpenComboFilter filter;
+
+  CHECK(filter.Update(kButtonBack, 3000).game_buttons == 0);
+  CHECK(filter.Update(kButtonBack, 3099).game_buttons == 0);
+  auto r = filter.Update(kButtonBack, 3100);
+  CHECK(r.game_buttons == kButtonBack);
+  CHECK_FALSE(r.open);
+  r = filter.Update(kButtonBack | kButtonStart, 3300);
+  CHECK(r.game_buttons == (kButtonBack | kButtonStart));
+  CHECK_FALSE(r.open);
+  r = filter.Update(0, 3400);  // long past the replay: released for good
+  CHECK(r.game_buttons == 0);
+  CHECK_FALSE(r.open);
+}
+
+TEST_CASE("A tap shorter than the window is replayed to the game, late but not lost") {
+  using topspin4::pad::kButtonBack;
+  using topspin4::pad::kButtonStart;
+  OpenComboFilter filter;
+
+  CHECK(filter.Update(kButtonStart, 4000).game_buttons == 0);
+  // Released after 30 ms: the game sees Start pressed for kReplayMs from the release.
+  auto r = filter.Update(0, 4030);
+  CHECK(r.game_buttons == kButtonStart);
+  CHECK_FALSE(r.open);
+  CHECK(filter.Update(0, 4030 + kReplayMs - 1).game_buttons == kButtonStart);
+  CHECK(filter.Update(0, 4030 + kReplayMs).game_buttons == 0);
+
+  // Back is replayed as Back.
+  filter.Update(kButtonBack, 5000);
+  CHECK(filter.Update(0, 5010).game_buttons == kButtonBack);
+  filter.Update(0, 5100);
+
+  // A press made during the replay waits its own window, and can still be a chord.
+  filter.Update(kButtonStart, 6000);
+  filter.Update(0, 6010);
+  CHECK(filter.Update(kButtonStart, 6030).game_buttons == kButtonStart);  // still replaying
+  CHECK(filter.Update(kButtonStart, 6070).game_buttons == 0);             // judged afresh
+  CHECK(filter.Update(kButtonStart | kButtonBack, 6080).open);
+
+  // Released just after passing through: still shown for kReplayMs in all.
+  filter.Update(0, 7000);
+  filter.Update(kButtonStart, 7100);
+  CHECK(filter.Update(kButtonStart, 7200).game_buttons == kButtonStart);
+  CHECK(filter.Update(0, 7210).game_buttons == kButtonStart);
+  CHECK(filter.Update(0, 7250).game_buttons == 0);
+}
+
+TEST_CASE("The gate masks only Back and Start and lets everything else through") {
+  using topspin4::pad::kButtonA;
+  using topspin4::pad::kButtonBack;
+  using topspin4::pad::kButtonStart;
+  OpenComboGate gate;
+  int opened = 0;
+  SetOpenComboHandler([&opened] { ++opened; });
+
+  CHECK(gate.Apply(kButtonStart | kButtonA, 100) == kButtonA);
+  CHECK(gate.Apply(kButtonStart | kButtonA | 0x0100, 120) == (kButtonA | 0x0100));
+  CHECK(opened == 0);
+  CHECK(gate.Apply(kButtonStart | kButtonBack | kButtonA, 140) == kButtonA);
+  CHECK(opened == 1);
+  CHECK(gate.Apply(kButtonStart | kButtonBack | kButtonA, 160) == kButtonA);
+  CHECK(opened == 1);
+  CHECK(gate.Apply(kButtonA, 180) == kButtonA);
+  // A tap: Start comes back after the release.
+  gate.Apply(kButtonStart, 1000);
+  CHECK(gate.Apply(kButtonA, 1020) == (kButtonA | kButtonStart));
+  SetOpenComboHandler({});
 }
 
 TEST_CASE("The page uses the game's font from the player's game data") {

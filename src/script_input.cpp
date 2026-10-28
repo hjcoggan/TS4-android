@@ -121,6 +121,7 @@ void InstallScriptInput(rex::RuntimeConfig& config, ScriptInputDriver::FrameSour
     auto driver = std::make_unique<ScriptInputDriver>(file, ScriptInputDriver::SteadyClock,
                                                       frames, ScriptInputDriver::kDevice, set);
     driver->Setup();
+    driver->EnableOpenCombo();  // player 1's pad only
     input->AddDriver(std::move(driver));
     // Players 2-4 in order, so each pad's ordinal is its player's.
     const std::filesystem::path others[] = {REXCVAR_GET(ts4_input_script_p2),
@@ -322,6 +323,10 @@ bool ScriptInputDriver::Over(std::chrono::milliseconds now, uint64_t frame) cons
   return current_.frames ? frame >= frame_end_ : now >= step_end_;
 }
 
+uint16_t ScriptInputDriver::GameButtons(uint16_t buttons) {
+  return open_combo_ ? combo_.Apply(buttons, uint64_t(clock_().count())) : buttons;
+}
+
 X_RESULT ScriptInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) {
   if (id != id_) {
     return X_ERROR_DEVICE_NOT_CONNECTED;
@@ -331,7 +336,7 @@ X_RESULT ScriptInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state
   if (out_state) {
     std::memset(out_state, 0, sizeof(*out_state));
     out_state->packet_number = packet;
-    out_state->gamepad.buttons = s.buttons;
+    out_state->gamepad.buttons = GameButtons(s.buttons);
     out_state->gamepad.left_trigger = s.left_trigger;
     out_state->gamepad.right_trigger = s.right_trigger;
     out_state->gamepad.thumb_lx = s.lx;
@@ -390,7 +395,7 @@ X_RESULT ScriptInputDriver::GetDeviceKeystroke(DeviceId id, uint32_t,
     return X_ERROR_BAD_ARGUMENTS;
   }
   uint32_t packet = 0;
-  const uint16_t buttons = CurrentStep(&packet).buttons;
+  const uint16_t buttons = GameButtons(CurrentStep(&packet).buttons);
   std::lock_guard lock(mutex_);
   const uint16_t changed = buttons ^ keystroke_buttons_;
   for (const bool down : {false, true}) {

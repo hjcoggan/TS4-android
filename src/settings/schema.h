@@ -2,8 +2,10 @@
 // keeping a copy (`topspin4.exe --print-settings-schema`, ticket 02). Adapted from WWE All Stars'
 // settings/schema.h (ADR-0004).
 //
-// Format 1, one setting per line in registry order:
-//   {"format": 1, "sections": ["Graphics", "Controls"], "settings": [
+// Format 1, one setting per line in registry order. settings_file_version is the version the
+// game writes into the Settings file (CurrentVersion in config_file.h), for the launcher to use
+// instead of keeping its own:
+//   {"format": 1, "settings_file_version": 1, "sections": ["Graphics", "Controls"], "settings": [
 //     {"key": "ts4_msaa", "kind": "choice", "default": "original",
 //      "choices": ["original", "4", "8"], "applies_when": "now", "renderers": "native",
 //      "section": "Graphics", "label": "MSAA", "order": 30, "help": "..."}, ...]}
@@ -21,6 +23,7 @@
 
 #include <rex/cvar.h>
 
+#include "settings/config_file.h"
 #include "settings/registry.h"
 
 namespace topspin4::settings {
@@ -90,7 +93,9 @@ inline std::string JsonString(std::string_view text) {
 // The registry as JSON. A setting the lookup knows no cvar for is exported as applying at the
 // next start, the safe reading.
 inline std::string SchemaJson(const AppliesLookup& applies = AppliesFromCvar) {
-  std::string out = "{\"format\": " + std::to_string(kSchemaFormat) + ", \"sections\": [";
+  std::string out = "{\"format\": " + std::to_string(kSchemaFormat) +
+                    ", \"settings_file_version\": " + std::to_string(CurrentVersion()) +
+                    ", \"sections\": [";
   for (size_t i = 0; i < std::size(kSections); ++i) {
     out += (i ? ", " : "") + JsonString(SectionName(kSections[i]));
   }

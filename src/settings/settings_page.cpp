@@ -40,8 +40,6 @@ struct State {
   ImFont* heading = nullptr;
   ImFont* body = nullptr;
   pad::Bindings bindings = pad::Bindings::Default();  // what the game's input system was built with
-  OpenComboLatch combo;
-  std::mutex combo_mutex;
 } g;
 
 // The page's colours are Top Spin 4's (settings/page_style.h).
@@ -222,6 +220,11 @@ class PageDialog final : public rex::ui::ImGuiDialog {
 
   void CloseFromKey() { model_.Close(); }
 
+  // A change from a script, through the model this page shows, so its rows follow.
+  std::vector<SettingChange> Change(std::string_view key, std::string_view value) {
+    return model_.Change(key, value);
+  }
+
  protected:
   void OnDraw(ImGuiIO&) override {
     // A key binding row waiting for a key takes the first key pressed after A began the wait.
@@ -391,28 +394,15 @@ void RequestOpenFromGuest() {
   });
 }
 
-// Guest thread, on every pad poll: holds the game's input while the page is open, and opens it
-// when the pad combo goes down. This runs after the poll's real state is stored, so the poll that
-// sees Back and Start together is already held and the game never sees them.
-bool HoldGuestInput() {
-  uint16_t buttons = 0;
-  rex::input::X_INPUT_STATE state = {};
-  if (g.input && g.input->HeldState(0, &state)) {
-    // The page and its combo work on the physical pad, so a remap cannot move them.
-    topspin4::pad::Pad game;
-    game.buttons = state.gamepad.buttons;
-    buttons = topspin4::pad::Unmap(game, g.bindings).buttons;
-  }
-  bool combo_pressed;
-  {
-    std::lock_guard lock(g.combo_mutex);  // the hold runs on any thread that polls the pad
-    combo_pressed = g.combo.Update(buttons);
-  }
-  if (combo_pressed && !g.hold) {
-    REXLOG_INFO("settings page: opened with the pad combo (Back + Start)");
-    RequestOpenFromGuest();
-  }
-  return g.hold;
+// Guest thread, on every pad poll: holds the game's input while the page is open. The pad combo is
+// not decided here: the pad drivers filter it (open_combo.h) and call OnOpenCombo.
+bool HoldGuestInput() { return g.hold; }
+
+// Guest thread, from the pad driver's poll: Back and Start are both down.
+void OnOpenCombo() {
+  if (g.hold) return;
+  REXLOG_INFO("settings page: opened with the pad combo (Back + Start)");
+  RequestOpenFromGuest();
 }
 
 void RequestOptionsRowOpen() {
@@ -469,11 +459,30 @@ void Configure(rex::ui::ImGuiDrawer* drawer, rex::input::InputSystem* input,
   g.settings_path = settings_path;
   g.run_on_ui = std::move(run_on_ui);
   if (input) input->SetGuestInputHold(HoldGuestInput);
+  SetOpenComboHandler(OnOpenCombo);
   // The OPTIONS row's hooks (options_row_hooks.cpp, in the Swing Module's DLL) reach the page here.
   options_row::RowSink& row_sink = options_row::GetRowSink();
   row_sink.open_page = RequestOptionsRowOpen;
   row_sink.log = LogOptionsRow;
   rex::ui::RegisterBind("bind_ts4_settings_page", "F4", "Open the PC SETTINGS page", Toggle);
+}
+
+bool SetPlayerSettingFromScript(std::string_view key, std::string_view value) {
+  const Setting* setting = FindSetting(key);
+  if (!setting) return false;
+  // The open page's model if there is one (its rows follow); else one built from this session.
+  const std::vector<SettingChange> changes =
+      g.dialog ? g.dialog->Change(key, value) : BuildModel().Change(key, value);
+  for (const SettingChange& change : changes) Apply(change);
+  if (changes.empty()) {
+    if (setting->Allows(value)) {
+      REXLOG_INFO("script input: set {} = {} changed nothing (already so, or fixed this session)",
+                  key, value);
+    } else {
+      REXLOG_WARN("script input: set {} = {} was rejected, the setting does not allow it", key, value);
+    }
+  }
+  return true;
 }
 
 bool RunScriptCommand(std::string_view name, std::string_view value) {

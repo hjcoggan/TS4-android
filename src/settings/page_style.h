@@ -1,6 +1,6 @@
 // How the Settings page looks (ticket 08): Top Spin 4's colours and font, and the sizing rules
 // that keep text readable and rows unclipped at any window size. Pure, so it is unit-tested
-// (tests/host/test_page_style.cpp); settings_page.cpp draws with it.
+// (tests/host/test_options_row.cpp); settings_page.cpp draws with it.
 //
 // The font is the game's own UI font, read from the player's game data when the page starts
 // (ADR-0006: nothing of the game is committed). The palette is the front end's, sampled from a

@@ -24,8 +24,8 @@ public sealed class BeforeStartSettings(SettingsSchema schema, string settingsPa
     {
         if (!setting.Allows(value)) return SettingChange.Refused;
         var text = File.Exists(SettingsPath) ? File.ReadAllText(SettingsPath) : "";
-        if (SettingsFile.IsNewerThanBuild(text)) return SettingChange.FileIsNewer;
-        return SettingsFile.Save(SettingsPath, setting.Key, SettingsFile.Literal(setting, value))
+        if (SettingsFile.IsNewerThanBuild(text, schema.FileVersion)) return SettingChange.FileIsNewer;
+        return SettingsFile.Save(SettingsPath, setting.Key, SettingsFile.Literal(setting, value), schema.FileVersion)
             ? SettingChange.Saved
             : SettingChange.NotWritten;
     }

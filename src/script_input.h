@@ -62,6 +62,8 @@
 #include <rex/input/input_driver.h>
 #include <rex/runtime.h>
 
+#include "settings/open_combo.h"
+
 namespace topspin4 {
 
 class ScriptInputDriver final : public rex::input::InputDriver {
@@ -83,6 +85,10 @@ class ScriptInputDriver final : public rex::input::InputDriver {
                     rex::input::DeviceId id = kDevice, Setter set = {});
 
   static std::chrono::milliseconds SteadyClock();
+
+  // Filters this pad's Back+Start combo as a real pad's is (settings/open_combo.h), so a script
+  // can open the Settings page with `press back+start` and a lone Back or Start is replayed late.
+  void EnableOpenCombo() { open_combo_ = true; }
 
   rex::X_STATUS Setup() override;
   void EnumerateDevices(std::vector<rex::input::DeviceInfo>& out) override;
@@ -117,6 +123,8 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   static void ReadDuration(std::istream& in, Step& step);
   // The step in force now, and the next packet number, under the lock.
   Step CurrentStep(uint32_t* packet);
+  // A step's buttons as the game sees them: through the combo filter if it is on.
+  uint16_t GameButtons(uint16_t buttons);
 
   std::filesystem::path file_;
   rex::input::DeviceId id_;
@@ -133,6 +141,8 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   uint64_t frame_end_ = 0;
   uint32_t packet_ = 0;
   uint16_t keystroke_buttons_ = 0;  // the buttons GetDeviceKeystroke last reported down
+  bool open_combo_ = false;
+  settings::OpenComboGate combo_;
 };
 
 // With --ts4_input_script set, replace the runtime's input system with one

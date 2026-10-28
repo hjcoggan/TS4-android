@@ -95,6 +95,33 @@ public sealed class BeforeStartSettingsTests : IDisposable
     }
 
     [Fact]
+    public void The_version_written_and_the_newer_check_come_from_the_export()
+    {
+        var versioned = Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 3,");
+        var schema = SettingsSchema.Parse(versioned);
+        var renderer = schema.Settings[0];
+        Assert.Equal(3, schema.FileVersion);
+        Assert.Equal(SettingsFile.FallbackVersion, SettingsSchema.Parse(Export).FileVersion);
+
+        new BeforeStartSettings(schema, SettingsPath).Set(renderer, "native");
+        Assert.Equal("version = 3\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
+
+        File.WriteAllText(SettingsPath, "version = 4\n");
+        Assert.Equal(SettingChange.FileIsNewer, new BeforeStartSettings(schema, SettingsPath).Set(renderer, "classic"));
+    }
+
+    [Theory]
+    [InlineData("version = 3\n", 3L)]
+    [InlineData("version = -2 # old\n", -2L)]
+    [InlineData("version = 4 \t\r\n", 4L)]
+    [InlineData("version = \"2\"\n", null)]
+    [InlineData("version = 2x\n", null)]
+    [InlineData("version = 99999999999999999999\n", null)]
+    [InlineData("version_old = 2\n", null)]
+    public void The_file_version_is_read_as_the_game_reads_it(string text, long? expected) =>
+        Assert.Equal(expected, SettingsFile.Version(text));
+
+    [Fact]
     public void A_file_from_a_newer_build_is_not_rewritten()
     {
         Directory.CreateDirectory(_folder);
@@ -176,9 +203,9 @@ public sealed class BeforeStartSettingsTests : IDisposable
     {
         // Needs a built game: set TOPSPIN4_EXE to its path to run this against the real exe.
         var exe = System.Environment.GetEnvironmentVariable("TOPSPIN4_EXE");
-        if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return;
+        Assert.SkipWhen(string.IsNullOrEmpty(exe) || !File.Exists(exe), "TOPSPIN4_EXE is not set to a built topspin4.exe.");
 
-        var schema = await SettingsExport.ReadAsync(exe, cancel: TestContext.Current.CancellationToken);
+        var schema = await SettingsExport.ReadAsync(exe!, cancel: TestContext.Current.CancellationToken);
 
         Assert.Contains(schema.BeforeStart(), setting => setting.Key == "ts4_renderer");
     }

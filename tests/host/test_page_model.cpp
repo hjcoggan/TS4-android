@@ -139,6 +139,13 @@ TEST_CASE("Safe start rows say a change is not kept; a live one still applies") 
   REQUIRE(live.size() == 1);
   CHECK(live[0].set_cvar);
   CHECK_FALSE(live[0].save);
+  // A next-start setting could neither apply nor be saved: the row is fixed and says why.
+  const Row renderer = model.RowFor("ts4_renderer");
+  CHECK_FALSE(renderer.editable);
+  CHECK(renderer.note.find("cannot be changed here") != std::string::npos);
+  CHECK(model.Change("ts4_renderer", "native").empty());
+  CHECK(model.Step("ts4_renderer", 1).empty());
+  CHECK(model.RowFor("ts4_renderer").value == "classic");
 }
 
 TEST_CASE("Stepping wraps around the choices both ways") {

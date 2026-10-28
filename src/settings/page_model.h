@@ -254,6 +254,7 @@ class SettingsModel {
   std::vector<SettingChange> SetOne(const Setting& setting, std::string_view value) {
     const auto shown = shown_.find(setting.key);
     if (shown == shown_.end() || !setting.Allows(value) || shown->second == value) return {};
+    if (Fixed(setting)) return {};
     shown->second = std::string(value);
     SettingChange change{std::string(setting.key), std::string(value)};
     const bool now = !AppliesNext(setting);
@@ -353,6 +354,11 @@ class SettingsModel {
   bool AppliesNext(const Setting& setting) const {
     return context_.applies(setting.key).value_or(Applies::kNextStart) == Applies::kNextStart;
   }
+  // A next-start setting in a Safe start session (not given as a Launch option): a change could
+  // neither apply now nor be saved, so the row is not editable.
+  bool Fixed(const Setting& setting) const {
+    return context_.safe_start && AppliesNext(setting) && !Pinned(setting);
+  }
   static std::string ValueOf(const ValueMap& values, std::string_view key, std::string_view fallback) {
     const auto found = values.find(key);
     return found != values.end() ? found->second : std::string(fallback);
@@ -368,8 +374,9 @@ class SettingsModel {
     row.value = shown_.at(row.key);
     const bool next = AppliesNext(setting);
     row.available = setting.AvailableOn(context_.renderer);
-    row.capture = row.available && IsKeyBinding(setting);
-    row.editable = row.available && (setting.kind != Setting::Kind::kText || row.capture);
+    const bool fixed = Fixed(setting);
+    row.capture = row.available && !fixed && IsKeyBinding(setting);
+    row.editable = row.available && !fixed && (setting.kind != Setting::Kind::kText || row.capture);
     if (Pinned(setting)) {
       row.mark = Mark::kLaunchOption;
     } else if (context_.safe_start) {
@@ -409,8 +416,11 @@ class SettingsModel {
         return next ? "Set by launch options: a change here does not apply at the next start."
                     : "Set by launch options: a change here lasts until the game closes.";
       case Mark::kSafeStart:
-        return next ? "Safe start: a change here is not kept."
-                    : "Safe start: a change here lasts until the game closes.";
+        if (!next) return "Safe start: a change here lasts until the game closes.";
+        return row.kind == RowKind::kSetting
+                   ? "Safe start: this applies at the next start and Safe start saves nothing, so it "
+                     "cannot be changed here."
+                   : "Safe start: a change here is not kept.";
       case Mark::kNextStart: return "Applies the next time the game starts.";
       case Mark::kNow: break;
     }
@@ -533,6 +543,11 @@ class PageModel {
     const std::string key = std::move(capture_key_);
     capture_key_.clear();
     return key.empty() ? std::vector<SettingChange>{} : model_.BindKey(key, binding);
+  }
+
+  // A change from outside the pad (a script's `set`), through the same rules as the page's own.
+  std::vector<SettingChange> Change(std::string_view key, std::string_view value) {
+    return model_.Change(key, value);
   }
 
   bool is_open() const { return open_; }

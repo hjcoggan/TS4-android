@@ -27,7 +27,7 @@
 #include "settings/config_file.h"
 #include "settings/renderer_choice.h"
 #include "settings/schema.h"
-#include "settings/settings_file.h"
+#include "settings/session.h"
 #include "settings/settings_page.h"
 #include "user_paths.h"
 
@@ -85,15 +85,13 @@ class TopSpin4App : public rex::ReXApp {
     // Started directly after the Launcher's setup: the prepared disc and TU1 are where the
     // Launcher left them, unless the command line (or config) names other folders.
     namespace user_paths = topspin4::user_paths;
-    std::error_code error;
-    if (paths.game_data_root.empty()) {
-      const auto prepared = user_paths::DefaultPreparedDataRoot() / user_paths::kGameDataFolder;
-      if (std::filesystem::is_directory(prepared, error)) paths.game_data_root = prepared;
-    }
-    if (paths.update_data_root.empty()) {
-      const auto prepared = user_paths::DefaultPreparedDataRoot() / user_paths::kUpdateDataFolder;
-      if (std::filesystem::is_directory(prepared, error)) paths.update_data_root = prepared;
-    }
+    const auto use_prepared = [](std::filesystem::path& root, const auto& folder) {
+      std::error_code error;
+      const auto prepared = user_paths::DefaultPreparedDataRoot() / folder;
+      if (root.empty() && std::filesystem::is_directory(prepared, error)) root = prepared;
+    };
+    use_prepared(paths.game_data_root, user_paths::kGameDataFolder);
+    use_prepared(paths.update_data_root, user_paths::kUpdateDataFolder);
   }
 
   // The player's settings (ticket 10), once logging can report on them and before the runtime
@@ -113,38 +111,9 @@ class TopSpin4App : public rex::ReXApp {
     namespace settings = topspin4::settings;
     const auto path = settings::SettingsPath(user_data_root());
     topspin4::crash::SetSettingsFile(path);
-    // The Settings page shows what the file holds and which settings Launch options pin.
-    settings::SessionStart session;
-    // Safe start (--safe, ticket 09): the file is neither read, migrated, set aside nor written,
-    // so every setting keeps its default; the page's changes last until the game closes.
-    session.safe_start = REXCVAR_GET(safe);
-    settings::LoadReport report;
-    if (session.safe_start) {
-      REXLOG_WARN("Safe start: every setting is at its default, and the Settings file {} is "
-                  "neither applied nor written",
-                  settings::Utf8(path));
-    } else {
-      report = settings::LoadSettingsFile(
-          path, [&session](std::string_view key, std::string_view value) {
-            session.file_values[std::string(key)] = std::string(value);
-            const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
-            if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
-                         flag->source == rex::cvar::Source::kEnvironment)) {
-              session.pinned.insert(std::string(key));
-              return true;
-            }
-            return rex::cvar::SetFlagByName(key, value);
-          });
-    }
-    // A setting given as a Launch option but absent from the file is pinned too.
-    for (const settings::Setting& setting : settings::PlayerSettings()) {
-      const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(setting.key);
-      if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
-                   flag->source == rex::cvar::Source::kEnvironment)) {
-        session.pinned.insert(std::string(setting.key));
-      }
-    }
-    settings::BeginSession(std::move(session));
+    // The Settings file into the cvars (Safe start, ticket 09, skips it), and the Settings page
+    // told what the file holds and which settings Launch options pin.
+    const settings::LoadReport report = settings::StartSession(path, REXCVAR_GET(safe));
     for (const std::string& warning : report.warnings) {
       REXLOG_WARN("{}", warning);
     }
@@ -222,7 +191,8 @@ class TopSpin4App : public rex::ReXApp {
       topspin4::settings::SetGamePadBindings(topspin4::BindingsFromCvars());
     }
     // A script's `set` changes a setting on the UI thread, where the settings page and the F6
-    // overlay change theirs (the presenter's CAS must be switched there).
+    // overlay change theirs (the presenter's CAS must be switched there). A player setting goes
+    // through the Settings page's own change path; any other cvar is set directly.
     rex::ui::WindowedAppContext* context = &app_context();
     topspin4::InstallScriptInput(
         config, &rex::system::GuestSwapCount, [context](std::string name, std::string value) {
@@ -231,6 +201,8 @@ class TopSpin4App : public rex::ReXApp {
             // the script's own pad.
             if (topspin4::settings::RunScriptCommand(name, value)) {
               REXLOG_INFO("script input: {} {}", name, value);
+            } else if (topspin4::settings::SetPlayerSettingFromScript(name, value)) {
+              // A player setting goes through the Settings page's change path, which logs it.
             } else if (rex::cvar::SetFlagByName(name, value)) {
               REXLOG_INFO("script input: set {} = {}", name, value);
             } else {

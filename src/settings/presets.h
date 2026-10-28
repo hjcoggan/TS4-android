@@ -34,16 +34,19 @@ struct Preset {
 // it cannot drift from them.
 inline const std::vector<Preset>& GraphicsPresets() {
   static const std::vector<Preset> presets = [] {
-    constexpr std::string_view kCovered[] = {"ts4_resolution_scale", "ts4_msaa",
-                                             "ts4_anisotropic_filtering", "ts4_sharpening"};
-    constexpr std::string_view kEnhanced[] = {"auto", "4", "16", "off"};
+    // Each covered setting with its Enhanced value.
+    constexpr std::pair<std::string_view, std::string_view> kCoveredEnhanced[] = {
+        {"ts4_resolution_scale", "auto"},
+        {"ts4_msaa", "4"},
+        {"ts4_anisotropic_filtering", "16"},
+        {"ts4_sharpening", "off"}};
     Preset original{"original", "Original", {}};
     Preset enhanced{"enhanced", "Enhanced", {}};
-    for (size_t i = 0; i < std::size(kCovered); ++i) {
-      const Setting* setting = FindSetting(kCovered[i]);
-      original.values.emplace_back(std::string(kCovered[i]),
+    for (const auto& [key, enhanced_value] : kCoveredEnhanced) {
+      const Setting* setting = FindSetting(key);
+      original.values.emplace_back(std::string(key),
                                    setting ? std::string(setting->default_value) : std::string());
-      enhanced.values.emplace_back(std::string(kCovered[i]), std::string(kEnhanced[i]));
+      enhanced.values.emplace_back(std::string(key), std::string(enhanced_value));
     }
     return std::vector<Preset>{original, enhanced};
   }();

@@ -443,6 +443,7 @@ TEST_CASE("The settings export reads back as the same registry") {
   std::string_view in = text;
   const Json root = ParseJson(in);
   CHECK(root.at("format").text == "1");
+  CHECK(root.at("settings_file_version").text == std::to_string(CurrentVersion()));
   REQUIRE(root.at("sections").items.size() == std::size(kSections));
   for (size_t i = 0; i < std::size(kSections); ++i) {
     CHECK(root.at("sections").items[i].text == SectionName(kSections[i]));

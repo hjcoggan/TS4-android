@@ -7,14 +7,18 @@ namespace TopSpin4.Launcher.Core;
 /// The player's Settings file (<c>topspin4.settings.toml</c>), written with the game's own rules
 /// (src/settings/config_file.h, which this mirrors): a top-level <c>version</c>, a line-preserving
 /// single-key rewrite, a temporary file and a rename, and a file of a newer build left alone.
-/// The migrations list is empty in both; when the game gains a migration, add it here too.
+/// The version this build writes comes from the game's export (settings_file_version), so a game
+/// migration needs no change here.
 /// </summary>
 public static class SettingsFile
 {
     public const string FileName = "topspin4.settings.toml";
 
-    /// <summary>The version this build writes: one more than its migrations (none yet).</summary>
-    public const long CurrentVersion = 1;
+    /// <summary>
+    /// The version to assume only when the game's export does not say (<see cref="SettingsSchema.FileVersion"/>);
+    /// the game decides it (CurrentVersion in src/settings/config_file.h).
+    /// </summary>
+    public const long FallbackVersion = 1;
 
     public static string PathIn(string userDataRoot) => Path.Combine(userDataRoot, FileName);
 
@@ -81,19 +85,23 @@ public static class SettingsFile
         ForEachLine(text, (body, _) =>
         {
             if (!IsKeyLine(body, "version", out var rest)) return true;
+            // As FileVersion in config_file.h: an optional minus, digits that fit a long, then only blanks or a comment.
             rest = rest.TrimStart(' ', '\t');
-            var digits = rest.TakeWhile(char.IsAsciiDigit).Count();
+            var sign = rest.StartsWith('-') ? 1 : 0;
+            var digits = rest.Skip(sign).TakeWhile(char.IsAsciiDigit).Count();
             if (digits == 0) return false;
-            var after = rest[digits..].TrimStart(' ', '\t').TrimEnd('\r');
-            if (after.Length == 0 || after[0] == '#')
-                version = long.Parse(rest[..digits], CultureInfo.InvariantCulture);
+            var number = rest[..(sign + digits)];
+            var after = rest[(sign + digits)..].TrimStart(' ', '\t', '\r');
+            if ((after.Length == 0 || after[0] == '#')
+                && long.TryParse(number, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+                version = value;
             return false;
         });
         return version;
     }
 
     /// <summary>Whether a newer build wrote the file. Such a file is read as well as possible and never rewritten.</summary>
-    public static bool IsNewerThanBuild(string text) => (Version(text) ?? 1) > CurrentVersion;
+    public static bool IsNewerThanBuild(string text, long currentVersion) => (Version(text) ?? 1) > currentVersion;
 
     /// <summary>The text with the version line set, or added first (a top-level key must come before any table).</summary>
     public static string WithVersion(string text, long version)
@@ -110,8 +118,8 @@ public static class SettingsFile
     }
 
     /// <summary>The text brought to this build's version (no migrations yet, so the version line is set).</summary>
-    public static string Migrate(string text) =>
-        (Version(text) ?? 1) > CurrentVersion ? text : WithVersion(text, CurrentVersion);
+    public static string Migrate(string text, long currentVersion) =>
+        IsNewerThanBuild(text, currentVersion) ? text : WithVersion(text, currentVersion);
 
     /// <summary>The value written after <paramref name="key"/> with quotes and trailing comment removed, or null when the key is absent.</summary>
     public static string? ValueOf(string text, string key)
@@ -156,11 +164,11 @@ public static class SettingsFile
     /// version first, a new one created at it) through a temporary file and a rename. Only that line changes otherwise.
     /// A file of a newer build is left alone: false.
     /// </summary>
-    public static bool Save(string path, string key, string literal)
+    public static bool Save(string path, string key, string literal, long currentVersion)
     {
         var text = File.Exists(path) ? File.ReadAllText(path) : "";
-        if (IsNewerThanBuild(text)) return false;
-        var result = SetKey(Migrate(text), key, literal);
+        if (IsNewerThanBuild(text, currentVersion)) return false;
+        var result = SetKey(Migrate(text, currentVersion), key, literal);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var temporary = path + ".tmp";
         try

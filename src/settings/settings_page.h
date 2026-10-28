@@ -64,4 +64,10 @@ inline constexpr std::string_view kScriptKey = "settings_page";
 // Runs the command if name is kScriptKey. Call on the UI thread. True if it was one.
 bool RunScriptCommand(std::string_view name, std::string_view value);
 
+// A script's `set key value` for a player setting in the registry: the same change path as the
+// page (apply now or at the next start, save rules, Launch options and Safe start, the open
+// page's rows). Call on the UI thread. False if key is no player setting; any other cvar is the
+// caller's to set directly.
+bool SetPlayerSettingFromScript(std::string_view key, std::string_view value);
+
 }  // namespace topspin4::settings
