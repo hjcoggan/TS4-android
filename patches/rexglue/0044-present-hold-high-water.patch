@@ -1,0 +1,120 @@
+diff --git a/include/rex/ui/present_hold.h b/include/rex/ui/present_hold.h
+index e8b5309..029d2db 100644
+--- a/include/rex/ui/present_hold.h
++++ b/include/rex/ui/present_hold.h
+@@ -5,52 +5,53 @@
+  * On a variable-refresh display (or the host clock) the display shows a frame when the present
+  * reaches it, and a present queued before the frame's GPU work is done reaches it when that work
+  * completes. Frames finishing a few milliseconds apart after the guest vblank were then shown a
+- * few milliseconds apart from the 60 Hz step: 8-14 % of display changes at 4x Resolution scale
+- * with 8x MSAA on a 360 Hz VRR display. The presenter instead waits for each frame's GPU work,
+- * then presents at a hold point after the guest vblank, the same for every frame: the 95th
+- * percentile of recent completion times plus a margin, between the paced present offset and the
+- * period less a millisecond. A frame finishing later still is presented as soon as it is done.
++ * few milliseconds apart from the 60 Hz step. The presenter instead waits for each frame's GPU
++ * work, then presents at a hold point after the guest vblank, the same for every frame.
++ *
++ * The hold is a high-water mark: a frame finishing after it raises it at once to cover that frame
++ * (one late frame, then none), and it comes down slowly (kDecayUs a frame) so presents shift
++ * imperceptibly as a scene gets lighter. A percentile (p95 + 1 ms, patch 0042) left about 1 % of
++ * frames a few milliseconds late by design: the last stutters at 3x Resolution scale with 8x
++ * MSAA. It stays a margin before the next vblank: the pacing thread holds, presents and then
++ * paints the next frame in turn, and a hold past the next vblank delayed every later frame. A
++ * frame finishing after that is late under any hold and raises nothing.
+  *
+  * @license     BSD 3-Clause License
+  *              See LICENSE file in the project root for full license text.
+  */
+ #pragma once
+ #include <algorithm>
+-#include <array>
+-#include <cstddef>
+ #include <cstdint>
+ 
+ namespace rex::ui::pacing {
+ 
+ class PresentHold {
+  public:
+-  // About 4 s of frames at 60 Hz, so the hold follows a scene getting lighter or heavier.
+-  static constexpr size_t kWindow = 240;
+   static constexpr int64_t kMarginUs = 1000;
+-  static constexpr int64_t kEndMarginUs = 1000;
++  static constexpr int64_t kDecayUs = 2;
+ 
+   // A frame's GPU work completed this long after its guest vblank.
+-  void Completed(int64_t after_vblank_us) {
+-    window_[next_] = after_vblank_us;
+-    next_ = (next_ + 1) % kWindow;
+-    count_ = std::min(count_ + 1, kWindow);
++  void Completed(int64_t after_vblank_us, int64_t offset_us, int64_t period_us) {
++    const int64_t cover = after_vblank_us + kMarginUs;
++    if (cover > hold_us_ && cover <= LatestUs(offset_us, period_us) + kMarginUs) {
++      hold_us_ = cover;
++    } else {
++      hold_us_ -= kDecayUs;
++    }
+   }
+ 
+   // The hold point after the guest vblank, in microseconds.
+   int64_t HoldUs(int64_t offset_us, int64_t period_us) const {
+-    const int64_t latest = std::max(offset_us, period_us - kEndMarginUs);
+-    if (count_ == 0) return std::min(offset_us, latest);
+-    std::array<int64_t, kWindow> sorted;
+-    std::copy_n(window_.begin(), count_, sorted.begin());
+-    const size_t p95 = (count_ * 95) / 100;
+-    std::nth_element(sorted.begin(), sorted.begin() + p95, sorted.begin() + count_);
+-    return std::clamp(sorted[p95] + kMarginUs, offset_us, latest);
++    return std::clamp(hold_us_, offset_us, LatestUs(offset_us, period_us));
+   }
+ 
+  private:
+-  std::array<int64_t, kWindow> window_{};
+-  size_t next_ = 0;
+-  size_t count_ = 0;
++  // A margin before the next vblank.
++  static int64_t LatestUs(int64_t offset_us, int64_t period_us) {
++    return std::max(offset_us, period_us - kMarginUs);
++  }
++
++  int64_t hold_us_ = 0;
+ };
+ 
+ }  // namespace rex::ui::pacing
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index 94dd031..2452131 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -1118,6 +1118,8 @@ class Presenter {
+   std::chrono::steady_clock::time_point present_hold_vblank_{};
+   std::chrono::steady_clock::time_point present_hold_until_{};
+   long long present_hold_last_done_us_ = -1;  // this present's completion after its vblank
++  long long present_hold_offset_us_ = 0;      // the present offset and period it was held with
++  long long present_hold_period_us_ = 0;
+   // steady_clock ticks when the pending frame was submitted, for the pacing log.
+   std::atomic<int64_t> guest_output_paced_frame_arrival_{0};
+   std::atomic<uint32_t> guest_output_paced_frames_replaced_{0};
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index 7a478f3..cc327db 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -879,7 +879,9 @@ void Presenter::GuestOutputPacingThread() {
+     if (hold) {
+       const Clock::time_point frame_vblank = target - offset;
+       std::lock_guard hold_lock(present_hold_mutex_);
+-      hold_us = present_hold_.HoldUs(us(offset), us(period));
++      present_hold_offset_us_ = us(offset);
++      present_hold_period_us_ = us(period);
++      hold_us = present_hold_.HoldUs(present_hold_offset_us_, present_hold_period_us_);
+       present_hold_vblank_ = frame_vblank;
+       present_hold_until_ = frame_vblank + std::chrono::microseconds(hold_us);
+       present_hold_last_done_us_ = -1;
+@@ -1007,7 +1009,8 @@ void Presenter::PresentHoldCompleted(std::chrono::steady_clock::time_point done)
+   }
+   present_hold_last_done_us_ =
+       std::chrono::duration_cast<std::chrono::microseconds>(done - present_hold_vblank_).count();
+-  present_hold_.Completed(present_hold_last_done_us_);
++  present_hold_.Completed(present_hold_last_done_us_, present_hold_offset_us_,
++                          present_hold_period_us_);
+ }
+ 
+ void Presenter::PresentLatestGuestOutput() {
