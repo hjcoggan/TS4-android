@@ -2,19 +2,17 @@ using TopSpin4.Launcher.Core;
 
 namespace TopSpin4.Launcher.Tests;
 
-public sealed class BeforeStartSettingsTests : IDisposable
+public sealed class SettingsStoreTests : IDisposable
 {
-    // The shape of `topspin4.exe --print-settings-schema` (src/settings/schema.h), cut down.
-    private const string Export = """
-        {"format": 1, "sections": ["Graphics", "Controls"],
-         "settings": [
-          {"key": "ts4_renderer", "kind": "choice", "default": "classic", "choices": ["classic", "native"], "applies_when": "next_start", "renderers": "both", "section": "Graphics", "label": "Renderer", "order": 10, "help": "Renderer help \"quoted\""},
-          {"key": "ts4_msaa", "kind": "choice", "default": "original", "choices": ["original", "4", "8"], "applies_when": "now", "renderers": "native", "section": "Graphics", "label": "MSAA", "order": 30, "help": "MSAA help"},
-          {"key": "ts4_gpu", "kind": "choice", "default": "auto", "choices": ["auto", "1", "2"], "applies_when": "next_start", "renderers": "native", "section": "Graphics", "label": "GPU", "order": 15, "help": "GPU help"},
-          {"key": "ts4_pad_a", "kind": "choice", "default": "a", "choices": ["a", "b"], "applies_when": "next_start", "renderers": "both", "section": "Controls", "label": "Pad: A", "order": 100, "help": "Pad help"},
-          {"key": "mnk_mode", "kind": "bool", "default": "false", "choices": [], "applies_when": "now", "renderers": "both", "section": "Controls", "label": "Keyboard and mouse", "order": 10, "help": "Mnk help"}
-         ]}
-        """;
+    // The shape of `topspin4.exe --print-settings-schema` (src/settings/schema.h), cut down; no file version unless given.
+    private static string Export(long? fileVersion = null) => ExportFixture.Json(
+    [
+        ExportFixture.Setting("ts4_renderer", "choice", "classic", ["classic", "native"], "next_start", "both", "Graphics", "Renderer", 10, "Renderer help \"quoted\""),
+        ExportFixture.Setting("ts4_msaa", "choice", "original", ["original", "4", "8"], "now", "native", "Graphics", "MSAA", 30, "MSAA help"),
+        ExportFixture.Setting("ts4_gpu", "choice", "auto", ["auto", "1", "2"], "next_start", "native", "Graphics", "GPU", 15, "GPU help"),
+        ExportFixture.Setting("ts4_pad_a", "choice", "a", ["a", "b"], "next_start", "both", "Controls", "Pad: A", 100, "Pad help", null, ("pad", "A")),
+        ExportFixture.Setting("mnk_mode", "bool", "false", [], "now", "both", "Controls", "Keyboard and mouse", 10, "Mnk help"),
+    ], fileVersion: fileVersion);
 
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "ts4-launcher-settings-" + Guid.NewGuid().ToString("N"));
 
@@ -25,37 +23,49 @@ public sealed class BeforeStartSettingsTests : IDisposable
         if (Directory.Exists(_folder)) Directory.Delete(_folder, recursive: true);
     }
 
-    private BeforeStartSettings Settings() => new(SettingsSchema.Parse(Export), SettingsPath);
+    private SettingsStore Settings() => new(SettingsSchema.Parse(Export()), SettingsPath);
 
     [Fact]
     public void Reading_the_export_gives_every_setting_with_its_fields()
     {
-        var schema = SettingsSchema.Parse(Export);
+        var schema = SettingsSchema.Parse(Export());
 
         Assert.Equal(5, schema.Settings.Count);
         var renderer = schema.Settings[0];
         Assert.Equal(("ts4_renderer", "choice", "classic", "next_start", "Graphics", "Renderer", 10),
             (renderer.Key, renderer.Kind, renderer.Default, renderer.AppliesWhen, renderer.Section, renderer.Label, renderer.Order));
         Assert.Equal(["classic", "native"], renderer.Choices);
+        Assert.Equal(["Classic", "Native"], renderer.ChoiceLabels);
         Assert.Equal("Renderer help \"quoted\"", renderer.Help);
         Assert.True(schema.Settings[4].IsBool);
+        Assert.Equal(("pad", "A"), (schema.Settings[3].Binding!.Device, schema.Settings[3].Binding!.Action));
+        Assert.Null(renderer.Binding);
     }
 
     [Fact]
-    public void The_before_start_settings_are_the_ones_the_export_marks_next_start_in_graphics()
+    public void Reading_the_export_gives_the_sections_and_the_presets_with_their_covered_values()
     {
-        var keys = SettingsSchema.Parse(Export).BeforeStart().Select(setting => setting.Key);
+        var schema = SettingsSchema.Parse(Export());
 
-        Assert.Equal(["ts4_renderer", "ts4_gpu"], keys);   // in page order; no MSAA (applies now), no pad binding (Controls)
+        Assert.Equal(["Graphics", "Controls"], schema.Sections);
+        Assert.Equal(("Graphics", "Graphics preset"), (schema.PresetSection, schema.PresetLabel));
+        Assert.Equal(["original", "enhanced"], schema.Presets.Select(preset => preset.Value));
+        Assert.Equal(["Original", "Enhanced"], schema.Presets.Select(preset => preset.Label));
+        Assert.Equal(
+            new KeyValuePair<string, string>[]
+            {
+                new("ts4_resolution_scale", "auto"), new("ts4_msaa", "4"), new("ts4_anisotropic_filtering", "16"), new("ts4_sharpening", "off"),
+            },
+            schema.Presets[1].Values);
     }
 
-    [Fact]
-    public void An_export_in_another_format_or_not_json_is_refused()
-    {
-        Assert.Throws<SettingsExportException>(() => SettingsSchema.Parse("""{"format": 2, "settings": []}"""));
-        Assert.Throws<SettingsExportException>(() => SettingsSchema.Parse("not json"));
-        Assert.Throws<SettingsExportException>(() => SettingsSchema.Parse("""{"format": 1}"""));
-    }
+    [Theory]
+    [InlineData("""{"format": 2, "settings": []}""")]
+    [InlineData("""{"format": 1, "sections": [], "settings": []}""")]
+    [InlineData("""{"format": 3}""")]
+    [InlineData("not json")]
+    public void An_export_in_another_format_or_not_json_or_missing_format_2_fields_is_refused(string export) =>
+        Assert.Throws<SettingsExportException>(() => SettingsSchema.Parse(export));
 
     [Fact]
     public void Writing_a_setting_into_an_existing_file_leaves_the_other_lines_untouched()
@@ -97,17 +107,16 @@ public sealed class BeforeStartSettingsTests : IDisposable
     [Fact]
     public void The_version_written_and_the_newer_check_come_from_the_export()
     {
-        var versioned = Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 3,");
-        var schema = SettingsSchema.Parse(versioned);
+        var schema = SettingsSchema.Parse(Export(3));
         var renderer = schema.Settings[0];
         Assert.Equal(3, schema.FileVersion);
-        Assert.Equal(SettingsFile.FallbackVersion, SettingsSchema.Parse(Export).FileVersion);
+        Assert.Equal(SettingsFile.FallbackVersion, SettingsSchema.Parse(Export()).FileVersion);
 
-        new BeforeStartSettings(schema, SettingsPath).Set(renderer, "native");
+        new SettingsStore(schema, SettingsPath).Set(renderer, "native");
         Assert.Equal("version = 3\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
 
         File.WriteAllText(SettingsPath, "version = 4\n");
-        Assert.Equal(SettingChange.FileIsNewer, new BeforeStartSettings(schema, SettingsPath).Set(renderer, "classic"));
+        Assert.Equal(SettingChange.FileIsNewer, new SettingsStore(schema, SettingsPath).Set(renderer, "classic"));
     }
 
     [Fact]
@@ -115,9 +124,9 @@ public sealed class BeforeStartSettingsTests : IDisposable
     {
         Directory.CreateDirectory(_folder);
         File.WriteAllText(SettingsPath, "version = 1\r\n# mine\r\nts4_resolution_scale = \"4\"  # big\r\nts4_msaa = \"4\"\r\n");
-        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+        var schema = SettingsSchema.Parse(Export(2));
 
-        new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+        new SettingsStore(schema, SettingsPath).Set(schema.Settings[0], "native");
 
         Assert.Equal(
             "version = 2\r\n# mine\r\nts4_resolution_scale = \"3\"  # big\r\nts4_msaa = \"4\"\r\nts4_renderer = \"native\"\n",
@@ -127,13 +136,13 @@ public sealed class BeforeStartSettingsTests : IDisposable
     [Fact]
     public void Saving_into_a_version_1_file_keeps_any_other_resolution_scale()
     {
-        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+        var schema = SettingsSchema.Parse(Export(2));
         foreach (var scale in new[] { "1", "auto", "2", "3" })
         {
             Directory.CreateDirectory(_folder);
             File.WriteAllText(SettingsPath, $"version = 1\nts4_resolution_scale = \"{scale}\"\n");
 
-            new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+            new SettingsStore(schema, SettingsPath).Set(schema.Settings[0], "native");
 
             Assert.Equal($"version = 2\nts4_resolution_scale = \"{scale}\"\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
         }
@@ -143,9 +152,9 @@ public sealed class BeforeStartSettingsTests : IDisposable
     public void A_version_2_file_is_not_migrated_again_and_an_export_without_a_version_runs_no_migration()
     {
         Directory.CreateDirectory(_folder);
-        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+        var schema = SettingsSchema.Parse(Export(2));
         File.WriteAllText(SettingsPath, "version = 2\nts4_resolution_scale = \"4\"\n");
-        new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+        new SettingsStore(schema, SettingsPath).Set(schema.Settings[0], "native");
         Assert.Equal("version = 2\nts4_resolution_scale = \"4\"\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
 
         // The game's version decides how many migrations run: at version 1 there are none.
@@ -215,24 +224,12 @@ public sealed class BeforeStartSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Pressing_a_setting_moves_it_to_the_next_choice_and_around()
-    {
-        var settings = Settings();
-        var renderer = settings.Settings.Single(setting => setting.Key == "ts4_renderer");
-
-        settings.Cycle(renderer);
-        Assert.Equal("native", settings.ValueOf(renderer));
-        settings.Cycle(renderer);
-        Assert.Equal("classic", settings.ValueOf(renderer));
-    }
-
-    [Fact]
     public void A_bool_is_written_bare()
     {
-        var mnk = SettingsSchema.Parse(Export).Settings.Single(setting => setting.Key == "mnk_mode");
+        var mnk = SettingsSchema.Parse(Export()).Settings.Single(setting => setting.Key == "mnk_mode");
 
         Assert.Equal("true", SettingsFile.Literal(mnk, "true"));
-        Assert.Equal("\"native\"", SettingsFile.Literal(SettingsSchema.Parse(Export).Settings[0], "native"));
+        Assert.Equal("\"native\"", SettingsFile.Literal(SettingsSchema.Parse(Export()).Settings[0], "native"));
     }
 
     [Fact]
@@ -264,6 +261,8 @@ public sealed class BeforeStartSettingsTests : IDisposable
 
         var schema = await SettingsExport.ReadAsync(exe!, cancel: TestContext.Current.CancellationToken);
 
-        Assert.Contains(schema.BeforeStart(), setting => setting.Key == "ts4_renderer");
+        Assert.Contains(schema.Settings, setting => setting.Key == "ts4_renderer");
+        Assert.Contains(schema.Presets, preset => preset.Value == "enhanced");
+        Assert.Contains(schema.Settings, setting => setting.Binding is { Device: "pad" });
     }
 }

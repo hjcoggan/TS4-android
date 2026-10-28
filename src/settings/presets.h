@@ -70,6 +70,25 @@ inline std::string ActivePreset(const ValueMap& values, std::string_view rendere
   return std::string(kCustomPreset);
 }
 
+// The Preset row's label, and its help: each Preset with the values it sets. Here so the page and
+// the settings export say the same.
+inline constexpr std::string_view kPresetLabel = "Graphics preset";
+
+inline std::string PresetHelp() {
+  std::string help;
+  for (const Preset& preset : GraphicsPresets()) {
+    help += (help.empty() ? "" : " ") + preset.label + ":";
+    for (size_t m = 0; m < preset.values.size(); ++m) {
+      const Setting* member = FindSetting(preset.values[m].first);
+      if (!member) continue;
+      help += std::string(m ? ", " : " ") + std::string(member->label) + " " +
+              ChoiceLabel(*member, preset.values[m].second);
+    }
+    help += ".";
+  }
+  return help;
+}
+
 // The session report's settings object, written after "renderer" (tickets 05 and 09): whether
 // this was a Safe start and the Preset in effect at the end (original, enhanced or custom).
 inline std::string SessionSettingsJson(bool safe_start, std::string_view preset) {

@@ -1,16 +1,17 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TopSpin4.Launcher.Pages.SettingsPage">
-  <!-- Settings: the rows come from the game's settings export (SettingsPageModel). -->
+  <!-- Settings: the tabs and rows come from the game's settings export (SettingsPageModel). -->
   <StackPanel Spacing="14">
-    <Grid ColumnDefinitions="Auto,*">
+    <Grid ColumnDefinitions="Auto,*,Auto">
       <Button x:Name="BackButton" Grid.Column="0" Classes="secondary" Content="Back" />
       <TextBlock Grid.Column="1" FontSize="30" FontWeight="Bold" Foreground="White" Text="Settings"
                  VerticalAlignment="Center" Margin="18,0,0,0" />
+      <Button x:Name="ResetButton" Grid.Column="2" Classes="secondary" Content="Reset to defaults" IsVisible="False" />
     </Grid>
     <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" IsVisible="False" />
     <TextBlock x:Name="ErrorText" Classes="error" TextAlignment="Left" IsVisible="False" />
-    <StackPanel x:Name="RowsHost" Spacing="12" />
+    <TabControl x:Name="Tabs" IsVisible="False" />
     <TextBlock x:Name="InGameNoteText" Classes="small" TextAlignment="Left" />
   </StackPanel>
 </UserControl>

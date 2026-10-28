@@ -2,15 +2,24 @@
 // keeping a copy (`topspin4.exe --print-settings-schema`, ticket 02). Adapted from WWE All Stars'
 // settings/schema.h (ADR-0004).
 //
-// Format 1, one setting per line in registry order. settings_file_version is the version the
+// Format 2, one setting per line in registry order. settings_file_version is the version the
 // game writes into the Settings file (CurrentVersion in config_file.h), for the launcher to use
 // instead of keeping its own:
-//   {"format": 1, "settings_file_version": 1, "sections": ["Graphics", "Controls"], "settings": [
+//   {"format": 2, "settings_file_version": 2, "sections": ["Graphics", "Controls"],
+//    "preset_section": "Graphics", "preset_label": "Graphics preset", "preset_help": "...",
+//    "presets": [{"value": "original", "label": "Original",
+//                 "values": {"ts4_msaa": "original", ...}}, ...],
+//    "settings": [
 //     {"key": "ts4_msaa", "kind": "choice", "default": "original",
-//      "choices": ["original", "4", "8"], "applies_when": "now", "renderers": "native",
-//      "section": "Graphics", "label": "MSAA", "order": 30, "help": "..."}, ...]}
-// kind is choice, bool or text; choices is empty unless the kind is choice; applies_when is now
-// or next_start; renderers is both or native.
+//      "choices": ["original", "4", "8"], "choice_labels": ["Original", "4x", "8x"],
+//      "applies_when": "now", "renderers": "native", "section": "Graphics", "label": "MSAA",
+//      "order": 30, "help": "...", "binding": null}, ...]}
+// kind is choice, bool or text; choices is empty unless the kind is choice; choice_labels are the
+// choices as the in-game page names them, one each; applies_when is now or next_start; renderers
+// is both or native. binding is null, or {"device": "pad" | "keyboard", "action": "LS click"} for a
+// controller or key binding (what it is for, without the device). presets are the Graphics
+// Presets in page order, each with the value of every setting it covers (custom is derived, never
+// listed); the Preset row sits at the top of preset_section.
 
 #pragma once
 
@@ -24,12 +33,13 @@
 #include <rex/cvar.h>
 
 #include "settings/config_file.h"
+#include "settings/presets.h"
 #include "settings/registry.h"
 
 namespace topspin4::settings {
 
 // The export's format; a reader refuses any other.
-inline constexpr int kSchemaFormat = 1;
+inline constexpr int kSchemaFormat = 2;
 
 // The command-line switch that prints the schema and exits before any window or the runtime.
 inline constexpr std::string_view kPrintSchemaSwitch = "--print-settings-schema";
@@ -99,6 +109,20 @@ inline std::string SchemaJson(const AppliesLookup& applies = AppliesFromCvar) {
   for (size_t i = 0; i < std::size(kSections); ++i) {
     out += (i ? ", " : "") + JsonString(SectionName(kSections[i]));
   }
+  out += "],\n \"preset_section\": " + JsonString(SectionName(Section::kGraphics));
+  out += ", \"preset_label\": " + JsonString(kPresetLabel);
+  out += ", \"preset_help\": " + JsonString(PresetHelp());
+  out += ",\n \"presets\": [";
+  const std::vector<Preset>& presets = GraphicsPresets();
+  for (size_t p = 0; p < presets.size(); ++p) {
+    out += (p ? ", " : "") + std::string("{\"value\": ") + JsonString(presets[p].value) +
+           ", \"label\": " + JsonString(presets[p].label) + ", \"values\": {";
+    for (size_t v = 0; v < presets[p].values.size(); ++v) {
+      out += (v ? ", " : "") + JsonString(presets[p].values[v].first) + ": " +
+             JsonString(presets[p].values[v].second);
+    }
+    out += "}}";
+  }
   out += "],\n \"settings\": [\n";
   const std::vector<Setting>& settings = PlayerSettings();
   for (size_t i = 0; i < settings.size(); ++i) {
@@ -110,6 +134,10 @@ inline std::string SchemaJson(const AppliesLookup& applies = AppliesFromCvar) {
     for (size_t c = 0; c < setting.choices.size(); ++c) {
       out += (c ? ", " : "") + JsonString(setting.choices[c]);
     }
+    out += "], \"choice_labels\": [";
+    for (size_t c = 0; c < setting.choices.size(); ++c) {
+      out += (c ? ", " : "") + JsonString(ChoiceLabel(setting, setting.choices[c]));
+    }
     out += "], \"applies_when\": " +
            JsonString(AppliesName(applies(setting.key).value_or(Applies::kNextStart)));
     out += std::string(", \"renderers\": ") +
@@ -117,7 +145,13 @@ inline std::string SchemaJson(const AppliesLookup& applies = AppliesFromCvar) {
     out += ", \"section\": " + JsonString(SectionName(setting.section));
     out += ", \"label\": " + JsonString(setting.label);
     out += ", \"order\": " + std::to_string(setting.order);
-    out += ", \"help\": " + JsonString(setting.help) + "}";
+    out += ", \"help\": " + JsonString(setting.help);
+    const BindingInfo binding = BindingOf(setting);
+    out += ", \"binding\": ";
+    out += binding.device.empty() ? std::string("null")
+                                  : "{\"device\": " + JsonString(binding.device) +
+                                        ", \"action\": " + JsonString(binding.action) + "}";
+    out += "}";
     out += i + 1 < settings.size() ? ",\n" : "\n";
   }
   return out + " ]}\n";

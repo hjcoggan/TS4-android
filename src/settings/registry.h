@@ -5,6 +5,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -118,6 +119,44 @@ inline constexpr std::string_view kPadLabels[pad::kInputCount] = {
     "Pad: D-pad up", "Pad: D-pad down", "Pad: D-pad left", "Pad: D-pad right"};
 
 }  // namespace detail
+
+// A value as the settings page shows it: On and Off, "4x", "LS click", "Original". Here, not in
+// the page model, so the settings export can carry the same labels to the launcher.
+inline std::string ChoiceLabel(const Setting& setting, std::string_view value) {
+  if (setting.kind == Setting::Kind::kBool) return value == "true" ? "On" : "Off";
+  if (value.empty()) return "Not set";
+  if (setting.kind == Setting::Kind::kText) return std::string(value);
+  if (setting.key.starts_with("ts4_pad_")) {
+    for (size_t i = 0; i < pad::kInputCount; ++i) {
+      if (pad::kInputs[i].name == value) {
+        return std::string(detail::kPadLabels[i]).substr(std::string("Pad: ").size());
+      }
+    }
+  }
+  std::string label(value);
+  if (std::all_of(label.begin(), label.end(), [](char c) { return std::isdigit((unsigned char)c); })) {
+    return label + "x";  // resolution scale, MSAA, anisotropic filtering
+  }
+  label[0] = char(std::toupper((unsigned char)label[0]));
+  return label;
+}
+
+// What a binding setting is, for the launcher to show: the device it is for ("pad" or "keyboard")
+// and the game input it is for, as the page's label names it without the device ("LS click",
+// "left stick up"). Empty device for a setting that is not a binding.
+struct BindingInfo {
+  std::string_view device, action;
+};
+inline BindingInfo BindingOf(const Setting& setting) {
+  constexpr std::string_view kPadPrefix = "Pad: ", kKeysPrefix = "Keys: ";
+  if (setting.kind == Setting::Kind::kChoice && setting.key.starts_with("ts4_pad_")) {
+    return {"pad", setting.label.substr(kPadPrefix.size())};
+  }
+  if (setting.kind == Setting::Kind::kText && setting.key.starts_with("keybind_")) {
+    return {"keyboard", setting.label.substr(kKeysPrefix.size())};
+  }
+  return {};
+}
 
 inline const std::vector<Setting>& PlayerSettings() {
   static const std::vector<Setting> settings = [] {
