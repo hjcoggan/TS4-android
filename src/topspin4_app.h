@@ -205,8 +205,10 @@ class TopSpin4App : public rex::ReXApp {
     }
   }
 
-  // The Settings page's fonts (the game's own are ticket 08).
-  void OnConfigureFonts(ImFontAtlas* atlas) override { topspin4::settings::AddFonts(atlas); }
+  // The Settings page's font: the game's own, from the player's game data.
+  void OnConfigureFonts(ImFontAtlas* atlas) override {
+    topspin4::settings::AddFonts(atlas, game_data_root());
+  }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
     topspin4::native::ApplyImageSettings();

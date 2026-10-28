@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cfloat>
 #include <chrono>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,9 @@
 
 #include "native/native_renderer.h"
 #include "settings/config_file.h"
+#include "settings/open_combo.h"
+#include "settings/options_row_sink.h"
+#include "settings/page_style.h"
 #include "settings/registry.h"
 
 namespace topspin4::settings {
@@ -36,22 +40,17 @@ struct State {
   ImFont* heading = nullptr;
   ImFont* body = nullptr;
   pad::Bindings bindings = pad::Bindings::Default();  // what the game's input system was built with
+  OpenComboLatch combo;
+  std::mutex combo_mutex;
 } g;
 
-// Colours of the game's OPTIONS screens (as sampled for WWE All Stars; Top Spin 4's own are
-// ticket 08).
-constexpr ImU32 kWhite = IM_COL32(255, 255, 255, 255);
-constexpr ImU32 kGold = IM_COL32(250, 200, 40, 255);
-constexpr ImU32 kGrey = IM_COL32(140, 152, 175, 255);
-constexpr ImU32 kDim = IM_COL32(85, 94, 112, 255);
-constexpr ImU32 kLaunchOrange = IM_COL32(255, 150, 60, 255);
-constexpr ImU32 kPanelTop = IM_COL32(6, 16, 48, 255), kPanelBottom = IM_COL32(2, 6, 22, 255);
-constexpr ImU32 kBarTop = IM_COL32(40, 120, 230, 245), kBarBottom = IM_COL32(10, 55, 150, 245);
-constexpr ImU32 kBarIdle = IM_COL32(14, 32, 78, 205);
-constexpr ImU32 kRuleOrange = IM_COL32(255, 140, 20, 255);
+// The page's colours are Top Spin 4's (settings/page_style.h).
+constexpr const style::Palette& kPalette = style::kTopSpinPalette;
+constexpr ImU32 Col(style::Rgba color) { return color.Packed(); }
 
 // Maps the game's 1280x720 frame into the window the way Native shows the game: stretched to
-// fill it. x follows the width, y and text sizes follow the height, so text keeps its shape.
+// fill it. x follows the width, y and text sizes follow the height (so a 1280x800 window scales
+// the text by 800/720 and the rows still fit), and text keeps its shape.
 struct Frame {
   float scale_x;
   float scale;
@@ -64,10 +63,10 @@ Frame GameFrame() {
 }
 
 void Rule(ImDrawList* draw, const Frame& f, float y) {
-  const ImU32 clear = IM_COL32(255, 140, 20, 0);
-  const ImVec2 a = f.At(110, y), m = f.At(435, y + 3), b = f.At(760, y);
-  draw->AddRectFilledMultiColor(a, {m.x, m.y}, clear, kRuleOrange, kRuleOrange, clear);
-  draw->AddRectFilledMultiColor({m.x, a.y}, {b.x, m.y}, kRuleOrange, clear, clear, kRuleOrange);
+  const ImU32 line = Col(kPalette.rule), clear = Col(kPalette.rule.WithAlpha(0));
+  const ImVec2 a = f.At(110, y), m = f.At(435, y + 2), b = f.At(760, y);
+  draw->AddRectFilledMultiColor(a, {m.x, m.y}, clear, line, line, clear);
+  draw->AddRectFilledMultiColor({m.x, a.y}, {b.x, m.y}, line, clear, clear, line);
 }
 
 void Text(ImDrawList* draw, ImFont* font, float size, const Frame& f, float x, float y, ImU32 color,
@@ -81,11 +80,26 @@ float TextWidth(ImFont* font, float size, const Frame& f, const std::string& tex
   return font->CalcTextSizeA(size, FLT_MAX, 0, text.c_str()).x * f.scale / f.scale_x;
 }
 
-void Arrow(ImDrawList* draw, const Frame& f, float x, float y, bool left) {
+// Text no wider than max_width (frame units): shrunk to fit, with an optional shadow, which the
+// game draws under the white text of its selected row.
+void FitText(ImDrawList* draw, ImFont* font, float size, const Frame& f, float x, float y,
+             float max_width, ImU32 color, const std::string& text, const style::Rgba* shadow = nullptr) {
+  const float fit = style::FitSize(size, TextWidth(font, size, f, text), max_width);
+  if (shadow) Text(draw, font, fit, f, x + 1.2f, y + 1.5f, Col(*shadow), text);
+  Text(draw, font, fit, f, x, y, color, text);
+}
+
+// The width the text takes once fitted to max_width.
+float FittedWidth(ImFont* font, float size, const Frame& f, float max_width, const std::string& text) {
+  const float width = TextWidth(font, size, f, text);
+  return width * style::FitSize(size, width, max_width) / size;
+}
+
+void Arrow(ImDrawList* draw, const Frame& f, float x, float y, bool left, ImU32 color) {
   const float w = 12, h = 13;
   const ImVec2 tip = f.At(left ? x : x + w, y);
   const ImVec2 top = f.At(left ? x + w : x, y - h), bottom = f.At(left ? x + w : x, y + h);
-  draw->AddTriangleFilled(tip, top, bottom, kGold);
+  draw->AddTriangleFilled(tip, top, bottom, color);
 }
 
 uint64_t NowMs() {
@@ -236,25 +250,28 @@ class PageDialog final : public rex::ui::ImGuiDialog {
   void DrawPage() {
     ImDrawList* draw = ImGui::GetForegroundDrawList();
     const Frame f = GameFrame();
-    draw->AddRectFilledMultiColor(f.At(90, 30), f.At(780, 714), kPanelTop, kPanelTop, kPanelBottom,
-                                  kPanelBottom);
-    draw->AddRect(f.At(90, 30), f.At(780, 714), IM_COL32(60, 110, 200, 160), 0, 0, 1.5f * f.scale);
-    Text(draw, g.heading, 46, f, 118, 88, kWhite, "PC SETTINGS");
+    const ImU32 panel_top = Col(kPalette.panel_top), panel_bottom = Col(kPalette.panel_bottom);
+    draw->AddRectFilledMultiColor(f.At(90, 30), f.At(780, 714), panel_top, panel_top, panel_bottom,
+                                  panel_bottom);
+    draw->AddRect(f.At(90, 30), f.At(780, 714), Col(kPalette.panel_edge), 0, 0, 1.5f * f.scale);
+    const style::Rgba shadow = kPalette.selected_shadow;
+    FitText(draw, g.heading, 44, f, 118, 78, 630, Col(kPalette.heading), "PC SETTINGS", &shadow);
     Rule(draw, f, 140);
 
     const std::vector<Section>& sections = model_.model().sections();
+    const ImU32 tab_idle = Col(kPalette.tab_idle), tab_active = Col(kPalette.tab_active);
     if (sections.size() > 1) {
       float x = 130;
-      Text(draw, g.heading, 24, f, x, 150, kGrey, "LB");
-      x += 44;
+      Text(draw, g.heading, 24, f, x, 148, tab_idle, "LB");
+      x += 48;
       for (size_t s = 0; s < sections.size(); ++s) {
         const std::string name(SectionName(sections[s]));
-        Text(draw, g.heading, 24, f, x, 150, s == model_.section_index() ? kGold : kGrey, name);
-        x += TextWidth(g.heading, 24, f, name) + 26;
+        Text(draw, g.heading, 24, f, x, 148, s == model_.section_index() ? tab_active : tab_idle, name);
+        x += TextWidth(g.heading, 24, f, name) + 28;
       }
-      Text(draw, g.heading, 24, f, x, 150, kGrey, "RB");
+      Text(draw, g.heading, 24, f, x, 148, tab_idle, "RB");
     } else {
-      Text(draw, g.heading, 24, f, 130, 150, kGold, std::string(SectionName(model_.section())));
+      Text(draw, g.heading, 24, f, 130, 148, tab_active, std::string(SectionName(model_.section())));
     }
 
     // Rows fill y 188..564 above the rule: 56 apart, closer with seven; a longer list (Controls)
@@ -270,11 +287,13 @@ class PageDialog final : public rex::ui::ImGuiDialog {
                        rows.size() - kVisible);
     const float step = std::min(56.0f, 376.0f / float(std::max<size_t>(shown, 1)));
     const float bar = step - 8;
-    const float label_size = std::min(32.0f, bar - 6), value_size = std::min(30.0f, bar - 8);
-    const float inset = (bar - label_size - 2) / 2;
+    // Labels take x 140..440 and values 470..710 between the arrows; either shrinks to fit.
+    const float label_size = std::min(28.0f, bar - 8), value_size = std::min(28.0f, bar - 8);
+    const float inset = (bar - label_size * 1.2f) / 2;
+    constexpr float kLabelX = 140, kLabelWidth = 300, kValueCenter = 590, kValueWidth = 240;
     float y = 188;
     if (rows.size() > kVisible) {
-      Text(draw, g.body, 21, f, 640, 152, kGrey,
+      Text(draw, g.body, 21, f, 640, 152, tab_idle,
            std::to_string(selected_row + 1) + " / " + std::to_string(rows.size()));
     }
     for (size_t i = first; i < first + shown; ++i) {
@@ -283,27 +302,38 @@ class PageDialog final : public rex::ui::ImGuiDialog {
       const bool waiting = model_.capturing() && model_.capture_key() == row.key;
       const ImVec2 a = f.At(120, y), b = f.At(750, y + bar);
       if (selected) {
-        draw->AddRectFilledMultiColor(a, b, kBarTop, kBarTop, kBarBottom, kBarBottom);
-        draw->AddLine(a, {b.x, a.y}, IM_COL32(150, 210, 255, 255), 2 * f.scale);
+        const ImU32 top = Col(kPalette.bar_top), bottom = Col(kPalette.bar_bottom);
+        draw->AddRectFilledMultiColor(a, b, top, top, bottom, bottom);
+        draw->AddRect(a, b, Col(kPalette.bar_edge), 0, 0, 1.5f * f.scale);
       } else {
-        draw->AddRectFilled(a, b, kBarIdle);
+        const ImU32 top = Col(kPalette.idle_top), bottom = Col(kPalette.idle_bottom);
+        draw->AddRectFilledMultiColor(a, b, top, top, bottom, bottom);
       }
-      ImU32 color = selected ? kGold : kGrey;
-      if (!row.available) color = kDim;
-      Text(draw, g.heading, label_size, f, 140, y + inset, color, row.label);
+      // The game's selected row is white text with a shadow on orange; the others are dark text
+      // on white.
+      const style::Rgba* text_shadow = selected ? &shadow : nullptr;
+      ImU32 color = Col(selected ? kPalette.selected_text : kPalette.idle_text);
+      if (!row.available) color = Col(selected ? kPalette.selected_text.WithAlpha(190) : kPalette.disabled_text);
       std::string value = row.available ? row.value_label : "Unavailable";
       if (row.pending) value += " *";
       if (waiting) value = "Press a key...";
-      const float width = TextWidth(g.heading, value_size, f, value);
-      ImU32 value_color = selected ? kWhite : kGrey;
-      if (!row.available) value_color = kDim;
-      if (row.mark == Mark::kLaunchOption || row.mark == Mark::kSafeStart) {
-        value_color = kLaunchOrange;
+      ImU32 value_color = Col(selected ? kPalette.selected_text : kPalette.idle_value);
+      if (!row.available) value_color = color;
+      if (!selected && (row.mark == Mark::kLaunchOption || row.mark == Mark::kSafeStart)) {
+        value_color = Col(kPalette.launch_mark);
       }
-      Text(draw, g.heading, value_size, f, 600 - width / 2, y + inset + 1, value_color, value);
+      // Clipped to the bar as a last resort, so no text ever spills over a neighbouring row.
+      draw->PushClipRect(a, b, true);
+      FitText(draw, g.heading, label_size, f, kLabelX, y + inset, kLabelWidth, color, row.label,
+              text_shadow);
+      const float width = FittedWidth(g.heading, value_size, f, kValueWidth, value);
+      FitText(draw, g.heading, value_size, f, kValueCenter - width / 2, y + inset, kValueWidth,
+              value_color, value, text_shadow);
+      draw->PopClipRect();
       if (selected && row.editable && !row.capture && row.kind != RowKind::kAction) {
-        Arrow(draw, f, 492, y + bar / 2, true);
-        Arrow(draw, f, 686, y + bar / 2, false);
+        const ImU32 arrow = Col(kPalette.selected_text);
+        Arrow(draw, f, 452, y + bar / 2, true, arrow);
+        Arrow(draw, f, 716, y + bar / 2, false, arrow);
       }
       y += step;
     }
@@ -314,14 +344,23 @@ class PageDialog final : public rex::ui::ImGuiDialog {
     std::string help = row.help;
     if (row.capture) help += " Press A, then the key to use (Esc or B cancels).";
     if (row.kind == RowKind::kAction) help += " Press A to reset.";
-    Text(draw, g.body, 21, f, 118, 578, kWhite, help, 620);
+    // The help and the note under it must end above the panel's edge (y 714): the size drops a
+    // point at a time until both fit, so a long description or note is never cut off.
     ImFont* body = g.body ? g.body : ImGui::GetFont();
-    const float help_bottom =
-        578 + body->CalcTextSizeA(21 * f.scale, FLT_MAX, 620 * f.scale_x, help.c_str()).y /
-                  f.scale;
-    const float note_y = std::max(640.0f, help_bottom + 6);
+    auto height = [&](float size, const std::string& text) {
+      if (text.empty()) return 0.0f;
+      return body->CalcTextSizeA(size * f.scale, FLT_MAX, 620 * f.scale_x, text.c_str()).y / f.scale;
+    };
+    constexpr float kTextTop = 578, kTextBottom = 706, kGap = 6;
+    float size = 21;
+    while (size > 14 && kTextTop + height(size, help) + (row.note.empty() ? 0 : kGap) +
+                                height(size, row.note) > kTextBottom) {
+      size -= 1;
+    }
+    Text(draw, g.body, size, f, 118, kTextTop, Col(kPalette.heading), help, 620);
     if (!row.note.empty()) {
-      Text(draw, g.body, 21, f, 118, note_y, row.pending ? kGold : kGrey, row.note, 620);
+      Text(draw, g.body, size, f, 118, kTextTop + height(size, help) + kGap,
+           Col(row.pending ? kPalette.note_pending : kPalette.note), row.note, 620);
     }
   }
 
@@ -341,8 +380,47 @@ void Toggle() {
   }
 }
 
-// Guest thread, on every pad poll: holds the game's input while the page is open.
-bool HoldGuestInput() { return g.hold; }
+// Guest thread. Holds the game's input at once, so the press that asked never reaches the game
+// (the dialog that follows also holds), and opens the page on the UI thread.
+void RequestOpenFromGuest() {
+  if (!g.drawer || !g.run_on_ui) return;
+  if (g.hold.exchange(true)) return;  // already open, or opening
+  g.run_on_ui([] {
+    OpenPage();
+    if (!g.dialog) g.hold = false;
+  });
+}
+
+// Guest thread, on every pad poll: holds the game's input while the page is open, and opens it
+// when the pad combo goes down. This runs after the poll's real state is stored, so the poll that
+// sees Back and Start together is already held and the game never sees them.
+bool HoldGuestInput() {
+  uint16_t buttons = 0;
+  rex::input::X_INPUT_STATE state = {};
+  if (g.input && g.input->HeldState(0, &state)) {
+    // The page and its combo work on the physical pad, so a remap cannot move them.
+    topspin4::pad::Pad game;
+    game.buttons = state.gamepad.buttons;
+    buttons = topspin4::pad::Unmap(game, g.bindings).buttons;
+  }
+  bool combo_pressed;
+  {
+    std::lock_guard lock(g.combo_mutex);  // the hold runs on any thread that polls the pad
+    combo_pressed = g.combo.Update(buttons);
+  }
+  if (combo_pressed && !g.hold) {
+    REXLOG_INFO("settings page: opened with the pad combo (Back + Start)");
+    RequestOpenFromGuest();
+  }
+  return g.hold;
+}
+
+void RequestOptionsRowOpen() {
+  REXLOG_INFO("settings page: opened from the OPTIONS row");
+  RequestOpenFromGuest();
+}
+
+void LogOptionsRow(const char* message) { REXLOG_INFO("{}", message); }
 
 }  // namespace
 
@@ -363,12 +441,24 @@ std::string SessionReportJson() {
   return SessionSettingsJson(g.session.safe_start, CurrentPreset());
 }
 
-void AddFonts(ImFontAtlas* atlas) {
-  // Sizes cover a 1440p window without upscaling the glyphs much.
-  const char* heading = "C:/Windows/Fonts/impact.ttf";
-  const char* body = "C:/Windows/Fonts/segoeuib.ttf";
-  if (std::filesystem::exists(heading)) g.heading = atlas->AddFontFromFileTTF(heading, 64.0f);
-  if (std::filesystem::exists(body)) g.body = atlas->AddFontFromFileTTF(body, 40.0f);
+void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root) {
+  // The game's own UI font from the player's data; if it is missing, Segoe UI Bold when Windows
+  // has it, else ImGui's built-in font (the page draws with whatever it got). Sizes cover a 1440p
+  // window without upscaling the glyphs much.
+  std::error_code error;
+  std::filesystem::path file = style::GameFontPath(game_data_root);
+  if (game_data_root.empty() || !std::filesystem::is_regular_file(file, error)) {
+    REXLOG_WARN("Settings page: the game's font {} is not there, using a fallback", Utf8(file));
+    file = "C:/Windows/Fonts/segoeuib.ttf";
+    if (!std::filesystem::is_regular_file(file, error)) {
+      REXLOG_WARN("Settings page: no fallback font either, using ImGui's built-in one");
+      return;
+    }
+  }
+  const std::string path = Utf8(file);
+  g.heading = atlas->AddFontFromFileTTF(path.c_str(), 64.0f);
+  g.body = atlas->AddFontFromFileTTF(path.c_str(), 40.0f);
+  REXLOG_INFO("Settings page: font {}", path);
 }
 
 void Configure(rex::ui::ImGuiDrawer* drawer, rex::input::InputSystem* input,
@@ -379,6 +469,10 @@ void Configure(rex::ui::ImGuiDrawer* drawer, rex::input::InputSystem* input,
   g.settings_path = settings_path;
   g.run_on_ui = std::move(run_on_ui);
   if (input) input->SetGuestInputHold(HoldGuestInput);
+  // The OPTIONS row's hooks (options_row_hooks.cpp, in the Swing Module's DLL) reach the page here.
+  options_row::RowSink& row_sink = options_row::GetRowSink();
+  row_sink.open_page = RequestOptionsRowOpen;
+  row_sink.log = LogOptionsRow;
   rex::ui::RegisterBind("bind_ts4_settings_page", "F4", "Open the PC SETTINGS page", Toggle);
 }
 

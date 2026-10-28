@@ -1,4 +1,5 @@
-// The in-game Settings page (ticket 03/04): F4 opens it over the game, or a script's
+// The in-game Settings page (ticket 03/04): F4 opens it over the game, so does the pad combo Back +
+// Start (open_combo.h), the OPTIONS menu's PC SETTINGS row (options_row.h) and a script's
 // `set settings_page open`; the controller drives it while the game reads an idle pad (the input
 // hold of patch 0014). The rows come from the pure model (page_model.h). Adapted from WWE All
 // Stars' settings_page (ADR-0004, ADR-0007).
@@ -46,9 +47,9 @@ std::string SessionReportJson();
 // The Graphics Preset in effect now, from the cvars; for the log.
 std::string CurrentPreset();
 
-// Adds the page's fonts (Impact for headings, Segoe UI Bold for help text, when Windows has
-// them). Call from OnConfigureFonts.
-void AddFonts(ImFontAtlas* atlas);
+// Adds the page's font: the game's own (Media\XUI\DroidSans-Bold.ttf in the player's game data),
+// else Segoe UI Bold when Windows has it, else ImGui's built-in font. Call from OnConfigureFonts.
+void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root);
 
 // Registers the F4 bind and the guest input hold. Changes are saved to settings_path. run_on_ui
 // runs a function on the UI thread. Call once the ImGui drawer and the input system exist.
