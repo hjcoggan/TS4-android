@@ -637,3 +637,44 @@ A follow-up RE pass on the TU1 modules answered §4's Scaleform question. Treat 
 - **WWE's technique carries over in outline.** Patch the scene or `.actions` data as it loads, answer the label through the string-table lookup, and catch the activation (`PushScene` or a command handler). **[inferred, unverified]** The cheapest route reuses the Xbox 3D entry: force `Is3DAccessible` true, relabel it, and open the page when `Xbox3DConfig`/`S4Xbox3DDisclaimer` is pushed. This only works if OPTIONS has a 3D row gated by that flag.
 - **Effort [inferred]:** a native row that opens the ImGui page takes 3–5 days with the 3D row, or about 2 weeks if a new row must be added; medium risk. Fully native pages take 4–8 weeks and need a PAM-LZX decompressor and scene/Lua authoring; high risk.
 - **Not known:** the row layout inside the scenes (not decompressed), and whether `.actions` files are Lua source or bytecode.
+
+## Addendum 2 (2026-10-28): OPTIONS scene data and the PC SETTINGS route (ticket 10)
+
+All addresses are in **Swing_DLL** (TU1, Ghidra `TopSpin4TU1/Swing_DLL.xex`). Scenes were decompressed from the player's own archives with throwaway tools (an LZX `.arc` unpacker and a PAM Lua 5.0 disassembler); neither the data nor the tools are committed (ADR-0006).
+
+
+### 1. Archive format (seen)
+- `.arc` header (big-endian): `u32 h0` (data base = h0+4), `0x20`, `count`, `count`, `?`, `dirCount`, `dirCount`, `"PAM-LZX\0"` at 0x1C. Then `count` entries of `{u32 nameHash, u32 offset (relative to h0+4), u32 compSize}` sorted by hash. A directory table and the name strings follow.
+- Each entry has its own header: `"PAM-LZX\0"`, `u32 1`, `u32 0x100000` (window), `u32 uncompSize`, `u32 uncompSize`, 12 bytes, `u32 hdrSize=0x2C`, `u32 crc?`. After that come XMemCompress-style frames: `0xFF u16 unc u16 comp`, or `u16 comp` for a 32 KB frame. libmspack `lzxd` with window_bits=20 decodes all 56 TitleUpdate entries and 645/651 PracticeGroundPart entries. The 6 failures are multi-part textures with larger headers; they don't matter here.
+- Overrides go by name hash. `S4Options_IngameOptions.scene` has hash `44367873` in both PracticeGroundPart.arc and TitleUpdate.arc. TU1 does **not** override `S4MainMenuSubOptions`.
+
+### 2. File formats (seen)
+- `.scene`, `.sceneData` and `.package` are **compiled Lua 5.0 bytecode** (`1B 4C 75 61 50`, big-endian, debug info kept, chunk name `@C:\Data\TS4\Asset\UI\RUI\...\S4X.scene`). PAM changed the opcode set: the VM in `8880E280` dispatches on `cmplwi r29,38` and a jump table at `8880E3E8`, which gives 39 ops. Ops 0–15 are standard (ADD..DIV = 12–15). Ops 16–21 are POW, UNM and 4 extra ops, not resolved. NOT is 22, JMP 24, EQ 25, TEST 28, CALL 29, RETURN 31, FORLOOP 32 (its handler at `8880FA1C` references the "`for' initial value" string), SETLIST/SETLISTO 35/36 (shared handler) and CLOSURE 38.
+- **`.actions` is neither Lua source nor bytecode.** It is a custom binary node graph: `u32 nodeCount`, `u32 size`, an offset table, then nodes such as `If17555`, `Switch17575`, `Case17590`, `True…` and `EXPORT_*`. Nodes reference Lua closures as text, e.g. `self.__Action_43()`, plus scene names and commands (`ChangeScene`, `PushLayer`, `PlaySound`).
+
+### 3. OPTIONS row layout and binding (seen, S4MainMenuSubOptions.scene, PG entry `d5ff0d94`)
+- The list control is `|SubOptions` (ActionPrefix `SubOptions`, `ListProcessInput()`, Up/Down → `SubOptions_SelPrevious/SelNext`).
+- Rows are built at runtime by the ItemList closure P47, not taken from sceneData. `Items = { {Id=<hash>, Enabled=true, MappingTitle='<textID>', __index, __count, __ratio}, … }`. The six rows are GamePlayOptions (-238111021), GamePlayHelpers (525693536), AudioOptions (-641984111), SavingDevice (-1630791758), Achievements (-921459450) and Credits (-1901401886).
+- `ItemMapping = { {Control='ButtonText.textID', SourceAttribute='MappingTitle'} }`, so each label is a string-table text ID.
+- Activation: the A button goes to the `.actions` `Switch17575`. Its Cases test the closures P36–P43 (`currentControl.Items[curSel+1].Id == <hash>`) and branch to that row's action.
+- **There is a ready-made extra row.** `EXPORT_AddMoveCalibrationButton` (P28) does `table.insert(Items, {Id=1751522001, Enabled=true, MappingTitle='PS3MoveCalibrate'}); dirty=true`. P43 tests that Id, and P44 calls `ForceMoveRecalibrate(currentControllerNum)`. The graph node `If17555` evaluates P25, which is `IsMoveController(currentControllerNum)==true`, and appears next to the EXPORT node.
+
+### 4. Xbox 3D row (seen)
+- **OPTIONS has no 3D row.** The 3D toggle is in the **main menu** (`S4MainMenu.scene`, `|MainMenu`). `EXPORT_PatchList` (P51) inserts it when `Is3DAccessible()` is true: Id 1770957945, label `MainButtonTextTwoD`/`MainButtonTextThreeD`. Selecting it runs `EXPORT_SwitchDimension` → native `SwitchDimension`; `S4Xbox3DDisclaimer` is also involved.
+- `Is3DAccessible` also gates `EXPORT_Patch3DCamera` (the CamTv3D camera) in `S4Options_IngameOptions`, both base and TU1. Forcing it true would change gameplay camera options and add a row to the main menu, not to OPTIONS. **Rejected.**
+
+### 5. Recommended route: reuse the PS3 Move calibration row
+1. **Show the row.** Hook `IsMoveController` at **`8877B2B8`**. Today it is a stub (`li r3,0; blr`), registered once at `887C2B34`. Return 1 only when the calling scene is `S4MainMenuSubOptions`. Other callers are S4StartScreen, S4ExhibitionAssignPad, S4ExhibitionPlayerSelect and S4PG_OptionsMenu, and those must keep getting 0. **[inferred]** The scene can be found from the handler context: `ctx[1]` is the scene node used by `SetTextID`, and `881CF4C0(&outStr, node)` gives the owning scene name. **Fallback:** call the action natively, the way `88908660` does: format `"$S4MainMenuSubOptions.EXPORT_AddMoveCalibrationButton()"`, then `881C2A58(881CE2B8(scene), &str, 0)`.
+2. **Label.** Hook the RGui text resolver **`881EC108`** (`(uiMgr, const String* textID, Text* out, …)`; callers include `8820E790` (SetTextID/textID binding) and `881DD8E0`). Call the original. If `*textID == "PS3MoveCalibrate"`, replace `out` with "PC SETTINGS": build it with `8819A5C8` (wide-string ctor), assign with `8819BAD0`, then free with `88151AE0`. String-table lookups take the provider at `+0xF0`, keyed by `88608618(0, textID)`. The `%sStringTable.bin` load is in `887EAB70` (xref `887EABF0`).
+3. **Activation.** Hook `ForceMoveRecalibrate` at **`8877B288`** (stub `li r3,1; blr`, registered once at `887C2D94`) and open the Settings page from it. S4PG_OptionsMenu also references it, but it can only fire if that scene's Move row appears, and item 1 keeps that row hidden.
+- All three stubs exist as `sub_8877B2B8`, `sub_8877B288` and `sub_881EC108` in `generated/swing`, so `REX_HOOK_RAW` can override them.
+
+### 6. Addendum addresses rechecked
+All confirmed. `881D26E8` registers `PushScene` (string xref `881D2CE8`, handler `881D1360`, which calls `88202108(sceneMgr,&name,…)`). `SetTextID` handler is `881D1C48`. `881DC0A8` is a function in the list-node code (the SourceAttribute xrefs are nearby at `881DBDC4` and `881DD520`); its role as row fill was not rechecked. In the `887C1768` registrations: `ApplyProfileOptions` `88794C98`, `SwitchDimension` `8877F078`, `Is3DAccessible` `8877A338` (`lbz r3,0x70(*(88D45A48))`), `LoadProfileOptions` `8879B808`.
+
+### Inferred, not seen
+- That `If17555` (true branch) → `EXPORT_AddMoveCalibrationButton` and `Case17590` → `__Action_44`. The node graph was not fully decoded.
+- That `ctx[1]` is the scene in command handlers.
+- That P47 fills the list before the Move row is inserted, so the row lands last.
+
+Confidence: high on the data layout and the missing 3D row in OPTIONS; medium on the hook route. The first run should log from each of the three hooks.
