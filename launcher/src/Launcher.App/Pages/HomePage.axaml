@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TopSpin4.Launcher.Pages.HomePage">
+  <!-- After setup: PLAY with a status line, the labelled actions, and Safe start under "Trouble starting?". Drawn from HomeModel. -->
+  <StackPanel Spacing="18">
+    <Button x:Name="PlayButton" Classes="play" Content="PLAY" IsDefault="True" />
+    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Center" />
+    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Center" IsVisible="False" />
+
+    <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
+
+    <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18" Margin="0,16,0,0">
+      <StackPanel Spacing="8">
+        <TextBlock x:Name="TroubleHeading" FontSize="20" FontWeight="Bold" Foreground="White" />
+        <TextBlock Classes="small" TextAlignment="Left"
+                   Text="If the game won't start: runs once with the default settings and leaves your settings file unchanged." />
+        <StackPanel x:Name="TroubleHost" Orientation="Horizontal" Spacing="12" />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

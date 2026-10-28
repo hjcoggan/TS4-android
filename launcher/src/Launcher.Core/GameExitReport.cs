@@ -11,6 +11,6 @@ public static class GameExitReport
 
     /// <summary>The message for the player, or null when the exit needs none.</summary>
     public static string? Describe(int exitCode) => exitCode == GpuFailureExitCode
-        ? "The graphics card or its driver stopped working while the game was running. Switch the renderer below, then press Play again."
+        ? "The graphics card or its driver stopped working while the game was running. Switch the renderer in Settings, then press Play again."
         : null;
 }

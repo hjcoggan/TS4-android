@@ -2,51 +2,66 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using TopSpin4.Launcher.Core;
+using TopSpin4.Launcher.Pages;
 using TopSpin4.Launcher.Platform;
 
 namespace TopSpin4.Launcher;
 
 /// <summary>
-/// The Launcher's one window: first-run disc and TU1 setup, then Play. It only draws
-/// <see cref="SetupFlow"/>. Everything is reachable with a pad: the pad is polled
-/// (<see cref="XInputPad"/>) and mapped to focus moves and presses (<see cref="PadNavigator"/>),
-/// and the keyboard's arrow keys do the same.
+/// The Launcher's one window. It owns no behaviour of its own beyond input and starting the
+/// game: <see cref="LauncherShell"/> says which page shows, and each page draws its model
+/// (<see cref="SetupFlow"/>, <see cref="HomeModel"/>, <see cref="SettingsPageModel"/>). Everything
+/// is reachable with a pad: the pad is polled (<see cref="XInputPad"/>) and mapped to focus moves
+/// and presses (<see cref="PadNavigator"/>), and the keyboard's arrow keys do the same.
 /// </summary>
 public partial class MainWindow : Window
 {
-    private readonly SetupFlow _flow;
     private readonly string _launcherDirectory = AppContext.BaseDirectory;
+    private readonly string _settingsPath;
+    private readonly string _gameExe;
+    private readonly SetupFlow _flow;
+    private readonly LauncherShell _shell;
+    private readonly HomeModel _home;
+    private readonly SetupPage _setupPage;
+    private readonly HomePage _homePage;
+    private readonly SettingsPage _settingsPage;
     private readonly PadNavigator _pad = new();
     private readonly DispatcherTimer _padTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private IReadOnlyList<string> _discs = [];
-    private IReadOnlyList<string> _titleUpdates = [];
-    private CancellationTokenSource? _stop;
-    private SetupPhase? _shownPhase;
-    private readonly string _settingsPath;
-    private BeforeStartSettings? _beforeStart;
-    private bool _settingsRequested;
+    private LauncherPage? _shownPage;
     private bool _gameRunning;
 
     public MainWindow()
     {
         InitializeComponent();
         var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? UserDirectories.PreparedDataRoot());
-        _flow = new SetupFlow(new Preparation(cacheRoot));
+        var preparation = new Preparation(cacheRoot);
+        _flow = new SetupFlow(preparation);
+        _shell = new LauncherShell(_flow);
         _settingsPath = SettingsFile.PathIn(Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot()));
-        FindInputs();
+        _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
+        _home = new HomeModel(preparation, _gameExe);
 
-        _flow.Changed += () => Dispatcher.UIThread.Post(Refresh);
-        ChooseDiscButton.Click += async (_, _) => _flow.ChooseDisc(await Pick("Choose your Top Spin 4 disc image", "*.iso")  ?? _flow.DiscPath);
-        ChooseTitleUpdateButton.Click += async (_, _) => _flow.ChooseTitleUpdate(await Pick("Choose Title Update 1", null) ?? _flow.TitleUpdatePath);
-        NextDiscButton.Click += (_, _) => _flow.ChooseDisc(Next(_discs, _flow.DiscPath));
-        NextTitleUpdateButton.Click += (_, _) => _flow.ChooseTitleUpdate(Next(_titleUpdates, _flow.TitleUpdatePath));
-        PrepareButton.Click += async (_, _) => await Prepare();
-        CancelButton.Click += (_, _) => _stop?.Cancel();
-        PlayButton.Click += async (_, _) => await StartGame();
-        SafeStartButton.Click += async (_, _) => await StartGame(safe: true);
+        var folders = InputFinder.DefaultFolders(_launcherDirectory);
+        var discs = InputFinder.DiscImages(folders);
+        var titleUpdates = InputFinder.TitleUpdates(folders);
+        if (_flow.NeedsDisc && discs.Count > 0) _flow.ChooseDisc(discs[0]);
+        if (_flow.NeedsTitleUpdate && titleUpdates.Count > 0) _flow.ChooseTitleUpdate(titleUpdates[0]);
+
+        _setupPage = new SetupPage(_flow, discs, titleUpdates);
+        _homePage = new HomePage(_home);
+        _settingsPage = new SettingsPage(LoadSettingsPage);
+        PageHost.Children.Add(_setupPage);
+        PageHost.Children.Add(_homePage);
+        PageHost.Children.Add(_settingsPage);
+
+        _shell.Changed += () => Dispatcher.UIThread.Post(Refresh);
+        _homePage.PlayPressed += async () => await StartGame();
+        _homePage.ActionPressed += async action => await OnHomeAction(action);
+        _settingsPage.BackPressed += _shell.Back;
+        // The exe or the prepared folders may change while the window is open; look again when it is used.
+        Activated += (_, _) => Refresh();
 
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         _padTimer.Tick += (_, _) => PollPad();
@@ -55,47 +70,67 @@ public partial class MainWindow : Window
         Refresh();
     }
 
-    // Pre-fills the inputs from the usual folders so a pad-only player rarely has to browse.
-    private void FindInputs()
+    private async Task OnHomeAction(HomeAction action)
     {
-        var folders = InputFinder.DefaultFolders(_launcherDirectory);
-        _discs = InputFinder.DiscImages(folders);
-        _titleUpdates = InputFinder.TitleUpdates(folders);
-        if (_flow.NeedsDisc && _discs.Count > 0) _flow.ChooseDisc(_discs[0]);
-        if (_flow.NeedsTitleUpdate && _titleUpdates.Count > 0) _flow.ChooseTitleUpdate(_titleUpdates[0]);
-    }
-
-    private static string? Next(IReadOnlyList<string> candidates, string? current)
-    {
-        if (candidates.Count == 0) return current;
-        var index = candidates.ToList().FindIndex(path => path == current);
-        return candidates[(index + 1) % candidates.Count];
-    }
-
-    private async Task<string?> Pick(string title, string? pattern)
-    {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        switch (action)
         {
-            Title = title,
-            AllowMultiple = false,
-            FileTypeFilter = pattern is null
-                ? [FilePickerFileTypes.All]
-                : [new FilePickerFileType("Disc image") { Patterns = [pattern] }, FilePickerFileTypes.All],
-        });
-        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            case HomeAction.Settings:
+                _shell.OpenSettings();
+                await _settingsPage.OpenAsync();
+                break;
+            case HomeAction.Help:
+                OpenHelp();
+                break;
+            case HomeAction.OpenLogs:
+                OpenLogs();
+                break;
+            case HomeAction.SafeStart:
+                await StartGame(safe: true);
+                break;
+        }
     }
 
-    private async Task Prepare()
+    // The game's settings export, read once when Settings first opens; a reason instead of rows when it can't be read.
+    private async Task<SettingsPageModel> LoadSettingsPage()
     {
-        _stop = new CancellationTokenSource();
+        if (!File.Exists(_gameExe))
+            return SettingsPageModel.Unavailable($"{LaunchArguments.GameExeName} was not found next to the Launcher, so the game's settings cannot be read.");
         try
         {
-            await _flow.PrepareAsync(_stop.Token);
+            return SettingsPageModel.From(await SettingsExport.ReadAsync(_gameExe), _settingsPath);
         }
-        finally
+        catch (SettingsExportException error)
         {
-            _stop.Dispose();
-            _stop = null;
+            return SettingsPageModel.Unavailable(error.Message);
+        }
+    }
+
+    private void OpenHelp()
+    {
+        if (HelpDocument.Find(_launcherDirectory) is { } readme) Open(readme);
+        else _home.Say($"{HelpDocument.FileName} was not found next to the Launcher.");
+        Refresh();
+    }
+
+    private void OpenLogs()
+    {
+        if (_home.LogsFolder is { } logs)
+        {
+            Directory.CreateDirectory(logs);
+            Open(logs);
+        }
+    }
+
+    private void Open(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            _home.Say("Could not open it: " + error.Message);
+            Refresh();
         }
     }
 
@@ -106,14 +141,13 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task StartGame(bool safe = false)
     {
-        if (_flow.Prepared is not { } prepared || _gameRunning) return;
-        var exe = App.Options.GameExe ?? LaunchArguments.FindGameExe(_launcherDirectory);
-        if (exe is null || !File.Exists(exe))
+        if (_home.Prepared is not { } prepared || _gameRunning) return;
+        if (!_home.CanPlay)
         {
-            PlayMessage.Text = $"{LaunchArguments.GameExeName} was not found next to the Launcher. Put the Launcher in the game's folder.";
+            Refresh();
             return;
         }
-        var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(exe))! };
+        var start = new ProcessStartInfo(_gameExe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(_gameExe))! };
         // Only a Launcher started with --user-data points the game elsewhere; otherwise the game finds the same folder itself.
         List<string> extra = [];
         if (App.Options.UserDataRoot is { } userData) extra.Add("--user_data_root=" + Path.GetFullPath(userData));
@@ -127,11 +161,11 @@ public partial class MainWindow : Window
             Hide();
             await game.WaitForExitAsync();
             _gameRunning = false;
-            if (GameExitReport.Describe(game.ExitCode) is { } message)
+            _home.SessionEnded(game.ExitCode);
+            if (_home.Note is not null)
             {
-                PlayMessage.Text = message;
                 Show();
-                PlayButton.Focus(NavigationMethod.Tab);
+                Refresh();
                 return;
             }
             Close();
@@ -139,105 +173,38 @@ public partial class MainWindow : Window
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             _gameRunning = false;
-            PlayMessage.Text = "The game could not be started: " + error.Message;
+            _home.Say("The game could not be started: " + error.Message);
+            Refresh();
         }
     }
 
-    // Reads the game's settings export once, when Play first shows, and draws the before-start settings.
-    private async Task LoadBeforeStartSettings()
-    {
-        var exe = App.Options.GameExe ?? LaunchArguments.FindGameExe(_launcherDirectory);
-        if (exe is null || !File.Exists(exe)) return;
-        try
-        {
-            _beforeStart = new BeforeStartSettings(await SettingsExport.ReadAsync(exe), _settingsPath);
-        }
-        catch (SettingsExportException error)
-        {
-            SettingsMessage.Text = error.Message;
-            SettingsMessage.IsVisible = true;
-            return;
-        }
-        DrawBeforeStartSettings();
-    }
-
-    private void DrawBeforeStartSettings()
-    {
-        if (_beforeStart is not { } settings) return;
-        BeforeStartSettingsHost.Children.Clear();
-        foreach (var setting in settings.Settings)
-        {
-            var row = new StackPanel { Spacing = 4, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
-            var button = new Button { Content = $"{setting.Label}: {settings.ValueOf(setting)}", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
-            button.Classes.Add("secondary");
-            button.Click += (_, _) =>
-            {
-                var change = settings.Cycle(setting);
-                SettingsMessage.Text = BeforeStartSettings.Describe(change);
-                SettingsMessage.IsVisible = change != SettingChange.Saved;
-                button.Content = $"{setting.Label}: {settings.ValueOf(setting)}";
-            };
-            row.Children.Add(button);
-            var help = new TextBlock { Text = setting.Help, TextAlignment = Avalonia.Media.TextAlignment.Center };
-            help.Classes.Add("small");
-            row.Children.Add(help);
-            BeforeStartSettingsHost.Children.Add(row);
-        }
-    }
-
-    // Draws the flow. Focus moves only when the phase changes, so a pad press is never undone.
+    // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.
     private void Refresh()
     {
-        var phase = _flow.Phase;
-        var ready = phase == SetupPhase.Ready;
-        var preparing = phase == SetupPhase.Preparing;
-        SetupView.IsVisible = !ready;
-        PlayView.IsVisible = ready;
-        if (ready && !_settingsRequested)
+        var page = _shell.Page;
+        _setupPage.IsVisible = page == LauncherPage.Setup;
+        _homePage.IsVisible = page == LauncherPage.Home;
+        _settingsPage.IsVisible = page == LauncherPage.Settings;
+        _setupPage.Refresh();
+        _homePage.Refresh();
+        HintText.Text = page switch
         {
-            _settingsRequested = true;
-            _ = LoadBeforeStartSettings();
-        }
+            LauncherPage.Setup => "D-pad or stick: move      A: select      B: stop setup",
+            LauncherPage.Settings => "D-pad or stick: move      A: select      B: back",
+            _ => "D-pad or stick: move      A: select",
+        };
 
-        DiscPanel.IsVisible = _flow.NeedsDisc;
-        TitleUpdatePanel.IsVisible = _flow.NeedsTitleUpdate;
-        DiscPathText.Text = _flow.DiscPath ?? "No disc image chosen";
-        TitleUpdatePathText.Text = _flow.TitleUpdatePath ?? "No Title Update 1 chosen";
-        NextDiscButton.IsVisible = _discs.Count > 1;
-        NextTitleUpdateButton.IsVisible = _titleUpdates.Count > 1;
-        foreach (var button in new[] { ChooseDiscButton, ChooseTitleUpdateButton, NextDiscButton, NextTitleUpdateButton })
-            button.IsEnabled = !preparing;
-
-        PrepareButton.IsVisible = !preparing;
-        PrepareButton.IsEnabled = _flow.CanPrepare;
-        ProgressPanel.IsVisible = preparing;
-        SetupMessage.IsVisible = _flow.Message is not null;
-        SetupMessage.Text = _flow.Message;
-        if (_flow.Progress is { } progress)
-        {
-            SetupProgressBar.Value = progress.Fraction;
-            SetupProgressText.Text = SetupFlow.Describe(progress);
-        }
-        else if (preparing)
-        {
-            SetupProgressBar.Value = 0;
-            SetupProgressText.Text = "Starting";
-        }
-
-        if (phase == _shownPhase) return;
-        _shownPhase = phase;
+        if (page == _shownPage) return;
+        _shownPage = page;
         // After the layout has settled, so the control is visible and enabled.
         Dispatcher.UIThread.Post(() =>
         {
-            Control first = phase switch
+            switch (page)
             {
-                SetupPhase.Ready => PlayButton,
-                SetupPhase.Preparing => CancelButton,
-                _ when _flow.CanPrepare => PrepareButton,
-                _ when _flow.NeedsDisc && _flow.DiscPath is null => ChooseDiscButton,
-                _ => ChooseTitleUpdateButton,
-            };
-            first.Focus(NavigationMethod.Tab);
+                case LauncherPage.Setup: _setupPage.FocusFirst(); break;
+                case LauncherPage.Home: _homePage.FocusFirst(); break;
+                default: _settingsPage.FocusFirst(); break;
+            }
         }, DispatcherPriority.Background);
     }
 
@@ -282,17 +249,23 @@ public partial class MainWindow : Window
                     button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 break;
             case PadAction.Back:
-                _stop?.Cancel();
+                _setupPage.Stop();
+                _shell.Back();
                 break;
         }
     }
 
-    // Every screen is a short list of controls, so previous and next are enough for all four directions.
+    // Every page is a short list of controls, so previous and next are enough for all four directions.
     private void MoveFocus(NavigationDirection direction)
     {
         if (FocusManager?.GetFocusedElement() is not InputElement current)
         {
-            (PlayView.IsVisible ? PlayButton : PrepareButton.IsEnabled ? PrepareButton : ChooseDiscButton).Focus(NavigationMethod.Tab);
+            (_shell.Page switch
+            {
+                LauncherPage.Home => _homePage.EntryControl,
+                LauncherPage.Settings => _settingsPage.EntryControl,
+                _ => _setupPage.EntryControl,
+            }).Focus(NavigationMethod.Tab);
             return;
         }
         KeyboardNavigationHandler.GetNext(current, direction)?.Focus(NavigationMethod.Tab);

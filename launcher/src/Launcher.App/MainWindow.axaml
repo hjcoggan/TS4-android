@@ -9,67 +9,15 @@
     <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14"
                   Width="760" Margin="0,24">
-        <TextBlock Classes="display" Text="TOP SPIN 4" HorizontalAlignment="Center" FontSize="84"
+        <TextBlock Classes="display" Text="TOP SPIN 4" HorizontalAlignment="Center" FontSize="72"
                    LetterSpacing="4" Foreground="{StaticResource BallBrush}" />
         <TextBlock Classes="kicker" Text="RECOMP" HorizontalAlignment="Center" Margin="0,-10,0,8" />
 
-        <!-- First run: prepare the disc and Title Update 1. -->
-        <StackPanel x:Name="SetupView" Spacing="14">
-          <TextBlock Classes="body" TextAlignment="Center"
-                     Text="To play, you need a disc image (.iso) of your own Top Spin 4 Xbox 360 disc and its Title Update 1. Setup checks both and copies the game files once. It never changes your disc image or update file." />
-
-          <Border x:Name="DiscPanel" Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
-            <StackPanel Spacing="8">
-              <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" Text="Disc image" />
-              <TextBlock x:Name="DiscPathText" Classes="small" Text="No disc image chosen" />
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button x:Name="ChooseDiscButton" Classes="secondary" Content="Choose disc image…" />
-                <Button x:Name="NextDiscButton" Classes="secondary" Content="Next one found" IsVisible="False" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-
-          <Border x:Name="TitleUpdatePanel" Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18">
-            <StackPanel Spacing="8">
-              <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" Text="Title Update 1" />
-              <TextBlock x:Name="TitleUpdatePathText" Classes="small" Text="No Title Update 1 chosen" />
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button x:Name="ChooseTitleUpdateButton" Classes="secondary" Content="Choose Title Update 1…" />
-                <Button x:Name="NextTitleUpdateButton" Classes="secondary" Content="Next one found" IsVisible="False" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-
-          <TextBlock x:Name="SetupMessage" Classes="error" TextAlignment="Center" IsVisible="False" />
-
-          <StackPanel x:Name="ProgressPanel" Spacing="8" IsVisible="False">
-            <ProgressBar x:Name="SetupProgressBar" Minimum="0" Maximum="1" Height="14" />
-            <TextBlock x:Name="SetupProgressText" Classes="body" TextAlignment="Center" />
-            <Button x:Name="CancelButton" Classes="secondary" Content="Stop" HorizontalAlignment="Center" />
-          </StackPanel>
-
-          <Button x:Name="PrepareButton" Classes="play" Content="SET UP" IsEnabled="False" />
-        </StackPanel>
-
-        <!-- After setup: Play. -->
-        <StackPanel x:Name="PlayView" Spacing="14" IsVisible="False">
-          <TextBlock x:Name="PlayMessage" Classes="body" TextAlignment="Center"
-                     Text="Everything is ready." />
-          <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
-          <!-- Before-start settings, read from the game's settings export (BeforeStartSettings). -->
-          <StackPanel x:Name="BeforeStartSettingsHost" Spacing="8" />
-          <TextBlock x:Name="SettingsMessage" Classes="error" TextAlignment="Center" IsVisible="False" />
-          <!-- Safe start: one session on the defaults; the Settings file is left alone. -->
-          <StackPanel x:Name="SafeStartHost" Spacing="8" HorizontalAlignment="Center">
-            <Button x:Name="SafeStartButton" Classes="secondary" Content="Safe start" HorizontalAlignment="Center" />
-            <TextBlock Classes="small" TextAlignment="Center"
-                       Text="If the game won't start: runs once with the default settings and leaves your settings file unchanged." />
-          </StackPanel>
-        </StackPanel>
+        <!-- One page at a time: Setup, Home or Settings (LauncherShell). Added by the code behind. -->
+        <Panel x:Name="PageHost" />
       </StackPanel>
     </ScrollViewer>
 
-    <TextBlock Grid.Row="1" Classes="small" HorizontalAlignment="Center" Margin="0,0,0,14"
-               Text="D-pad or stick: move      A: select      B: stop" />
+    <TextBlock x:Name="HintText" Grid.Row="1" Classes="small" HorizontalAlignment="Center" Margin="0,0,0,14" />
   </Grid>
 </Window>
