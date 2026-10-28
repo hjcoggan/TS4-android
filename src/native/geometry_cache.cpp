@@ -8,6 +8,7 @@
 #include <rex/logging.h>
 #include <rex/ui/vulkan/util.h>
 
+#include "native/arena_pair.h"
 #include "native/guest_decode.h"
 #include "native/vk_context.h"
 #include "native/write_watch.h"
@@ -46,6 +47,10 @@ struct Entry {
 struct State {
   VkBuffer arena = VK_NULL_HANDLE;
   VkDeviceMemory arena_memory = VK_NULL_HANDLE;
+  // The other arena, allocated once, which a full arena switches to (arena_pair.h).
+  VkBuffer spare = VK_NULL_HANDLE;
+  VkDeviceMemory spare_memory = VK_NULL_HANDLE;
+  ArenaPair pair{3};  // the renderer's frames in flight
   VkDeviceSize arena_used = 0;
   uint32_t generation = 0;
   bool copied = false;
@@ -56,31 +61,39 @@ struct State {
   std::vector<uint32_t> index_scratch;
 } g;
 
-bool CreateArena() {
+bool CreateArena(VkBuffer& buffer, VkDeviceMemory& memory) {
   return vk_util::CreateDedicatedAllocationBuffer(
       g_vk.device, kArenaSize,
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      vk_util::MemoryPurpose::kDeviceLocal, g.arena, g.arena_memory);
+      vk_util::MemoryPurpose::kDeviceLocal, buffer, memory);
 }
 
-// Space in the arena; a full arena is replaced (retired once frames in
-// flight are done with it), which invalidates every entry.
+bool CreateArena() { return CreateArena(g.arena, g.arena_memory); }
+
+// Space in the arena; a full arena gives way to the spare one (arena_pair.h), or, when that
+// may still be in use, is replaced (retired once frames in flight are done with it). Either
+// invalidates every entry.
 bool AllocateArena(VkDeviceSize size, VkDeviceSize& offset) {
   if (size > kArenaSize / 4) {
     return false;
   }
   offset = (g.arena_used + 15) & ~VkDeviceSize(15);
   if (offset + size > kArenaSize) {
-    Retired retired;
-    retired.buffer = g.arena;
-    retired.memory = g.arena_memory;
-    Retire(std::move(retired));
-    g.arena = VK_NULL_HANDLE;
-    g.arena_memory = VK_NULL_HANDLE;
-    if (!CreateArena()) {
-      REXLOG_ERROR("native renderer: could not replace the geometry arena");
-      return false;
+    if (g.spare && g.pair.Switch(g_vk.frame)) {
+      std::swap(g.arena, g.spare);
+      std::swap(g.arena_memory, g.spare_memory);
+    } else {
+      Retired retired;
+      retired.buffer = g.arena;
+      retired.memory = g.arena_memory;
+      Retire(std::move(retired));
+      g.arena = VK_NULL_HANDLE;
+      g.arena_memory = VK_NULL_HANDLE;
+      if (!CreateArena()) {
+        REXLOG_ERROR("native renderer: could not replace the geometry arena");
+        return false;
+      }
     }
     ++g.generation;
     offset = 0;
@@ -152,6 +165,12 @@ bool Initialize() {
   if (!CreateArena()) {
     REXLOG_WARN("native renderer: no geometry arena; uploading every draw");
     g.arena = VK_NULL_HANDLE;
+    return true;
+  }
+  // Without a spare a full arena is replaced, as before.
+  if (!CreateArena(g.spare, g.spare_memory)) {
+    g.spare = VK_NULL_HANDLE;
+    g.spare_memory = VK_NULL_HANDLE;
   }
   return true;
 }
