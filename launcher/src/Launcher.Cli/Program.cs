@@ -32,7 +32,8 @@ Console.CancelKeyPress += (_, stop) =>
     cancel.Cancel();
 };
 
-var root = Path.GetFullPath(cache ?? UserDirectories.PreparedDataRoot());
+// The command line wins, then the place the Launcher recorded for the game files, then the default folder.
+var root = Path.GetFullPath(cache ?? new GameFilesLocation(UserDirectories.SettingsRoot()).Current(UserDirectories.PreparedDataRoot()));
 var preparation = new Preparation(root);
 var lastLine = "";
 var progress = new Progress(report =>

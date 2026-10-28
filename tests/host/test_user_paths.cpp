@@ -3,6 +3,7 @@
 
 #include <catch_amalgamated.hpp>
 
+#include <fstream>
 #include <map>
 #include <optional>
 #include <string>
@@ -47,4 +48,80 @@ TEST_CASE("The prepared data folders are named as the Launcher names them") {
   // launcher/src/Launcher.Core/Preparation.cs: GameDataFolderName and UpdateDataFolderName.
   CHECK(topspin4::user_paths::kGameDataFolder == "gamedata");
   CHECK(topspin4::user_paths::kUpdateDataFolder == "updatedata");
+}
+
+namespace {
+
+namespace fs = std::filesystem;
+using topspin4::user_paths::PreparedFolder;
+using topspin4::user_paths::ReadLocationFile;
+
+// A scratch folder with a default prepared-data root and another place, each optionally holding
+// a prepared "gamedata" folder.
+struct Places {
+  fs::path root = fs::temp_directory_path() / "ts4-user-paths-test";
+  fs::path default_root = root / "default";
+  fs::path other_root = root / "other";
+  fs::path command_line = root / "dev" / "gamedata";
+
+  Places() { fs::remove_all(root); fs::create_directories(root); }
+  ~Places() { std::error_code error; fs::remove_all(root, error); }
+  static void Prepared(const fs::path& place) { fs::create_directories(place / "gamedata"); }
+};
+
+}  // namespace
+
+TEST_CASE("The prepared-data lookup prefers the command line") {
+  Places places;
+  Places::Prepared(places.default_root);
+  Places::Prepared(places.other_root);
+
+  CHECK(PreparedFolder(places.command_line, places.other_root, places.default_root, "gamedata") ==
+        places.command_line);
+}
+
+TEST_CASE("Without a command line the location file's place comes before the default folder") {
+  Places places;
+  Places::Prepared(places.default_root);
+  Places::Prepared(places.other_root);
+
+  CHECK(PreparedFolder({}, places.other_root, places.default_root, "gamedata") ==
+        places.other_root / "gamedata");
+}
+
+TEST_CASE("Without a command line or a location file the default folder is used") {
+  Places places;
+  Places::Prepared(places.default_root);
+
+  CHECK(PreparedFolder({}, std::nullopt, places.default_root, "gamedata") ==
+        places.default_root / "gamedata");
+}
+
+TEST_CASE("A place with no prepared folder gives nothing, so setup is seen to be missing") {
+  Places places;
+  Places::Prepared(places.default_root);
+
+  // The recorded place is the one the Launcher uses, so a stale default copy is not picked up.
+  CHECK(PreparedFolder({}, places.other_root, places.default_root, "gamedata").empty());
+  CHECK(PreparedFolder({}, std::nullopt, places.other_root, "gamedata").empty());
+}
+
+TEST_CASE("The location file holds one absolute path, which the Launcher writes") {
+  Places places;
+  fs::create_directories(places.root);
+  const auto file = places.root / std::string(topspin4::user_paths::kLocationFileName);
+
+  CHECK_FALSE(ReadLocationFile(file));
+
+  const auto write = [&](const std::string& text) { std::ofstream(file, std::ios::binary) << text; };
+  write(R"(D:\Games\TopSpin4)" "\n");
+  REQUIRE(ReadLocationFile(file));
+  CHECK(*ReadLocationFile(file) == fs::path(LR"(D:\Games\TopSpin4)"));
+  write("\r\n  " R"(D:\Games\TopSpin4)" "  \r\nignored\r\n");
+  CHECK(*ReadLocationFile(file) == fs::path(LR"(D:\Games\TopSpin4)"));
+  write(R"(relative\place)" "\n");
+  CHECK_FALSE(ReadLocationFile(file));
+  write("");
+  CHECK_FALSE(ReadLocationFile(file));
+  CHECK(topspin4::user_paths::kLocationFileName == "game-files-location.txt");
 }

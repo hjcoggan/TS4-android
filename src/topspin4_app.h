@@ -83,12 +83,13 @@ class TopSpin4App : public rex::ReXApp {
       paths.cache_root = topspin4::user_paths::DefaultCacheRoot();
     }
     // Started directly after the Launcher's setup: the prepared disc and TU1 are where the
-    // Launcher left them, unless the command line (or config) names other folders.
+    // Launcher left them (the place its location file records after a move, else the default
+    // folder), unless the command line (or config) names other folders.
     namespace user_paths = topspin4::user_paths;
-    const auto use_prepared = [](std::filesystem::path& root, const auto& folder) {
-      std::error_code error;
-      const auto prepared = user_paths::DefaultPreparedDataRoot() / folder;
-      if (root.empty() && std::filesystem::is_directory(prepared, error)) root = prepared;
+    const auto recorded =
+        user_paths::ReadLocationFile(paths.user_data_root / std::string(user_paths::kLocationFileName));
+    const auto use_prepared = [&](std::filesystem::path& root, const auto& folder) {
+      root = user_paths::PreparedFolder(root, recorded, user_paths::DefaultPreparedDataRoot(), folder);
     };
     use_prepared(paths.game_data_root, user_paths::kGameDataFolder);
     use_prepared(paths.update_data_root, user_paths::kUpdateDataFolder);

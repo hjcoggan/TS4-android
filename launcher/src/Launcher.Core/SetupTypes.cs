@@ -16,6 +16,8 @@ public enum SetupError
     DamagedFile,
     DiskFull,
     NoPermission,
+    /// <summary>The place chosen for the game files cannot hold them (inside the old place, or the same one).</summary>
+    BadPlace,
 }
 
 /// <summary>
@@ -72,6 +74,8 @@ public enum SetupStep
     CheckingExistingFiles,
     Extracting,
     UnpackingTitleUpdate,
+    /// <summary>Copying the prepared folders to a new place (<see cref="Preparation.Move"/>).</summary>
+    MovingFiles,
     Done,
 }
 

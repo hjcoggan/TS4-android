@@ -9,6 +9,9 @@
 
     <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
 
+    <!-- "Game files are in … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
+    <StackPanel x:Name="LocationHost" />
+
     <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18" Margin="0,16,0,0">
       <StackPanel Spacing="8">
         <TextBlock x:Name="TroubleHeading" FontSize="20" FontWeight="Bold" Foreground="White" />

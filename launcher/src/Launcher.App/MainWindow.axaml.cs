@@ -29,6 +29,9 @@ public partial class MainWindow : Window
     private readonly SetupPage _setupPage;
     private readonly HomePage _homePage;
     private readonly SettingsPage _settingsPage;
+    private readonly GameFilesLocationModel _location;
+    private readonly GameFilesLocationPanel _setupLocation;
+    private readonly GameFilesLocationPanel _homeLocation;
     private readonly PadNavigator _pad = new();
     private readonly InputHints _hints = new();
     private Avalonia.Point _pointerAt;
@@ -40,9 +43,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? UserDirectories.PreparedDataRoot());
+        // The command line wins, then the place the player moved the game files to (the location file the
+        // game reads too), then the default folder.
+        var userRoot = Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot());
+        var locationFile = new GameFilesLocation(userRoot);
+        var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? locationFile.Current(UserDirectories.PreparedDataRoot()));
         var preparation = new Preparation(cacheRoot);
-        _settingsPath = SettingsFile.PathIn(Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot()));
+        _location = new GameFilesLocationModel(preparation, locationFile);
+        _settingsPath = SettingsFile.PathIn(userRoot);
         _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
         _home = new HomeModel(preparation, _gameExe);
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
@@ -52,6 +60,11 @@ public partial class MainWindow : Window
         _setupPage = new SetupPage(_flow);
         _homePage = new HomePage(_home);
         _settingsPage = new SettingsPage(LoadSettingsPage);
+        _setupLocation = new GameFilesLocationPanel(_location);
+        _homeLocation = new GameFilesLocationPanel(_location);
+        _setupPage.LocationHost.Children.Add(_setupLocation);
+        _homePage.LocationHost.Children.Add(_homeLocation);
+        _location.Changed += () => Dispatcher.UIThread.Post(Refresh);
         PageHost.Children.Add(_setupPage);
         PageHost.Children.Add(_homePage);
         PageHost.Children.Add(_settingsPage);
@@ -169,7 +182,8 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task StartGame(bool safe = false)
     {
-        if (_home.Prepared is not { } prepared || _gameRunning) return;
+        // Not while the game files are being moved: the old copy is removed at the end of the move.
+        if (_home.Prepared is not { } prepared || _gameRunning || _location.Moving) return;
         if (!_home.CanPlay)
         {
             Refresh();
@@ -215,6 +229,10 @@ public partial class MainWindow : Window
         _settingsPage.IsVisible = page == LauncherPage.Settings;
         _setupPage.Refresh();
         _homePage.Refresh();
+        _setupPage.PrepareButton.IsEnabled = _location.AllowsSetup(_flow);
+        _setupLocation.Refresh();
+        _homeLocation.Refresh();
+        if (_location.Moving) _homePage.PlayButton.IsEnabled = false;
         HintText.Text = InputHints.Text(page, _flow.Busy);
         HintText.IsVisible = _hints.Visible;
         // Enter triggers the default button anywhere in the window, so only the page on show has one.

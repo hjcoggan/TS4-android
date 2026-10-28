@@ -7,6 +7,7 @@
 #pragma once
 
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <optional>
 #include <string>
@@ -55,6 +56,42 @@ std::filesystem::path DefaultPreparedDataRoot();
 // UpdateDataFolderName), mounted as game: and update:.
 inline constexpr std::string_view kGameDataFolder = "gamedata";
 inline constexpr std::string_view kUpdateDataFolder = "updatedata";
+
+// The location file the Launcher writes in the per-user folder (--user_data_root, else
+// DefaultUserDataRoot) when the player moves the prepared files off the default folder
+// (launcher/src/Launcher.Core/GameFilesLocation.cs): one absolute path, the folder that holds
+// the two folders above.
+inline constexpr std::string_view kLocationFileName = "game-files-location.txt";
+
+// The recorded place in that file, or nothing when the file is missing, empty or does not start
+// with an absolute path. Only the first non-empty line counts, with its surrounding blanks cut.
+inline std::optional<std::filesystem::path> ReadLocationFile(const std::filesystem::path& file) {
+  std::ifstream input(file, std::ios::binary);
+  std::string line;
+  while (std::getline(input, line)) {
+    const auto first = line.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) continue;
+    line = line.substr(first, line.find_last_not_of(" \t\r\n") - first + 1);
+    std::filesystem::path place(line);
+    if (place.is_absolute()) return place;
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+// Where the game finds one prepared folder ("gamedata" or "updatedata"): the command line's folder
+// when it gave one, else the place the location file records, else the default prepared-data
+// folder. A recorded place is the one the Launcher uses, so a folder missing there is not looked
+// for in the default place. Empty when the folder is not there: the game is not set up.
+inline std::filesystem::path PreparedFolder(const std::filesystem::path& command_line,
+                                               const std::optional<std::filesystem::path>& recorded_root,
+                                               const std::filesystem::path& default_root,
+                                               std::string_view folder) {
+  if (!command_line.empty()) return command_line;
+  const auto prepared = (recorded_root ? *recorded_root : default_root) / folder;
+  std::error_code error;
+  return std::filesystem::is_directory(prepared, error) ? prepared : std::filesystem::path();
+}
 
 // The shader and pipeline cache: beside the launcher's prepared data under the local app data
 // folder (the same XDG folder under Proton), as it is large and derivable again.

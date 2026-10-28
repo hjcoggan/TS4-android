@@ -58,6 +58,9 @@
 
     <Button x:Name="HelpButton" Classes="link" Content="How do I get these files?" />
 
+    <!-- "Game files go to … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
+    <StackPanel x:Name="LocationHost" />
+
     <TextBlock x:Name="SetupMessage" Classes="error" TextAlignment="Left" IsVisible="False"
                AutomationProperties.LiveSetting="Assertive" />
     <Expander x:Name="MessageDetails" Header="Details" IsVisible="False">
