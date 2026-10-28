@@ -24,6 +24,7 @@ Commands:
   constants EID vs|ps FIRST [COUNT]
                               float4 registers FIRST.. of a draw's guest constants, read
                               through Native's constant pointers (Native captures only)
+  calls EID                   the API calls recorded since the previous action up to action EID
   durations [FROM TO]         GPU time per action on replay (EventGPUDuration): the frame's
                               sum, and the actions FROM..TO (default: the 10 longest)
 """
@@ -259,6 +260,20 @@ def cmd_actions(ctrl, textures, args):
         say(line)
 
 
+def cmd_calls(ctrl, textures, args):
+    """calls EID: every API call recorded since the previous action up to action EID (the state
+    set for a draw: binds, push constants, dynamic state, barriers), in order."""
+    eid = int(args[0])
+    sdfile = ctrl.GetStructuredFile()
+    for a in all_actions(ctrl.GetRootActions(), []):
+        if a.eventId != eid:
+            continue
+        for e in a.events:
+            say(f"  eid {e.eventId} {sdfile.chunks[e.chunkIndex].name}")
+        return
+    say(f"calls: no action {eid}")
+
+
 def cmd_buffer(ctrl, textures, args):
     """buffer ID OFFSET LENGTH EID: nonzero bytes and the first dwords, as of after EID."""
     rid = next(b.resourceId for b in ctrl.GetBuffers() if int(b.resourceId) == int(args[0]))
@@ -392,7 +407,7 @@ def cmd_durations(ctrl, textures, args):
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
             "history": cmd_history, "mesh": cmd_mesh, "present": cmd_present,
             "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer,
-            "constants": cmd_constants, "durations": cmd_durations}
+            "constants": cmd_constants, "durations": cmd_durations, "calls": cmd_calls}
 
 def succeeded(result):
     return getattr(result, "code", result) == rd.ResultCode.Succeeded

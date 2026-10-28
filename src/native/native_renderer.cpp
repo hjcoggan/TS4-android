@@ -35,6 +35,7 @@
 #include <rex/ui/vulkan/util.h>
 #include <rex/ui/presenter.h>
 
+#include "native/core_dynamic_state.h"
 #include "native/debug_labels.h"
 #include "native/geometry_cache.h"
 #include "native/gpu_timer.h"
@@ -441,6 +442,8 @@ struct State {
   bool bound_dynamic = false;
   bool dynamic_set = false;
   parts::DynamicState last_dynamic = {};
+  // Viewport, scissor, blend constants and stencil values set on the main command buffer.
+  CoreDynamicStateCache core_dynamic;
   // Size of the surfaces set with SetRenderTarget, per index.
   uint32_t surface_width[4] = {1280, 1280, 1280, 1280};
   uint32_t surface_height[4] = {720, 720, 720, 720};
@@ -1100,6 +1103,7 @@ void OpenCommandBuffers(FrameSlot& slot) {
   g.last_push = {};
   g.bound_pipeline = VK_NULL_HANDLE;
   g.dynamic_set = false;
+  g.core_dynamic.Reset();
 }
 
 // Ends the slot's command buffers and submits them, uploads first, signalling
@@ -1594,7 +1598,6 @@ void SetDynamicState(const uint8_t* d3d, VkCommandBuffer cb) {
     viewport.x = 0.0f;
     viewport.width = float(g.active_color->width);
   }
-  dfn.vkCmdSetViewport(cb, 0, 1, &viewport);
 
   // The screen scissor intersected with the window scissor, which clips
   // UI such as the menus' scrolling tickers to their boxes.
@@ -1623,29 +1626,54 @@ void SetDynamicState(const uint8_t* d3d, VkCommandBuffer cb) {
   const VkRect2D scissor = {{left, top},
                             {uint32_t(std::max(right - left, 0)),
                              uint32_t(std::max(bottom - top, 0))}};
-  dfn.vkCmdSetScissor(cb, 0, 1, &scissor);
   TRACE("  viewport {:.1f},{:.1f} {:.1f}x{:.1f} scissor {},{} {}x{} (screen {:08X} {:08X} "
         "window {:08X} {:08X})",
         viewport.x, viewport.y, viewport.width, viewport.height, scissor.offset.x,
         scissor.offset.y, scissor.extent.width, scissor.extent.height, tl, br, window_tl,
         window_br);
 
-  float blend_constants[4];
+  CoreDynamicState state;
+  state.viewport = {viewport.x,     viewport.y,        viewport.width,
+                    viewport.height, viewport.minDepth, viewport.maxDepth};
+  state.scissor = {scissor.offset.x, scissor.offset.y, scissor.extent.width,
+                   scissor.extent.height};
   for (uint32_t i = 0; i < 4; ++i) {
-    blend_constants[i] = ReadRegFloat(d3d, RB_BLEND_RED + i);
+    state.blend[i] = ReadRegFloat(d3d, RB_BLEND_RED + i);
   }
-  dfn.vkCmdSetBlendConstants(cb, blend_constants);
   const uint32_t ref_mask = ReadReg(d3d, RB_STENCILREFMASK);
   // With two-sided stencil disabled, both faces use the front reference and masks.
   const uint32_t ref_mask_bf = (ReadReg(d3d, RB_DEPTHCONTROL) & 0x80)
                                  ? ReadReg(d3d, RB_STENCILREFMASK_BF)
                                  : ref_mask;
-  dfn.vkCmdSetStencilReference(cb, VK_STENCIL_FACE_FRONT_BIT, ref_mask & 0xFF);
-  dfn.vkCmdSetStencilCompareMask(cb, VK_STENCIL_FACE_FRONT_BIT, (ref_mask >> 8) & 0xFF);
-  dfn.vkCmdSetStencilWriteMask(cb, VK_STENCIL_FACE_FRONT_BIT, (ref_mask >> 16) & 0xFF);
-  dfn.vkCmdSetStencilReference(cb, VK_STENCIL_FACE_BACK_BIT, ref_mask_bf & 0xFF);
-  dfn.vkCmdSetStencilCompareMask(cb, VK_STENCIL_FACE_BACK_BIT, (ref_mask_bf >> 8) & 0xFF);
-  dfn.vkCmdSetStencilWriteMask(cb, VK_STENCIL_FACE_BACK_BIT, (ref_mask_bf >> 16) & 0xFF);
+  for (int face = 0; face < 2; ++face) {
+    const uint32_t value = face ? ref_mask_bf : ref_mask;
+    state.stencil[face] = {value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF};
+  }
+
+  // Only what changed since the last draw on this command buffer (core_dynamic_state.h).
+  const CoreDynamicStateCache::Changes changed = g.core_dynamic.Update(state);
+  if (changed.viewport) {
+    dfn.vkCmdSetViewport(cb, 0, 1, &viewport);
+  }
+  if (changed.scissor) {
+    dfn.vkCmdSetScissor(cb, 0, 1, &scissor);
+  }
+  if (changed.blend) {
+    dfn.vkCmdSetBlendConstants(cb, state.blend.data());
+  }
+  constexpr VkStencilFaceFlags kFaces[2] = {VK_STENCIL_FACE_FRONT_BIT, VK_STENCIL_FACE_BACK_BIT};
+  for (int face = 0; face < 2; ++face) {
+    const CoreDynamicState::Stencil& s = state.stencil[face];
+    if (changed.reference[face]) {
+      dfn.vkCmdSetStencilReference(cb, kFaces[face], s.reference);
+    }
+    if (changed.compare_mask[face]) {
+      dfn.vkCmdSetStencilCompareMask(cb, kFaces[face], s.compare_mask);
+    }
+    if (changed.write_mask[face]) {
+      dfn.vkCmdSetStencilWriteMask(cb, kFaces[face], s.write_mask);
+    }
+  }
 }
 
 // The library path's dynamic state (parts::DynamicStateOf), set where it
