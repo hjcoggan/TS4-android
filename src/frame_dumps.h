@@ -71,6 +71,22 @@ inline std::string PresentedFileName(uint64_t frame) {
   return fmt::format("frame-{:06}-presented.png", frame);
 }
 
+// FNV-1a over the R, G and B of every 8th pixel of every 8th row of an R8 G8 B8 X8 image: cheap
+// enough to run on every shown frame (--ts4_frame_hash_csv), and a changed picture changes it.
+inline uint64_t SampledFrameHash(const uint8_t* rgbx, uint32_t width, uint32_t height,
+                                 size_t stride) {
+  uint64_t hash = 14695981039346656037ull;
+  for (uint32_t y = 0; y < height; y += 8) {
+    const uint8_t* row = rgbx + y * stride;
+    for (uint32_t x = 0; x < width; x += 8) {
+      for (int c = 0; c < 3; ++c) {
+        hash = (hash ^ row[x * 4 + c]) * 1099511628211ull;
+      }
+    }
+  }
+  return hash;
+}
+
 struct OutputSize {
   uint32_t width = 0;
   uint32_t height = 0;

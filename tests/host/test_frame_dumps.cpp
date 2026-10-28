@@ -101,3 +101,20 @@ TEST_CASE("the image data is stored rows behind filter byte 0, raw") {
   const std::vector<uint8_t> row(png.begin() + z + 7, png.begin() + z + 7 + 7);
   CHECK(row == std::vector<uint8_t>{0, 1, 2, 3, 4, 5, 6});
 }
+
+TEST_CASE("the sampled frame hash tells a changed picture from the same one") {
+  const uint32_t w = 64, h = 32;
+  const size_t stride = w * 4 + 8;  // rows padded past the pixels
+  std::vector<uint8_t> a(stride * h, 0);
+  for (size_t i = 0; i < a.size(); ++i) a[i] = uint8_t(i * 7);
+  std::vector<uint8_t> b = a;
+  CHECK(SampledFrameHash(a.data(), w, h, stride) == SampledFrameHash(b.data(), w, h, stride));
+  // A pixel the 8x8 grid samples changes the hash.
+  b[8 * stride + 8 * 4] ^= 0xFF;
+  CHECK(SampledFrameHash(a.data(), w, h, stride) != SampledFrameHash(b.data(), w, h, stride));
+  // The X byte and the row padding are not part of the picture.
+  std::vector<uint8_t> c = a;
+  c[3] ^= 0xFF;
+  c[w * 4] ^= 0xFF;
+  CHECK(SampledFrameHash(a.data(), w, h, stride) == SampledFrameHash(c.data(), w, h, stride));
+}

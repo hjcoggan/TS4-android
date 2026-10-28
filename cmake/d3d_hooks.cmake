@@ -91,6 +91,12 @@ foreach(_d3d_module Loader_DLL Swing_DLL)
     endif()
 endforeach()
 
+# The movie player's clock, locked to the guest's swaps (src/movie_clock.h).
+if(TARGET topspin4_Loader_DLL)
+    target_sources(topspin4_Loader_DLL PRIVATE src/movie_clock_hook.cpp)
+    target_include_directories(topspin4_Loader_DLL PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+endif()
+
 # The OPTIONS row's hooks (ticket 11) override three Swing functions.
 if(TARGET topspin4_Swing_DLL)
     target_sources(topspin4_Swing_DLL PRIVATE src/settings/options_row_hooks.cpp)
