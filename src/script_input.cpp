@@ -108,8 +108,8 @@ void ScriptInputDriver::ReadDuration(std::istream& in, Step& step) {
   }
 }
 
-void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> frames,
-                        std::function<void(std::string, std::string)> set) {
+void InstallScriptInput(rex::RuntimeConfig& config, ScriptInputDriver::FrameSource frames,
+                        ScriptInputDriver::Setter set) {
   const std::filesystem::path file = REXCVAR_GET(ts4_input_script);
   if (file.empty()) {
     return;

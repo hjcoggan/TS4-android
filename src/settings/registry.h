@@ -18,12 +18,21 @@ inline constexpr std::string_view kRendererNative = "native";
 
 struct Setting {
   enum class Kind { kChoice, kBool, kText };
+  // The renderers a setting does anything on (ADR-0005).
+  enum class Renderers { kBoth, kNativeOnly };
 
   std::string_view key;  // the cvar and the settings file key
   Kind kind;
   std::string_view default_value;
   std::vector<std::string_view> choices;  // kChoice only
   std::string_view help;
+  Renderers renderers = Renderers::kBoth;
+
+  // Whether the setting does anything on this renderer (kRendererClassic or kRendererNative);
+  // the settings page shows one that does not as unavailable.
+  bool AvailableOn(std::string_view renderer) const {
+    return renderers == Renderers::kBoth || renderer == kRendererNative;
+  }
 
   bool Allows(std::string_view value) const {
     if (kind == Kind::kBool) {
@@ -68,10 +77,12 @@ inline const std::vector<Setting>& PlayerSettings() {
       {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3", "4"},
        "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
        "filtered down to the window when larger; auto picks the smallest that covers the "
-       "16:9 area of the window, and follows it. The GPU's limit may clamp it"},
+       "16:9 area of the window, and follows it. The GPU's limit may clamp it",
+       Setting::Renderers::kNativeOnly},
       {"ts4_msaa", Setting::Kind::kChoice, "original", {"original", "4", "8"},
        "MSAA (Native renderer): original (the game's own 2x on its match pass) or more "
-       "samples where the game multisamples, for smoother edges; the GPU's limit may lower it"},
+       "samples where the game multisamples, for smoother edges; the GPU's limit may lower it",
+       Setting::Renderers::kNativeOnly},
       // On both renderers:
       {"ts4_anisotropic_filtering", Setting::Kind::kChoice, "original",
        {"original", "4", "8", "16"},

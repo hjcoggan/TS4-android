@@ -57,12 +57,6 @@
 
 namespace topspin4 {
 
-// With --ts4_input_script set, replace the runtime's input system with one
-// whose only device is a ScriptInputDriver reading that file (user 0), timing
-// frame steps by `frames`. Without it, leave the config alone. `set` commands go to `set`.
-void InstallScriptInput(rex::RuntimeConfig& config, std::function<uint64_t()> frames,
-                        std::function<void(std::string, std::string)> set);
-
 class ScriptInputDriver final : public rex::input::InputDriver {
  public:
   // Monotonic time; tests pass a hand-advanced one.
@@ -133,5 +127,11 @@ class ScriptInputDriver final : public rex::input::InputDriver {
   uint32_t packet_ = 0;
   uint16_t keystroke_buttons_ = 0;  // the buttons GetDeviceKeystroke last reported down
 };
+
+// With --ts4_input_script set, replace the runtime's input system with one
+// whose only device is a ScriptInputDriver reading that file (user 0), timing
+// frame steps by `frames`. Without it, leave the config alone. `set` commands go to `set`.
+void InstallScriptInput(rex::RuntimeConfig& config, ScriptInputDriver::FrameSource frames,
+                        ScriptInputDriver::Setter set);
 
 }  // namespace topspin4

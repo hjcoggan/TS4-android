@@ -370,3 +370,14 @@ TEST_CASE("repacked vertices hold the guest bytes Xenos fetches for each one") {
   CHECK(GuestVertexBytes(3, 16, 32) == 64);
   CHECK(GuestVertexBytes(3, 20, 20) == 60);
 }
+
+TEST_CASE("the window's 16:9 area is the largest that fits, and nothing without a window") {
+  CHECK(FitWindow(1920, 1080).width == 1920);
+  CHECK(FitWindow(1920, 1080).height == 1080);
+  CHECK(FitWindow(3440, 1440).width == 2560);  // ultrawide: bars beside
+  CHECK(FitWindow(3440, 1440).height == 1440);
+  CHECK(FitWindow(1280, 1024).width == 1280);  // 5:4: bars above and below
+  CHECK(FitWindow(1280, 1024).height == 720);
+  CHECK(FitWindow(0, 0).width == 0);
+  CHECK(FitWindow(0, 0).height == 0);
+}

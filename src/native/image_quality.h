@@ -7,11 +7,15 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
+#include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -47,6 +51,28 @@ inline constexpr std::string_view kMsaaChoices[] = {"original", "4", "8"};
 inline constexpr std::string_view kAnisotropicFilteringChoices[] = {"original", "4", "8", "16"};
 inline constexpr std::string_view kSharpeningChoices[] = {"off", "low", "medium", "high"};
 
+// Each image setting in one place: the cvar and settings key, the values it allows and whether
+// only Native applies it. The order is SettingValues'. A test ties the table to
+// settings/registry.h, so a new setting is added there, in settings_cvars.cpp, in SettingValues
+// and Settings, here and in the renderer's kEnhancements.
+struct SettingInfo {
+  std::string_view name;
+  std::span<const std::string_view> choices;
+  bool native_only;
+};
+inline constexpr SettingInfo kSettings[] = {
+    {"ts4_resolution_scale", kResolutionScaleChoices, true},
+    {"ts4_msaa", kMsaaChoices, true},
+    {"ts4_anisotropic_filtering", kAnisotropicFilteringChoices, false},
+    {"ts4_sharpening", kSharpeningChoices, false},
+};
+
+// "Nx" for a level above 0 (a scale, a sample count or a filtering level); else none ("original",
+// "auto").
+inline std::string LevelText(uint32_t level, std::string_view none) {
+  return level ? std::to_string(level) + "x" : std::string(none);
+}
+
 // "N" for a level of N (1..16), by bit_width(N) - 1.
 inline constexpr std::string_view kLevelNames[] = {"1", "2", "4", "8", "16"};
 
@@ -76,22 +102,14 @@ constexpr Settings ParseSettings(const SettingValues& values) {
 // The settings whose value is none the setting allows (a typo on the command line or in a
 // `set`), by cvar name: ParseSettings gives them their default, and the log says so.
 inline std::vector<std::string_view> IgnoredSettings(const SettingValues& values) {
-  struct Allowed {
-    std::string_view name;
-    std::string_view value;
-    std::span<const std::string_view> choices;
-  };
-  const Allowed settings[] = {
-      {"ts4_resolution_scale", values.resolution_scale, kResolutionScaleChoices},
-      {"ts4_msaa", values.msaa, kMsaaChoices},
-      {"ts4_anisotropic_filtering", values.anisotropic_filtering, kAnisotropicFilteringChoices},
-      {"ts4_sharpening", values.sharpening, kSharpeningChoices},
-  };
+  const std::string_view given[] = {values.resolution_scale, values.msaa,
+                                    values.anisotropic_filtering, values.sharpening};
+  static_assert(std::size(given) == std::size(kSettings));
   std::vector<std::string_view> ignored;
-  for (const Allowed& setting : settings) {
-    if (std::find(setting.choices.begin(), setting.choices.end(), setting.value) ==
-        setting.choices.end()) {
-      ignored.push_back(setting.name);
+  for (size_t i = 0; i < std::size(kSettings); ++i) {
+    const std::span<const std::string_view> choices = kSettings[i].choices;
+    if (std::find(choices.begin(), choices.end(), given[i]) == choices.end()) {
+      ignored.push_back(kSettings[i].name);
     }
   }
   return ignored;
@@ -149,8 +167,9 @@ struct Plan {
   guest::OutputPlan output;
   // The global texture sharpness bias (negative is sharper), added to each fetch's own.
   float lod_bias = 0.0f;
+  float max_lod_bias = 2.0f;  // the device's limit on a sampler's total bias
   // In anisotropic_override's form, as both renderers take it: -1 = the game's own filtering,
-  // 3..5 = 4x..16x. The device's maximum clamps it where a sampler is chosen (ChooseSampler).
+  // 0..5 = 1x..16x (the setting writes only 3..5; a developer's override may give any). The device's maximum clamps it where a sampler is chosen (ChooseSampler).
   int32_t texture_filtering = -1;
   guest::CasSetting cas;
   uint32_t msaa = 0;  // as Settings::msaa
@@ -171,20 +190,40 @@ struct Plan {
   }
 };
 
-// Whether the session forces texture filtering on either renderer: the setting's plan_filtering
-// (Plan::texture_filtering), or a --anisotropic_override given directly, which Classic takes
-// over the setting. override_value is that flag's text; -1 is the game's own, and anything that
-// is not a number forces nothing.
-inline bool FilteringForced(int32_t plan_filtering, std::string_view override_value) {
-  int32_t forced = -1;
-  const char* end = override_value.data() + override_value.size();
-  if (std::from_chars(override_value.data(), end, forced).ptr != end) forced = -1;
-  return plan_filtering >= 0 || forced >= 0;
+// The anisotropic_override flag's value, from its text; none when it is not a number (or the
+// flag does not exist), which leaves the setting's.
+inline std::optional<int32_t> ParseFilteringOverride(std::string_view text) {
+  int32_t value = 0;
+  if (text.empty()) return std::nullopt;
+  const char* end = text.data() + text.size();
+  const auto result = std::from_chars(text.data(), end, value);
+  if (result.ec != std::errc() || result.ptr != end) return std::nullopt;
+  return value;
+}
+
+// The filtering both renderers use: the anisotropic_override flag's value when it is a number
+// (the setting writes its own level there; a --anisotropic_override given directly, or set while
+// playing, is a developer's choice that wins), else the plan's (Plan::texture_filtering). -1 is
+// the game's own.
+constexpr int32_t EffectiveFiltering(int32_t plan_filtering,
+                                     std::optional<int32_t> override_value) {
+  return override_value ? *override_value : plan_filtering;
+}
+
+// Whether the session forces texture filtering on either renderer (the report's Enhancement).
+constexpr bool FilteringForced(int32_t plan_filtering, std::optional<int32_t> override_value) {
+  return EffectiveFiltering(plan_filtering, override_value) >= 0;
 }
 
 // Whether a --present_effect given directly sharpens the frame (CAS), as ts4_sharpening does.
 inline bool PresentEffectSharpens(std::string_view present_effect) {
   return present_effect == "cas";
+}
+
+// Whether ts4_sharpening reaches the presenter: only while --present_effect is left at its
+// bilinear default; any other effect is a developer's, and the setting does nothing.
+inline bool SharpeningApplies(std::string_view present_effect) {
+  return present_effect == "bilinear";
 }
 
 // What a fetch's texel offset is multiplied by before the shader divides it by the texture's
@@ -199,11 +238,26 @@ constexpr uint32_t TextureOffsetScale(uint32_t texture_scale, bool resolved) {
 // scaled target must fit in the device's maximum image size.
 inline constexpr uint32_t kLargestTargetSide = 1280;
 
-// The height of the window's 16:9 area, where the presenter shows the frame; 0 without a window.
-constexpr uint32_t FitHeight(uint32_t window_width, uint32_t window_height) {
-  return uint64_t(window_width) * 9 > uint64_t(window_height) * 16
-             ? window_height
-             : uint32_t(uint64_t(window_width) * 9 / 16);
+// A render target the game creates, by its guest size and kind.
+struct TargetShape {
+  uint32_t guest_width = 0;
+  uint32_t guest_height = 0;
+  bool is_depth = false;
+  constexpr bool operator==(const TargetShape&) const = default;
+};
+
+// The targets shown to break when scaled, which stay at 1x whatever the Resolution scale (the
+// spec's per-target pin, as Edge does). Empty: ticket 05 found no target that breaks. Add a
+// target here with the frame evidence for why.
+inline constexpr std::array<TargetShape, 0> kPinnedTargets = {};
+
+// The scale a render target draws at: the plan's, or 1 for a pinned target.
+constexpr uint32_t TargetScale(uint32_t plan_scale, const TargetShape& target,
+                               std::span<const TargetShape> pinned = kPinnedTargets) {
+  for (const TargetShape& pin : pinned) {
+    if (pin == target) return 1;
+  }
+  return plan_scale;
 }
 
 // window_width x window_height: the window's pixel size, 0 before the window has one.
@@ -211,7 +265,7 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
                         const DeviceLimits& device) {
   Plan plan;
   uint32_t requested = settings.resolution_scale;
-  const uint32_t shown_height = FitHeight(window_width, window_height);
+  const uint32_t shown_height = guest::FitWindow(window_width, window_height).height;
   if (requested == kAutoScale) {
     // The 16:9 area is shown_height tall and at most 16/9 of it wide, so covering its height
     // covers its width; bars beside or above it don't count.
@@ -223,11 +277,13 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
   plan.scale = std::min(requested, fits);
   plan.clamped = plan.scale < requested;
   plan.output = guest::PlanOutput(plan.scale, window_width, window_height);
-  // When the presenter scales the frame up, textures are sharpened by as much (the vendors'
-  // upscaler rule without its temporal term); a frame drawn at or above the window is
-  // supersampled, which sharpens them already.
+  // Above 1x, when the presenter still scales the frame up, textures are sharpened by as much
+  // (the vendors' upscaler rule without its temporal term); a frame drawn at or above the window
+  // is supersampled, which sharpens them already. At 1x the bias is 0 whatever the window, so the
+  // default look stays the original's (ADR-0001; owner decision 2026-10-28).
   const uint32_t render_height = 720 * plan.scale;
-  if (shown_height > render_height) {
+  plan.max_lod_bias = device.max_lod_bias;
+  if (plan.scale > 1 && shown_height > render_height) {
     plan.lod_bias = std::max(std::log2(float(render_height) / float(shown_height)),
                              -device.max_lod_bias);
   }

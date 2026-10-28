@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <unordered_set>
 #include <chrono>
@@ -558,8 +559,11 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
   if (const uint32_t debug = REXCVAR_GET(ts4_native_debug_max_image_size)) {
     limits.max_image_size = std::min(limits.max_image_size, debug);
   }
-  // Every device allows a bias of 2 (VkPhysicalDeviceLimits' required minimum).
-  limits.max_lod_bias = 2.0f;
+  // VulkanDevice::Properties does not carry maxSamplerLodBias (Vulkan requires at least 2).
+  VkPhysicalDeviceProperties full = {};
+  device.vulkan_instance()->functions().vkGetPhysicalDeviceProperties(device.physical_device(),
+                                                                      &full);
+  limits.max_lod_bias = full.limits.maxSamplerLodBias;
   limits.sample_counts = image_quality::TargetSampleCounts(
       {.framebuffer_color = p.framebufferColorSampleCounts,
        .framebuffer_depth = p.framebufferDepthSampleCounts,
@@ -568,23 +572,52 @@ image_quality::DeviceLimits LimitsOf(const VulkanDevice& device) {
        .sampled_depth = p.sampledImageDepthSampleCounts,
        .sampled_stencil = p.sampledImageStencilSampleCounts,
        .debug_max_samples = REXCVAR_GET(ts4_native_debug_max_samples)});
-  REXLOG_INFO("native renderer: render targets can have {} samples{}",
+  REXLOG_INFO("image quality: render targets can have {} samples{}; texture sharpness bias "
+              "limit {}",
               SampleCountsText(limits.sample_counts),
               REXCVAR_GET(ts4_native_debug_max_samples) ? " (capped by ts4_native_debug_max_samples)"
-                                                        : "");
+                                                        : "",
+              limits.max_lod_bias);
   if (!p.standardSampleLocations) {
     // XenosRecomp's alpha to mask (patches 0006, 0009) maps guest samples to Vulkan's standard
     // positions; elsewhere alpha-masked surfaces such as foliage may dither differently.
-    REXLOG_WARN("native renderer: this GPU does not use the standard sample positions; "
+    REXLOG_WARN("image quality: this GPU does not use the standard sample positions; "
                 "alpha-to-mask coverage at 2x, 4x and 8x may look different");
   }
   return limits;
 }
 
+// The anisotropic_override flag as a number, for the render thread (the flag's own string is not
+// safe to read while another thread writes it): the setting's level where it owns the flag,
+// else a developer's; kNoFilteringOverride when the flag is not a number. Both renderers follow it.
+constexpr int32_t kNoFilteringOverride = INT32_MIN;
+std::atomic<int32_t> g_filtering_override{kNoFilteringOverride};
+
+std::optional<int32_t> FilteringOverride() {
+  const int32_t value = g_filtering_override.load(std::memory_order_relaxed);
+  return value == kNoFilteringOverride ? std::nullopt : std::optional<int32_t>(value);
+}
+
+// The plan with the window and device unknown: what the image settings alone decide (CAS,
+// texture filtering).
+image_quality::Plan SettingsOnlyPlan() {
+  return image_quality::MakePlan(ImageSettings(), 0, 0, {});
+}
+
+// The CAS the sharpening setting asks for.
+CasSetting SharpeningCas() { return SettingsOnlyPlan().cas; }
+
+// The filtering the setting asks for, in anisotropic_override's form, before any override.
+int32_t SettingFiltering() { return SettingsOnlyPlan().texture_filtering; }
+
 // The plan for the settings and window as they are now.
 image_quality::Plan MakeImagePlan() {
   const uint64_t size = g_window_size.load(std::memory_order_relaxed);
-  return image_quality::MakePlan(ImageSettings(), uint32_t(size >> 32), uint32_t(size), g.limits);
+  image_quality::Plan plan = image_quality::MakePlan(ImageSettings(), uint32_t(size >> 32),
+                                                      uint32_t(size), g.limits);
+  plan.texture_filtering = image_quality::EffectiveFiltering(plan.texture_filtering,
+                                                             FilteringOverride());
+  return plan;
 }
 
 // The samples a target the game creates on this surface gets.
@@ -595,7 +628,7 @@ VkSampleCountFlagBits TargetSamples(uint32_t surface_info) {
   // Any target given fewer samples than asked, the game's own 2x under Original included.
   const uint32_t asked = g.plan.AskedSamples(guest);
   if (samples < asked && g.msaa_fallback_logged != asked) {
-    REXLOG_WARN("native renderer: MSAA {}x is not supported for render targets on this GPU; "
+    REXLOG_WARN("image quality: MSAA {}x is not supported for render targets on this GPU; "
                 "using {}x",
                 asked, samples);
     g.msaa_fallback_logged = asked;
@@ -1101,12 +1134,12 @@ void ApplyResolutionScale() {
     return;
   }
   if (g.plan.clamped) {
-    REXLOG_WARN("native renderer: Resolution scale clamped to {}x: larger targets do not fit "
+    REXLOG_WARN("image quality: Resolution scale clamped to {}x: larger targets do not fit "
                 "the GPU's {}-pixel image limit",
                 g.plan.scale, g.limits.max_image_size);
   }
   if (g.plan.scale != g.scale) {
-    REXLOG_INFO("native renderer: Resolution scale {}x -> {}x at frame {}, render size {}x{}",
+    REXLOG_INFO("image quality: Resolution scale {}x -> {}x at frame {}, render size {}x{}",
                 g.scale, g.plan.scale, g.frame, 1280 * g.plan.scale, 720 * g.plan.scale);
   }
   g.scale = g.plan.scale;
@@ -1124,9 +1157,9 @@ void TakeImagePlan() {
   g.plan = MakeImagePlan();
   if (g.plan.msaa != msaa_before) {
     g.msaa_fallback_logged = 0;  // a new setting's fallback is logged again (8x -> 4x -> 8x)
-    REXLOG_INFO("native renderer: MSAA {} -> {} at frame {}",
-                msaa_before ? fmt::format("{}x", msaa_before) : std::string("original"),
-                g.plan.msaa ? fmt::format("{}x", g.plan.msaa) : std::string("original"), g.frame);
+    REXLOG_INFO("image quality: MSAA {} -> {} at frame {}",
+                image_quality::LevelText(msaa_before, "original"),
+                image_quality::LevelText(g.plan.msaa, "original"), g.frame);
   }
   ApplyResolutionScale();
 }
@@ -1153,7 +1186,7 @@ void BeginFrameIfNeeded() {
     DestroyRetired(g.frame - kFramesInFlight);
   }
   TakeImagePlan();
-  textures::BeginFrame(g.frame, g.plan.texture_filtering, g.plan.lod_bias);
+  textures::BeginFrame(g.frame, g.plan);
   if (g.frame % 300 == 0) {
     textures::EvictUnused(g.frame);
   }
@@ -1241,7 +1274,9 @@ void SubmitDrawAndWait(const uint8_t* d3d, const VertexLayout& layout,
 RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_width,
                               uint32_t guest_height, bool is_depth,
                               VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT) {
-  const uint32_t scale = g.scale;
+  // A target pinned to 1x (image_quality::kPinnedTargets) is not scaled.
+  const uint32_t scale =
+      image_quality::TargetScale(g.scale, {guest_width, guest_height, is_depth});
   const uint32_t width = guest_width * scale;
   const uint32_t height = guest_height * scale;
   std::unique_ptr<RenderTarget>& slot = g.render_targets[key];
@@ -1790,17 +1825,29 @@ bool Requested() { return g_requested; }
 
 namespace {
 
+// Whether ts4_sharpening reaches the presenter this session: false under a developer's
+// --present_effect (image_quality::SharpeningApplies), which leaves the setting without effect.
+bool g_sharpening_applies = true;
+
 // A sharpening change after startup (the PC SETTINGS page, the F6 overlay):
 // the presenter's effect follows at once. Change callbacks run on the thread
 // that sets the cvar (after the new value is stored); the page and the
 // overlay draw on the UI thread, the one the presenter's paint config belongs to.
 void ApplyLiveSharpening() {
+  const CasSetting cas = SharpeningCas();
+  if (!g_sharpening_applies) {
+    // A developer's --present_effect owns the presenter's effect; say so rather than do nothing.
+    REXLOG_WARN("image quality: --present_effect is set; ts4_sharpening {} is not applied",
+                cas.enabled ? cas.sharpness : 0.0);
+    return;
+  }
   auto* graphics = g_runtime ? g_runtime->graphics_system() : nullptr;
   rex::ui::Presenter* presenter = graphics ? graphics->presenter() : nullptr;
   if (!presenter) {
+    REXLOG_WARN("image quality: no presenter yet; ts4_sharpening {} is not applied",
+                cas.enabled ? cas.sharpness : 0.0);
     return;
   }
-  const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
   // The game is built without REX_HAS_FIDELITYFX_SDK, so it never touches the
   // presenter's paint config itself (its layout differs here): the SDK switches it.
   presenter->SetCasFromUIThread(cas.enabled, float(cas.sharpness));
@@ -1808,28 +1855,30 @@ void ApplyLiveSharpening() {
   REXLOG_INFO("image quality: CAS sharpening {} (live)", cas.enabled ? cas.sharpness : 0.0);
 }
 
-// Records whether the setting or a direct --anisotropic_override forces filtering now; called
-// where filtering is set (startup, each change of the setting or of anisotropic_override, on
-// the thread that sets the cvars).
+// Takes anisotropic_override's value for the render thread (g_filtering_override) and records
+// whether it, or the setting, forces filtering now (the Enhancement report). Called where the
+// flag is set (startup, each change of the setting or of the flag, on the thread that sets the
+// cvars). Both renderers follow the flag: the setting's level where it owns the flag, else a
+// developer's --anisotropic_override.
 void NoteFiltering() {
-  if (image_quality::FilteringForced(
-          image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering,
-          rex::cvar::GetFlagByName("anisotropic_override"))) {
+  const std::optional<int32_t> flag = image_quality::ParseFilteringOverride(
+      rex::cvar::GetFlagByName("anisotropic_override"));
+  g_filtering_override = flag.value_or(kNoFilteringOverride);
+  if (image_quality::FilteringForced(SettingFiltering(), flag)) {
     g_filtering_forced = true;
   }
 }
 
-// Classic's texture filtering follows the setting, unless --anisotropic_override was given on
-// the command line or as an environment variable (a developer's choice wins).
+// The anisotropic_override flag follows the setting, unless it was given on the command line or
+// as an environment variable (a developer's choice wins, on both renderers).
 bool g_classic_filtering_owned = false;
 void ApplyClassicFiltering(bool live) {
   if (g_classic_filtering_owned) {
-    const int32_t filtering =
-        image_quality::MakePlan(ImageSettings(), 0, 0, {}).texture_filtering;
+    const int32_t filtering = SettingFiltering();
     rex::cvar::SetFlagByName("anisotropic_override", fmt::format("{}", filtering));
     REXLOG_INFO("image quality: anisotropic filtering {}{}",
-                filtering < 0 ? std::string("original (the game's own)")
-                              : fmt::format("{}x", 1u << (filtering - 1)),
+                image_quality::LevelText(filtering >= 1 ? 1u << (filtering - 1) : 0,
+                                         "original (the game's own)"),
                 live ? " (live)" : "");
   }
   // After anisotropic_override holds the setting's value (until then it holds the SDK's 4x).
@@ -1844,15 +1893,12 @@ void WarnNativeOnly(bool live) {
   if (settings.resolution_scale != 1) {
     REXLOG_WARN("image quality: Resolution scale {} is unavailable on the Classic renderer "
                 "(Native only); drawing at 1x{}",
-                settings.resolution_scale == image_quality::kAutoScale
-                    ? std::string("auto")
-                    : fmt::format("{}x", settings.resolution_scale),
-                when);
+                image_quality::LevelText(settings.resolution_scale, "auto"), when);
   }
   if (settings.msaa != 0) {
-    REXLOG_WARN("image quality: MSAA {}x is unavailable on the Classic renderer (Native only); "
+    REXLOG_WARN("image quality: MSAA {} is unavailable on the Classic renderer (Native only); "
                 "drawing the game's own{}",
-                settings.msaa, when);
+                image_quality::LevelText(settings.msaa, "original"), when);
   }
 }
 
@@ -1861,31 +1907,36 @@ void WarnNativeOnly(bool live) {
 void ApplyImageSettings() {
   PublishImageSettings({});
   // First, so the callbacks below and the render thread see the new value.
-  for (const char* name :
-       {"ts4_resolution_scale", "ts4_msaa", "ts4_anisotropic_filtering", "ts4_sharpening"}) {
+  for (const image_quality::SettingInfo& setting : image_quality::kSettings) {
     rex::cvar::RegisterChangeCallback(
-        name, [](std::string_view changed, std::string_view) { PublishImageSettings(changed); });
+        setting.name,
+        [](std::string_view changed, std::string_view) { PublishImageSettings(changed); });
+    // On Classic, a Native-only setting is just as unavailable when changed while playing
+    // (Native logs its own as it takes it).
+    if (setting.native_only && !g_requested) {
+      rex::cvar::RegisterChangeCallback(
+          setting.name, [](std::string_view, std::string_view) { WarnNativeOnly(true); });
+    }
   }
   if (!g_requested) {
     WarnNativeOnly(false);
-    // A change while playing is just as unavailable (Native logs its own as it takes it).
-    for (const char* name : {"ts4_resolution_scale", "ts4_msaa"}) {
-      rex::cvar::RegisterChangeCallback(
-          name, [](std::string_view, std::string_view) { WarnNativeOnly(true); });
-    }
   }
-  const CasSetting cas = image_quality::MakePlan(ImageSettings(), 0, 0, {}).cas;
+  const CasSetting cas = SharpeningCas();
   const std::string present_effect = rex::cvar::GetFlagByName("present_effect");
-  if (present_effect != "bilinear") {
+  g_sharpening_applies = image_quality::SharpeningApplies(present_effect);
+  // Registered either way, so a live change under a developer's --present_effect says why it
+  // does nothing (ApplyLiveSharpening).
+  rex::cvar::RegisterChangeCallback(
+      "ts4_sharpening", [](std::string_view, std::string_view) { ApplyLiveSharpening(); });
+  if (!g_sharpening_applies) {
     if (cas.enabled) {
-      REXLOG_INFO("image quality: --present_effect is set; --ts4_sharpening is not applied");
+      REXLOG_WARN("image quality: --present_effect={} is set; ts4_sharpening {} is not applied",
+                  present_effect, cas.sharpness);
     }
     // A developer's --present_effect=cas sharpens too, which the report must show.
     g_cas_applied = image_quality::PresentEffectSharpens(present_effect);
     return;
   }
-  rex::cvar::RegisterChangeCallback(
-      "ts4_sharpening", [](std::string_view, std::string_view) { ApplyLiveSharpening(); });
   if (!cas.enabled) {
     return;
   }
@@ -1963,7 +2014,7 @@ void Configure(rex::Runtime* runtime) {
                                                       : ColourMode::kNatural;
   bool ok = g.device && InitializeContext(g.device, runtime->memory()) &&
             CreateUploadRings(kFramesInFlight, kUploadRingSize) &&
-            textures::Initialize(g.scale, g.colour, g.plan.lod_bias, g.plan.texture_filtering) &&
+            textures::Initialize(g.scale, g.colour, g.plan) &&
             geometry::Initialize() &&
             write_watch::Initialize(runtime->memory());
   for (FrameSlot& slot : g.slots) {
@@ -2072,8 +2123,8 @@ struct Enhancement {
 };
 constexpr std::array<Enhancement, 5> kEnhancements = {{
     // Both renderers' (ApplyImageSettings). Filtering counts as on when the setting forced it or
-    // --anisotropic_override was given directly, which Classic takes over the setting, at any
-    // point this session (NoteFiltering).
+    // --anisotropic_override was given directly, which both renderers follow over the setting,
+    // at any point this session (NoteFiltering).
     {"ts4_anisotropic_filtering", [] { return g_filtering_forced.load(); }},
     {"ts4_sharpening", [] { return g_cas_applied; }},
     {"ts4_native_color_mode",

@@ -96,3 +96,29 @@ TEST_CASE("only Original's draws into a gamma target encode with the Xenos curve
   CHECK(GammaOutputSpec(ColourMode::kOriginal, false) == 0u);
   CHECK(GammaOutputSpec(ColourMode::kNatural, true) == 0u);
 }
+
+// The descriptor index carries three fields (patches/xenosrecomp 0001 and 0007); the shader reads
+// each from the whole index, so a PWL fetch from a resolved texture keeps its flag and its scale.
+TEST_CASE("a descriptor index keeps its heap index, offset scale and PWL flag apart") {
+  using namespace topspin4::native;
+  for (const bool pwl : {false, true}) {
+    for (uint32_t scale = 1; scale <= 4; ++scale) {
+      for (const uint32_t heap_index : {0u, 1u, 8191u, (1u << 29) - 1}) {
+        const uint32_t index = DescriptorIndex(heap_index, pwl, scale);
+        CHECK(HeapIndexOf(index) == heap_index);
+        CHECK(OffsetScaleOf(index) == scale);
+        CHECK(PwlDecodeOf(index) == pwl);
+      }
+    }
+  }
+}
+
+TEST_CASE("a PWL fetch from a resolved texture at 3x keeps the flag and the scale") {
+  using namespace topspin4::native;
+  const uint32_t index = DescriptorIndex(42, true, 3);
+  CHECK((index & kPwlFetchFlag) != 0);
+  CHECK(HeapIndexOf(index) == 42);
+  CHECK(OffsetScaleOf(index) == 3);
+  // The ordinary texture: no flag, offsets as they are.
+  CHECK(DescriptorIndex(42, false, 1) == 42);
+}

@@ -228,3 +228,16 @@ TEST_CASE("A number written without quotes is accepted where the setting's value
   CHECK(typo.values.empty());
   CHECK(typo.report.warnings.size() == 3);
 }
+
+TEST_CASE("Resolution scale and MSAA are Native only; every other setting is available on both") {
+  for (const Setting& setting : PlayerSettings()) {
+    CAPTURE(setting.key);
+    CHECK(setting.AvailableOn(kRendererNative));
+    const bool native_only = setting.key == "ts4_resolution_scale" || setting.key == "ts4_msaa";
+    CHECK(setting.AvailableOn(kRendererClassic) == !native_only);
+  }
+  CHECK(FindSetting("ts4_anisotropic_filtering")->AvailableOn(kRendererClassic));
+  CHECK(FindSetting("ts4_sharpening")->AvailableOn(kRendererClassic));
+  CHECK_FALSE(FindSetting("ts4_resolution_scale")->AvailableOn(kRendererClassic));
+  CHECK_FALSE(FindSetting("ts4_msaa")->AvailableOn(kRendererClassic));
+}

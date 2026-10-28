@@ -590,19 +590,25 @@ struct OutputPlan {
   DownsampleFilter filter = DownsampleFilter::kNone;
   uint32_t halvings = 0;  // 2:1 box steps before the final bilinear one
 };
+// The window's largest 16:9 area, where the presenter puts the frame; 0x0 without a window.
+struct FitArea {
+  uint32_t width = 0;
+  uint32_t height = 0;
+};
+constexpr FitArea FitWindow(uint32_t window_width, uint32_t window_height) {
+  if (uint64_t(window_width) * 9 > uint64_t(window_height) * 16) {
+    return {uint32_t(uint64_t(window_height) * 16 / 9), window_height};
+  }
+  return {window_width, uint32_t(uint64_t(window_width) * 9 / 16)};
+}
 constexpr OutputPlan PlanOutput(uint32_t render_scale, uint32_t window_width,
                                 uint32_t window_height) {
   OutputPlan plan;
   plan.target_scale = render_scale;
   plan.output_width = 1280 * render_scale;
   plan.output_height = 720 * render_scale;
-  // The window's 16:9 area, where the presenter puts the frame.
-  uint32_t fit_width = window_width, fit_height = window_height;
-  if (uint64_t(window_width) * 9 > uint64_t(window_height) * 16) {
-    fit_width = uint32_t(uint64_t(window_height) * 16 / 9);
-  } else {
-    fit_height = uint32_t(uint64_t(window_width) * 9 / 16);
-  }
+  const FitArea fit = FitWindow(window_width, window_height);
+  const uint32_t fit_width = fit.width, fit_height = fit.height;
   // 720p goes to the presenter whatever the window: as before the remaster, and
   // scene runs keep their 1280x720 frames.
   if (render_scale <= 1 || fit_height == 0 || fit_width == 0 || plan.output_height <= fit_height) {

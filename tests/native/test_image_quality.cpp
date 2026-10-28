@@ -3,6 +3,9 @@
 
 #include <catch_amalgamated.hpp>
 
+#include <utility>
+#include <vector>
+
 #include "native/image_quality.h"
 #include "settings/registry.h"
 
@@ -56,6 +59,26 @@ TEST_CASE("a scale whose targets do not fit the device is clamped, and says so")
   CHECK_FALSE(MakePlan(settings, 3840, 2160, small).clamped);
 }
 
+// ADR-0001: the default look is the original's, in any window (owner decision 2026-10-28).
+TEST_CASE("the default plan in a window larger than 720p is still the original") {
+  const std::vector<std::pair<uint32_t, uint32_t>> windows = {
+      {1920, 1080}, {2560, 1440}, {3840, 2160}, {3440, 1440}, {1366, 768}};
+  for (const auto& [width, height] : windows) {
+    CAPTURE(width, height);
+    const Plan plan = MakePlan({}, width, height, kDesktop);
+    CHECK(plan.scale == 1);
+    CHECK_FALSE(plan.clamped);
+    CHECK_FALSE(plan.output.downsample);
+    CHECK(plan.output.output_width == 1280);
+    CHECK(plan.output.output_height == 720);
+    CHECK(plan.lod_bias == 0.0f);
+    CHECK(plan.texture_filtering == -1);
+    CHECK_FALSE(plan.cas.enabled);
+    CHECK(plan.SamplesFor(1) == 1);
+    CHECK(plan.SamplesFor(2) == 2);
+  }
+}
+
 TEST_CASE("the texture sharpness bias is 0 when the frame is drawn at or above the window") {
   Settings settings;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).lod_bias == 0.0f);  // the original
@@ -66,23 +89,47 @@ TEST_CASE("the texture sharpness bias is 0 when the frame is drawn at or above t
   CHECK(MakePlan(settings, 1280, 720, kDesktop).lod_bias == 0.0f);
 }
 
-TEST_CASE("the texture sharpness bias sharpens by the presenter's upscale") {
+TEST_CASE("the texture sharpness bias is 0 at 1x, however much the presenter upscales") {
+  Settings settings;  // Resolution scale 1x
+  CHECK(MakePlan(settings, 2560, 1440, kDesktop).lod_bias == 0.0f);
+  CHECK(MakePlan(settings, 7680, 4320, kDesktop).lod_bias == 0.0f);
+  // Auto that lands on 1x (a 720p window, or before the window has a size) is 1x too.
+  settings.resolution_scale = kAutoScale;
+  CHECK(MakePlan(settings, 1280, 720, kDesktop).lod_bias == 0.0f);
+  CHECK(MakePlan(settings, 0, 0, kDesktop).lod_bias == 0.0f);
+  // So is a scale the device clamped down to 1x.
+  settings.resolution_scale = 4;
+  DeviceLimits tiny = kDesktop;
+  tiny.max_image_size = 1280;
+  CHECK(MakePlan(settings, 3840, 2160, tiny).scale == 1);
+  CHECK(MakePlan(settings, 3840, 2160, tiny).lod_bias == 0.0f);
+}
+
+TEST_CASE("above 1x, the texture sharpness bias sharpens by the presenter's upscale") {
   Settings settings;
-  // 720p shown at 1440p: one mip sharper.
-  CHECK(MakePlan(settings, 2560, 1440, kDesktop).lod_bias == -1.0f);
-  // 1440p shown at 2160p: log2(1440 / 2160).
   settings.resolution_scale = 2;
+  // 1440p shown at 2160p: log2(1440 / 2160).
   CHECK(MakePlan(settings, 3840, 2160, kDesktop).lod_bias ==
         Catch::Approx(-0.585).margin(0.001));
+  // 1440p shown at 4320p: log2(1/3).
+  CHECK(MakePlan(settings, 7680, 4320, kDesktop).lod_bias ==
+        Catch::Approx(-1.585).margin(0.001));
   // The window's 16:9 area counts, not its whole height.
-  settings.resolution_scale = 1;
-  CHECK(MakePlan(settings, 1280, 1440, kDesktop).lod_bias == 0.0f);
+  CHECK(MakePlan(settings, 1280, 2880, kDesktop).lod_bias == 0.0f);
   // Never sharper than the device allows.
   DeviceLimits device = kDesktop;
-  device.max_lod_bias = 2.0f;
-  CHECK(MakePlan(settings, 7680, 4320, device).lod_bias == -2.0f);
+  device.max_lod_bias = 1.0f;
+  CHECK(MakePlan(settings, 7680, 4320, device).lod_bias == -1.0f);
   // Before the window has a size, nothing is upscaled.
   CHECK(MakePlan(settings, 0, 0, kDesktop).lod_bias == 0.0f);
+}
+
+TEST_CASE("the plan carries the device's limit on a sampler's bias") {
+  DeviceLimits device = kDesktop;
+  device.max_lod_bias = 15.99f;
+  CHECK(MakePlan({}, 1280, 720, device).max_lod_bias == 15.99f);
+  device.max_lod_bias = 2.0f;
+  CHECK(MakePlan({}, 1280, 720, device).max_lod_bias == 2.0f);
 }
 
 TEST_CASE("anisotropic filtering at Original leaves the game's own filtering") {
@@ -101,17 +148,40 @@ TEST_CASE("a forced anisotropic filtering level is the plan's, in anisotropic_ov
   CHECK(MakePlan(settings, 1280, 720, kDesktop).texture_filtering == 4);
 }
 
-TEST_CASE("filtering is forced when the setting or a direct anisotropic_override forces it") {
-  // Neither: the game's own (-1), on both.
-  CHECK_FALSE(FilteringForced(-1, "-1"));
-  CHECK_FALSE(FilteringForced(-1, ""));
-  // The setting alone, or the override alone (Classic takes it over the setting).
-  CHECK(FilteringForced(5, "-1"));
-  CHECK(FilteringForced(-1, "5"));
-  // 0 forces filtering off, which is not the game's own.
-  CHECK(FilteringForced(-1, "0"));
-  // An override that is not a number forces nothing.
-  CHECK_FALSE(FilteringForced(-1, "high"));
+TEST_CASE("the anisotropic_override flag is a number, or it is not an override") {
+  CHECK(ParseFilteringOverride("-1") == -1);
+  CHECK(ParseFilteringOverride("5") == 5);
+  CHECK(ParseFilteringOverride("0") == 0);
+  CHECK_FALSE(ParseFilteringOverride("").has_value());  // no such flag
+  CHECK_FALSE(ParseFilteringOverride("high").has_value());
+  CHECK_FALSE(ParseFilteringOverride("5x").has_value());
+}
+
+TEST_CASE("both renderers follow a direct anisotropic_override over the setting") {
+  // No override: the setting's level, or the game's own.
+  CHECK(EffectiveFiltering(5, std::nullopt) == 5);
+  CHECK(EffectiveFiltering(-1, std::nullopt) == -1);
+  // The setting writes its own level into the flag, so the two agree.
+  CHECK(EffectiveFiltering(5, 5) == 5);
+  // A developer's override wins, whatever the setting says: forced, off, or the game's own.
+  CHECK(EffectiveFiltering(-1, 5) == 5);
+  CHECK(EffectiveFiltering(5, 3) == 3);
+  CHECK(EffectiveFiltering(5, 0) == 0);
+  CHECK(EffectiveFiltering(5, -1) == -1);
+  // Native takes the override through the plan's field, so it reaches ChooseSampler unchanged.
+  Settings settings;
+  settings.anisotropic_filtering = 16;
+  CHECK(EffectiveFiltering(MakePlan(settings, 1280, 720, kDesktop).texture_filtering, 3) == 3);
+}
+
+TEST_CASE("filtering is reported forced when the effective filtering is not the game's own") {
+  CHECK_FALSE(FilteringForced(-1, -1));
+  CHECK_FALSE(FilteringForced(-1, std::nullopt));
+  CHECK(FilteringForced(5, std::nullopt));  // the setting alone
+  CHECK(FilteringForced(-1, 5));            // the override alone
+  CHECK(FilteringForced(-1, 0));            // 0 forces filtering off, which is not the game's own
+  // An override of the game's own filtering beats a setting: nothing is forced on either renderer.
+  CHECK_FALSE(FilteringForced(5, -1));
 }
 
 TEST_CASE("sharpening levels map to fixed CAS strengths, and Off leaves CAS off") {
@@ -129,6 +199,35 @@ TEST_CASE("a --present_effect of cas sharpens, and bilinear does not") {
   CHECK(PresentEffectSharpens("cas"));
   CHECK_FALSE(PresentEffectSharpens("bilinear"));
   CHECK_FALSE(PresentEffectSharpens(""));
+}
+
+TEST_CASE("ts4_sharpening reaches the presenter only under the default present effect") {
+  CHECK(SharpeningApplies("bilinear"));
+  CHECK_FALSE(SharpeningApplies("cas"));
+  CHECK_FALSE(SharpeningApplies("fsr"));
+  CHECK_FALSE(SharpeningApplies(""));
+}
+
+TEST_CASE("a level reads as Nx, and none as its word") {
+  CHECK(LevelText(2, "original") == "2x");
+  CHECK(LevelText(16, "original") == "16x");
+  CHECK(LevelText(0, "original") == "original");
+  CHECK(LevelText(kAutoScale, "auto") == "auto");
+}
+
+TEST_CASE("a render target is scaled unless it is pinned to 1x") {
+  const TargetShape main_scene = {1280, 720, false};
+  const TargetShape shadow_map = {1040, 1024, true};
+  // No target is pinned today.
+  CHECK(kPinnedTargets.empty());
+  CHECK(TargetScale(3, main_scene) == 3);
+  CHECK(TargetScale(2, shadow_map) == 2);
+  // A pinned one stays at 1x whatever the scale, and the others still scale.
+  const TargetShape pinned[] = {shadow_map};
+  CHECK(TargetScale(3, shadow_map, pinned) == 1);
+  CHECK(TargetScale(3, main_scene, pinned) == 3);
+  // The pin names the kind too: a colour target of that size is not the depth one.
+  CHECK(TargetScale(3, {1040, 1024, false}, pinned) == 3);
 }
 
 TEST_CASE("the settings' values parse, and a value they do not allow is the default") {
@@ -317,4 +416,19 @@ TEST_CASE("the values the plan allows are the settings registry's") {
   CHECK(list(kMsaaChoices) == choices("ts4_msaa"));
   CHECK(list(kAnisotropicFilteringChoices) == choices("ts4_anisotropic_filtering"));
   CHECK(list(kSharpeningChoices) == choices("ts4_sharpening"));
+}
+
+TEST_CASE("the plan's settings table is the registry's: names, values and renderers") {
+  using topspin4::settings::kRendererClassic;
+  using topspin4::settings::kRendererNative;
+  using topspin4::settings::FindSetting;
+  for (const SettingInfo& info : kSettings) {
+    CAPTURE(info.name);
+    const topspin4::settings::Setting* setting = FindSetting(info.name);
+    REQUIRE(setting);
+    CHECK(std::vector<std::string_view>(info.choices.begin(), info.choices.end()) ==
+          setting->choices);
+    CHECK(setting->AvailableOn(kRendererNative));
+    CHECK(setting->AvailableOn(kRendererClassic) == !info.native_only);
+  }
 }

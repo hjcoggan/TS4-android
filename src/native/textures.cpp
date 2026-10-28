@@ -156,6 +156,7 @@ struct State {
   // The plan's texture sharpness bias as of this frame's start (BeginFrame), unless
   // --ts4_native_lod_bias replaces it.
   float lod_bias = 0.0f;
+  float max_lod_bias = 2.0f;  // the device's limit, from the plan
   // Render thread: textures uploaded, bytes, and its own time on textures
   // (applying finished reads, reading inline, waiting for workers).
   uint64_t upload_count = 0;
@@ -286,14 +287,20 @@ uint32_t ViewIndex(Texture& texture, uint32_t swizzle, DescriptorHeap heap,
   return index;
 }
 
+// A heap's indices must stay below the offset scale bits of a descriptor index (DescriptorIndex).
+static_assert(*std::max_element(std::begin(kHeapCapacity), std::end(kHeapCapacity)) <=
+              (1u << kOffsetScaleShift));
+
 // A fetch's view index: Enhanced samples gamma through the sRGB view, Original
-// flags the index so the shader PWL-decodes after filtering (GammaFetch).
+// flags the index so the shader PWL-decodes after filtering (GammaFetch). offset_scale is the
+// texture's (image_quality::TextureOffsetScale); both ride in the index (DescriptorIndex).
 uint32_t FetchViewIndex(Texture& texture, uint32_t swizzle, DescriptorHeap heap,
-                        VkImageViewType view_type, const FetchConstant& raw) {
+                        VkImageViewType view_type, const FetchConstant& raw,
+                        uint32_t offset_scale = 1) {
   const GammaFetchPath path =
       GammaFetch(g.colour, FetchSamplesGamma(raw.dwords[0]), texture.format);
-  return ViewIndex(texture, swizzle, heap, view_type, path.srgb_view) |
-         (path.shader_decode ? kPwlFetchFlag : 0u);
+  return DescriptorIndex(ViewIndex(texture, swizzle, heap, view_type, path.srgb_view),
+                         path.shader_decode, offset_scale);
 }
 
 void Barrier(VkCommandBuffer cb, Texture& texture, VkImageLayout new_layout,
@@ -355,7 +362,7 @@ uint32_t SamplerIndex(const xenos::xe_gpu_texture_fetch_t& fetch, uint32_t min_l
   const SamplerChoice choice =
       ChooseSampler(fetch, min_level, max_level, g.texture_filtering,
                     properties.samplerAnisotropy ? properties.maxSamplerAnisotropy : 0.0f,
-                    g.lod_bias, 2.0f);
+                    g.lod_bias, g.max_lod_bias);
   const float anisotropy = choice.anisotropy;
   const auto it = g.samplers.find(choice.key);
   if (it != g.samplers.end()) {
@@ -372,8 +379,7 @@ uint32_t SamplerIndex(const xenos::xe_gpu_texture_fetch_t& fetch, uint32_t min_l
   // The image holds levels 0..max_level; kBaseMap samples the first only.
   sampler_info.minLod = float(min_level);
   sampler_info.maxLod = uint32_t(fetch.mip_filter) == 2 ? float(min_level) : float(max_level);
-  // The fetch constant's bias plus the global one; Vulkan guarantees |bias| <= 2 on every
-  // device.
+  // The fetch constant's bias plus the global one, within the device's maxSamplerLodBias.
   sampler_info.mipLodBias = choice.lod_bias;
   if (anisotropy > 1.0f) {
     // As in the emulated path, anisotropic filtering is fully linear.
@@ -671,13 +677,14 @@ FetchConstant LoadFetchConstant(const uint8_t* big_endian) {
   return fetch;
 }
 
-bool Initialize(uint32_t scale, ColourMode colour, float lod_bias, int32_t texture_filtering) {
+bool Initialize(uint32_t scale, ColourMode colour, const image_quality::Plan& plan) {
   g.scale = scale;
   g.colour = colour;
   g.lod_bias = rex::cvar::HasNonDefaultValue("ts4_native_lod_bias")
                    ? float(REXCVAR_GET(ts4_native_lod_bias))
-                   : lod_bias;
-  g.texture_filtering = texture_filtering;
+                   : plan.lod_bias;
+  g.max_lod_bias = plan.max_lod_bias;
+  g.texture_filtering = plan.texture_filtering;
   // A prepare starts no texture work, so play's count serves both.
   const uint32_t workers =
       thread_budget::ForPlay(std::thread::hardware_concurrency()).textures;
@@ -752,9 +759,8 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
       // Its fetch offsets are in guest texels (XenosRecomp 0007).
       const uint32_t offset_scale =
           image_quality::TextureOffsetScale(resolved->second->scale, true);
-      binding.texture_index =
-          FetchViewIndex(*resolved->second, swizzle, kHeapTexture2D, VK_IMAGE_VIEW_TYPE_2D, raw) |
-          (offset_scale - 1) << kOffsetScaleShift;
+      binding.texture_index = FetchViewIndex(*resolved->second, swizzle, kHeapTexture2D,
+                                             VK_IMAGE_VIEW_TYPE_2D, raw, offset_scale);
       return binding;
     }
   }
@@ -1040,22 +1046,23 @@ void Shutdown() {
   g.workers.clear();  // joins
 }
 
-void BeginFrame(uint64_t frame, int32_t texture_filtering, float lod_bias) {
+void BeginFrame(uint64_t frame, const image_quality::Plan& plan) {
   if (!rex::cvar::HasNonDefaultValue("ts4_native_lod_bias")) {
-    if (lod_bias != g.lod_bias) {
-      REXLOG_INFO("native renderer: texture sharpness bias {} -> {} at frame {}", g.lod_bias,
-                  lod_bias, frame);
+    if (plan.lod_bias != g.lod_bias) {
+      REXLOG_INFO("image quality: texture sharpness bias {} -> {} at frame {}", g.lod_bias,
+                  plan.lod_bias, frame);
     }
-    g.lod_bias = lod_bias;
+    g.lod_bias = plan.lod_bias;
   }
-  if (texture_filtering != g.texture_filtering) {
+  g.max_lod_bias = plan.max_lod_bias;
+  if (plan.texture_filtering != g.texture_filtering) {
     // Old samplers stay for frames in flight; each level used adds its own to
     // the sampler heap (kHeapCapacity), so the count shows the headroom left.
-    REXLOG_INFO("native renderer: texture filtering {} -> {} at frame {}; samplers are rebuilt as "
+    REXLOG_INFO("image quality: texture filtering {} -> {} at frame {}; samplers are rebuilt as "
                 "draws need them ({} samplers so far)",
-                g.texture_filtering, texture_filtering, frame, g.samplers.size());
+                g.texture_filtering, plan.texture_filtering, frame, g.samplers.size());
   }
-  g.texture_filtering = texture_filtering;
+  g.texture_filtering = plan.texture_filtering;
 }
 
 void EvictUnused(uint64_t frame) {
