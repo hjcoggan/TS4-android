@@ -75,3 +75,21 @@ Tried and reverted, with the measurement that ruled each out:
   external_frame paint signal): completion moved to ~5.4 ms after the vblank for 80 % of frames,
   but the tail and the hold rules interacted badly (5.3-21 % off step). Doing this properly needs
   the presenter's copy and paint on their own queue, or a pacing thread that does not hold.
+
+## Final state: 3x cap, and overlays
+
+The owner capped Resolution scale at 3x (2e59ab8; bringing 4x back is
+`.scratch/image-quality/issues/14-resolution-scale-4x-without-stutter.md`). Match play at 3x + 8x
+MSAA, judged from 60 s over ~90 s per run:
+
+| Injected Vulkan layers | Display changes off the 60 Hz step |
+|---|---|
+| OBS, Overwolf, RTSS (the owner's desktop) | 0, 1 frame, 1 frame per run |
+| RTSS only | 0, 0 + 1 frame at a scene change |
+| none | 0 of 4,226 and 0 of 4,435 |
+
+The single late frames came at scene changes (a replay handing back to play, a skip), ~2.7 ms late
+although the game presented them on time and well within the hold; no GPU allocation was near them.
+With no injected layers they did not occur, so they come from the overlay hooks (RTSS's present
+hook among them), not the game. `VK_LOADER_LAYERS_DISABLE` and `DISABLE_VULKAN_OBS_CAPTURE=1`
+remove the layers for one run.
