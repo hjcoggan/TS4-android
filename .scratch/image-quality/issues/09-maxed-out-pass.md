@@ -31,3 +31,4 @@
   - The research doc's cost numbers are corrected (CPU 1.04 ms at defaults, +4.6 to +5.8 ms GPU).
   - Blocked on the machine: the PC lost every audio endpoint after the Edge runs, and the port then hangs at boot (pc-port ticket 32). No game runs are possible until audio is back.
 - 2026-10-28 (owner, via Claude): measure the CAS cost once in a RenderDoc capture and add it to the cost table (no new timer). The two Edge results (AF16 not separated at 1028x578; the 2 px offset at `draw_resolution_scale` 2) stand as recorded notes.
+- 2026-10-28 (Claude): box 2's gap closed on the current build (0039-0041, ticket 13): `analysis/scenes/iq09/practice-ground-default-0041/` dual verdict PASS; against Edge's `iq02/edge-practice-original/shot-040s.png` (`crop_verdict.py`/`.txt` there) Native passes floor, baseline and the full frame (before 0039 its full frame failed), Classic floor and baseline.

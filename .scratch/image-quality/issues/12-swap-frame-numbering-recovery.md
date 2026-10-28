@@ -6,11 +6,11 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A test shows the numbering recovers after a swap that issues no packet
-- [ ] The README and tests describe the fallback the game actually takes at lag 1
-- [ ] A Native scene run shows no "frame N shows Native's frame M" line and its dual verdict passes
+- [x] A test shows the numbering recovers after a swap that issues no packet
+- [x] The README and tests describe the fallback the game actually takes at lag 1
+- [x] A Native scene run shows no "frame N shows Native's frame M" line and its dual verdict passes
 
 ## Comments
 
@@ -18,3 +18,4 @@
 - 2026-10-28 (owner, via Claude): fix both gaps on this branch before the merge. Delete the unreachable "frame before" fallback rather than make it reachable. Tests in `tests/host/test_swap_choice.cpp`.
 - 2026-10-28 (Claude): implemented as `patches/rexglue/0040-swap-numbering-recovery.patch`. `VdSwap` counts a swap only after the invalid-front-buffer early return; `ChooseSwapFrame` searches only upward. `test_swap_choice.cpp` builds standalone, all 8 cases pass. QA: pass with notes (the recovery test checks a model of `VdSwap`, not the kernel code, which the host tests cannot link; no other `VdSwap` path desyncs the counts). Box 3 waits for the combined game run.
 - 2026-10-28 (Claude): the 12 runs of ticket 10's shot pass (`analysis/before-after/runs/*/{dual,max}/runtime.log`, build with 0040) log no "frame N shows Native's frame M" line; all exit 0.
+- 2026-10-28 (Claude): boxes ticked. Box 1: `tests/host/test_swap_choice.cpp` "numbering recovers" case passes in `build.ps1 -Action Check` (host tests, 300 cases, after 8442446/f311d9e) — at model level, per QA. Box 2: README rows 0039/0040 and the lag-1 test (QA read). Box 3: `analysis/scenes/iq09/practice-ground-default-0041/` (build with 0040 and 0041): native-1 and dual-1 exit 0, dual verdict PASS at 1300 and 1600 (worst tile 0), no "shows Native's frame" line in either `runtime.log`; same for the 12 shot runs of ticket 10.
