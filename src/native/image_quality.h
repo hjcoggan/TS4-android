@@ -28,9 +28,14 @@ enum class Sharpening : uint8_t { kOff, kLow, kMedium, kHigh };
 // Resolution scale Auto: the smallest multiple of 1280x720 that covers the window's 16:9 area.
 inline constexpr uint32_t kAutoScale = 0;
 
+// The largest Resolution scale: Auto stops here and any request is clamped to it. At 4x with 8x
+// MSAA heavy frames cost about 15 ms of GPU time and stutter on a variable-refresh display, while
+// 3x with 8x does not (docs/research/native-draw-cost.md).
+inline constexpr uint32_t kMaxResolutionScale = 3;
+
 // The image settings.
 struct Settings {
-  uint32_t resolution_scale = 1;  // 1..4, or kAutoScale
+  uint32_t resolution_scale = 1;  // 1..kMaxResolutionScale, or kAutoScale
   uint32_t msaa = 0;  // 0 = Original (the game's own 2x on its match pass); else 4 or 8
   // 0 = Original (the game's own filtering); else the level forced on linear, mipmapped fetches.
   uint32_t anisotropic_filtering = 0;
@@ -39,14 +44,14 @@ struct Settings {
 
 // The player settings' values (settings/registry.h), as their cvars hold them.
 struct SettingValues {
-  std::string_view resolution_scale = "1";              // 1, auto, 2, 3, 4
+  std::string_view resolution_scale = "1";              // 1, auto, 2, 3
   std::string_view msaa = "original";                   // original, 4, 8
   std::string_view anisotropic_filtering = "original";  // original, 4, 8, 16
   std::string_view sharpening = "off";                  // off, low, medium, high
 };
 
 // The values each setting allows, as settings/registry.h lists them (a test ties the two).
-inline constexpr std::string_view kResolutionScaleChoices[] = {"1", "auto", "2", "3", "4"};
+inline constexpr std::string_view kResolutionScaleChoices[] = {"1", "auto", "2", "3"};
 inline constexpr std::string_view kMsaaChoices[] = {"original", "4", "8"};
 inline constexpr std::string_view kAnisotropicFilteringChoices[] = {"original", "4", "8", "16"};
 inline constexpr std::string_view kSharpeningChoices[] = {"off", "low", "medium", "high"};
@@ -80,7 +85,7 @@ inline constexpr std::string_view kLevelNames[] = {"1", "2", "4", "8", "16"};
 constexpr Settings ParseSettings(const SettingValues& values) {
   Settings settings;
   if (values.resolution_scale == "auto") settings.resolution_scale = kAutoScale;
-  for (uint32_t scale : {2u, 3u, 4u}) {
+  for (uint32_t scale = 2; scale <= kMaxResolutionScale; ++scale) {
     if (values.resolution_scale.size() == 1 && values.resolution_scale[0] == char('0' + scale)) {
       settings.resolution_scale = scale;
     }
@@ -270,9 +275,9 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
     // The 16:9 area is shown_height tall and at most 16/9 of it wide, so covering its height
     // covers its width; bars beside or above it don't count.
     requested = 1;
-    while (requested < 4 && 720 * requested < shown_height) ++requested;
+    while (requested < kMaxResolutionScale && 720 * requested < shown_height) ++requested;
   }
-  requested = std::clamp(requested, 1u, 4u);
+  requested = std::clamp(requested, 1u, kMaxResolutionScale);
   const uint32_t fits = std::max(device.max_image_size / kLargestTargetSide, 1u);
   plan.scale = std::min(requested, fits);
   plan.clamped = plan.scale < requested;

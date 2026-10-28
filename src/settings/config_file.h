@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <charconv>
 #include <filesystem>
 #include <fstream>
@@ -119,6 +120,49 @@ inline std::string RenameTomlKey(std::string_view text, std::string_view from, s
   return out;
 }
 
+// The text with key's value `from` (a string, in either quote, or a bare number) changed to `to`
+// in the same form, keeping the rest of the line (indent, spacing, comment, line end). Any other
+// value of the key is left alone. For migrations (below).
+inline std::string ReplaceTomlValue(std::string_view text, std::string_view key,
+                                    std::string_view from, std::string_view to) {
+  std::string out;
+  detail::ForEachLine(text, [&](std::string_view body, std::string_view ending) {
+    std::string_view rest;
+    if (detail::IsKeyLine(body, key, &rest)) {
+      // rest is the end of body, so the value starts where the blanks after the equals sign end.
+      const size_t blanks = rest.find_first_not_of(" \t");
+      const std::string_view value =
+          blanks == std::string_view::npos ? std::string_view() : rest.substr(blanks);
+      size_t length = 0;
+      std::string_view quote;
+      if (value.starts_with('"') || value.starts_with('\'')) {
+        const size_t close = value.find(value[0], 1);
+        if (close != std::string_view::npos) {
+          length = close + 1;
+          quote = value.substr(0, 1);
+        }
+      } else {
+        length = std::min(value.find_first_of(" \t#\r"), value.size());
+      }
+      const std::string_view inner = quote.empty() ? value.substr(0, length)
+                                                   : value.substr(1, length - 2);
+      if (length != 0 && inner == from) {
+        out += body.substr(0, body.size() - value.size());
+        out += quote;
+        out += to;
+        out += quote;
+        out += value.substr(length);
+        out += ending;
+        return true;
+      }
+    }
+    out += body;
+    out += ending;
+    return true;
+  });
+  return out;
+}
+
 // The settings file's version: the top-level integer `version`. Empty if the file has none (an
 // unversioned file counts as version 1) or it is not an integer.
 inline std::optional<long long> FileVersion(std::string_view text) {
@@ -153,12 +197,18 @@ inline std::string WithFileVersion(std::string_view text, long long version) {
 
 // Settings migrations, in order: the one at index i takes a file of version i + 1 to version
 // i + 2 (text in, text out, with RenameTomlKey and the like), so a renamed or removed setting
-// never misreads an old file. The file's version is the build's after them. The list starts
-// empty: no setting has been renamed yet.
+// never misreads an old file. The file's version is the build's after them. The launcher
+// mirrors this list (launcher/src/Launcher.Core/SettingsFile.cs, Migrations): change both.
 using Migration = std::function<std::string(std::string_view text)>;
 
 inline const std::vector<Migration>& Migrations() {
-  static const std::vector<Migration> migrations;
+  static const std::vector<Migration> migrations = {
+      // 1 -> 2: the Resolution scale's 4x was removed (the largest is 3x, kMaxResolutionScale in
+      // native/image_quality.h), so a saved 4 becomes 3 instead of falling back to the default.
+      [](std::string_view text) {
+        return ReplaceTomlValue(text, "ts4_resolution_scale", "4", "3");
+      },
+  };
   return migrations;
 }
 

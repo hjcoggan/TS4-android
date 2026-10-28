@@ -76,7 +76,8 @@ TEST_CASE("A saved setting is written whole, through a temporary file") {
   REQUIRE(SaveSetting(path, "ts4_renderer", "\"native\""));
   REQUIRE(SaveSetting(path, "mnk_mode", "true"));
   // A new file is written at this build's version.
-  CHECK(ReadText(path) == "version = 1\nts4_renderer = \"native\"\nmnk_mode = true\n");
+  CHECK(ReadText(path) == "version = " + std::to_string(CurrentVersion()) +
+                              "\nts4_renderer = \"native\"\nmnk_mode = true\n");
   CHECK_FALSE(fs::exists(path.string() + ".tmp"));
 }
 
@@ -185,7 +186,7 @@ TEST_CASE("The image settings default to the original look and list their levels
   const Setting* scale = FindSetting("ts4_resolution_scale");
   REQUIRE(scale);
   CHECK(scale->default_value == "1");
-  CHECK(scale->choices == std::vector<std::string_view>{"1", "auto", "2", "3", "4"});
+  CHECK(scale->choices == std::vector<std::string_view>{"1", "auto", "2", "3"});
   const Setting* msaa = FindSetting("ts4_msaa");
   REQUIRE(msaa);
   CHECK(msaa->default_value == "original");
@@ -264,7 +265,8 @@ TEST_CASE("A file with no version loads as version 1, keeps its values and is ve
   CHECK(loaded.report.file_version == 1);
   CHECK(loaded.values == std::map<std::string, std::string>{{"ts4_renderer", "native"}});
   CHECK(loaded.report.rewritten);
-  CHECK(ReadText(path) == "version = 1\n# mine\nts4_renderer = \"native\"\n");
+  CHECK(ReadText(path) ==
+        "version = " + std::to_string(CurrentVersion()) + "\n# mine\nts4_renderer = \"native\"\n");
   // Once versioned it is left alone.
   Loaded again(path);
   CHECK_FALSE(again.report.rewritten);
@@ -320,11 +322,83 @@ TEST_CASE("A file of a newer build is read as well as possible and never rewritt
 TEST_CASE("Saving one key rewrites only that line, keeping the version and every other line") {
   TempFolder folder;
   const fs::path path = SettingsPath(folder.path);
-  const std::string before = "version = 1\r\n# mine\r\nts4_renderer = \"classic\"\r\nother = 1\r\n";
-  WriteFile(path, before);
+  const std::string version = "version = " + std::to_string(CurrentVersion()) + "\r\n";
+  WriteFile(path, version + "# mine\r\nts4_renderer = \"classic\"\r\nother = 1\r\n");
   REQUIRE(SaveSetting(path, "ts4_renderer", "\"native\""));
-  CHECK(ReadText(path) == "version = 1\r\n# mine\r\nts4_renderer = \"native\"\r\nother = 1\r\n");
+  CHECK(ReadText(path) == version + "# mine\r\nts4_renderer = \"native\"\r\nother = 1\r\n");
   CHECK_FALSE(fs::exists(path.string() + ".tmp"));
+}
+
+// --- The build's own migrations: Resolution scale 4x was removed (the maximum is 3x) ---
+
+TEST_CASE("The build is at settings file version 2, one migration past version 1") {
+  CHECK(Migrations().size() == 1);
+  CHECK(CurrentVersion() == 2);
+}
+
+TEST_CASE("A version 1 file with a Resolution scale of 4 loads as 3 and is rewritten at version 2") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "version = 1\n# mine\nts4_resolution_scale = \"4\"  # big\nts4_msaa = \"4\"\n");
+  Loaded loaded(path);
+  CHECK(loaded.report.file_version == 1);
+  CHECK(loaded.report.rewritten);
+  CHECK(loaded.report.warnings.empty());
+  CHECK(loaded.values == std::map<std::string, std::string>{{"ts4_msaa", "4"},
+                                                            {"ts4_resolution_scale", "3"}});
+  // Line-preserving: the comment stays, and the MSAA's own "4" is not a scale.
+  CHECK(ReadText(path) ==
+        "version = 2\n# mine\nts4_resolution_scale = \"3\"  # big\nts4_msaa = \"4\"\n");
+  Loaded again(path);
+  CHECK_FALSE(again.report.rewritten);
+  CHECK(again.values == loaded.values);
+}
+
+TEST_CASE("A version 1 file with any other Resolution scale keeps it") {
+  for (const char* scale : {"1", "auto", "2", "3"}) {
+    CAPTURE(scale);
+    TempFolder folder;
+    const fs::path path = SettingsPath(folder.path);
+    WriteFile(path, std::string("version = 1\nts4_resolution_scale = \"") + scale + "\"\n");
+    Loaded loaded(path);
+    CHECK(loaded.report.rewritten);
+    CHECK(ReadText(path) ==
+          std::string("version = 2\nts4_resolution_scale = \"") + scale + "\"\n");
+    CHECK(loaded.values == std::map<std::string, std::string>{{"ts4_resolution_scale", scale}});
+  }
+}
+
+TEST_CASE("The 4x migration also takes an unversioned file and a single-quoted or bare 4") {
+  CHECK(MigrateSettingsText("ts4_resolution_scale = '4'\n") ==
+        "version = 2\nts4_resolution_scale = '3'\n");
+  CHECK(MigrateSettingsText("version = 1\r\nts4_resolution_scale = 4\r\n") ==
+        "version = 2\r\nts4_resolution_scale = 3\r\n");
+  CHECK(MigrateSettingsText("version = 1\nts4_resolution_scale=\"4\"") ==
+        "version = 2\nts4_resolution_scale=\"3\"");
+  // 40 is no scale and is not touched; a file with no scale at all gains none.
+  CHECK(MigrateSettingsText("version = 1\nts4_resolution_scale = \"40\"\n") ==
+        "version = 2\nts4_resolution_scale = \"40\"\n");
+  CHECK(MigrateSettingsText("version = 1\nmnk_mode = true\n") == "version = 2\nmnk_mode = true\n");
+}
+
+TEST_CASE("A version 2 file is not migrated again: its 4 is a value the setting refuses") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  const std::string text = "version = 2\nts4_resolution_scale = \"4\"\n";
+  WriteFile(path, text);
+  Loaded loaded(path);
+  CHECK_FALSE(loaded.report.rewritten);
+  CHECK(ReadText(path) == text);
+  CHECK(loaded.values.empty());
+  CHECK(loaded.report.warnings.size() == 1);
+}
+
+TEST_CASE("Saving a setting into a version 1 file migrates its Resolution scale first") {
+  TempFolder folder;
+  const fs::path path = SettingsPath(folder.path);
+  WriteFile(path, "version = 1\nts4_resolution_scale = \"4\"\n");
+  REQUIRE(SaveSetting(path, "mnk_mode", "true"));
+  CHECK(ReadText(path) == "version = 2\nts4_resolution_scale = \"3\"\nmnk_mode = true\n");
 }
 
 TEST_CASE("The file version reads only an integer `version` key") {

@@ -42,21 +42,32 @@ TEST_CASE("a Resolution scale draws every target at that multiple and fits the w
 }
 
 TEST_CASE("a scale whose targets do not fit the device is clamped, and says so") {
-  // Scale 4 needs 5120-wide targets; Vulkan guarantees only 4096.
+  // Scale 3 needs 3840-wide targets; a device whose images stop at 2560 holds only 2x.
   Settings settings;
-  settings.resolution_scale = 4;
-  DeviceLimits small = kDesktop;
-  small.max_image_size = 4096;
-  const Plan clamped = MakePlan(settings, 3840, 2160, small);
-  CHECK(clamped.scale == 3);
-  CHECK(clamped.clamped);
-  DeviceLimits large = kDesktop;
-  large.max_image_size = 8192;
-  const Plan fits = MakePlan(settings, 3840, 2160, large);
-  CHECK(fits.scale == 4);
-  CHECK_FALSE(fits.clamped);
   settings.resolution_scale = 3;
+  DeviceLimits small = kDesktop;
+  small.max_image_size = 2560;
+  const Plan clamped = MakePlan(settings, 3840, 2160, small);
+  CHECK(clamped.scale == 2);
+  CHECK(clamped.clamped);
+  // Vulkan guarantees 4096, so the largest scale always fits a conforming device.
+  DeviceLimits guaranteed = kDesktop;
+  guaranteed.max_image_size = 4096;
+  const Plan fits = MakePlan(settings, 3840, 2160, guaranteed);
+  CHECK(fits.scale == 3);
+  CHECK_FALSE(fits.clamped);
+  settings.resolution_scale = 2;
   CHECK_FALSE(MakePlan(settings, 3840, 2160, small).clamped);
+}
+
+TEST_CASE("the Resolution scale stops at 3x, whatever the settings value or the window") {
+  CHECK(kMaxResolutionScale == 3);
+  Settings settings;
+  // A value above the maximum (only a caller that skipped the parse can give one) is clamped.
+  settings.resolution_scale = 4;
+  CHECK(MakePlan(settings, 7680, 4320, kDesktop).scale == kMaxResolutionScale);
+  settings.resolution_scale = kAutoScale;
+  CHECK(MakePlan(settings, 7680, 4320, kDesktop).scale == kMaxResolutionScale);
 }
 
 // ADR-0001: the default look is the original's, in any window (owner decision 2026-10-28).
@@ -85,7 +96,7 @@ TEST_CASE("the texture sharpness bias is 0 when the frame is drawn at or above t
   settings.resolution_scale = 2;
   CHECK(MakePlan(settings, 2560, 1440, kDesktop).lod_bias == 0.0f);  // equal size
   CHECK(MakePlan(settings, 1920, 1080, kDesktop).lod_bias == 0.0f);  // supersampled
-  settings.resolution_scale = 4;
+  settings.resolution_scale = 3;
   CHECK(MakePlan(settings, 1280, 720, kDesktop).lod_bias == 0.0f);
 }
 
@@ -98,7 +109,7 @@ TEST_CASE("the texture sharpness bias is 0 at 1x, however much the presenter ups
   CHECK(MakePlan(settings, 1280, 720, kDesktop).lod_bias == 0.0f);
   CHECK(MakePlan(settings, 0, 0, kDesktop).lod_bias == 0.0f);
   // So is a scale the device clamped down to 1x.
-  settings.resolution_scale = 4;
+  settings.resolution_scale = 3;
   DeviceLimits tiny = kDesktop;
   tiny.max_image_size = 1280;
   CHECK(MakePlan(settings, 3840, 2160, tiny).scale == 1);
@@ -248,6 +259,9 @@ TEST_CASE("the settings whose value is not allowed are named, so the log can say
   CHECK(IgnoredSettings({.msaa = "2"}) == std::vector<std::string_view>{"ts4_msaa"});
   CHECK(IgnoredSettings({.resolution_scale = "5", .sharpening = "hgih"}) ==
         std::vector<std::string_view>{"ts4_resolution_scale", "ts4_sharpening"});
+  // 4x is no longer a choice: a --ts4_resolution_scale=4 is ignored like any other typo.
+  CHECK(IgnoredSettings({.resolution_scale = "4"}) ==
+        std::vector<std::string_view>{"ts4_resolution_scale"});
   CHECK(IgnoredSettings({.anisotropic_filtering = "2"}) ==
         std::vector<std::string_view>{"ts4_anisotropic_filtering"});
 }
@@ -255,6 +269,7 @@ TEST_CASE("the settings whose value is not allowed are named, so the log can say
 TEST_CASE("the Resolution scale parses, and an invalid one is 1x") {
   CHECK(ParseSettings({.resolution_scale = "3"}).resolution_scale == 3);
   CHECK(ParseSettings({.resolution_scale = "1"}).resolution_scale == 1);
+  CHECK(ParseSettings({.resolution_scale = "4"}).resolution_scale == 1);
   CHECK(ParseSettings({.resolution_scale = "5"}).resolution_scale == 1);
   CHECK(ParseSettings({.resolution_scale = "22"}).resolution_scale == 1);
 }
@@ -367,18 +382,19 @@ TEST_CASE("Auto picks the smallest multiple of 1280x720 that covers the window's
   CHECK(MakePlan(settings, 1920, 1080, kDesktop).scale == 2);
   CHECK(MakePlan(settings, 2560, 1440, kDesktop).scale == 2);
   CHECK(MakePlan(settings, 3840, 2160, kDesktop).scale == 3);
-  CHECK(MakePlan(settings, 5120, 2880, kDesktop).scale == 4);
+  CHECK(MakePlan(settings, 5120, 2880, kDesktop).scale == 3);  // capped at 3x
   // The frame is shown in the window's 16:9 area, so the bars beside or above it don't count.
   CHECK(MakePlan(settings, 3440, 1440, kDesktop).scale == 2);  // ultrawide: 2560x1440 shown
   CHECK(MakePlan(settings, 2560, 1600, kDesktop).scale == 2);  // 16:10: 2560x1440 shown
   CHECK(MakePlan(settings, 2564, 1421, kDesktop).scale == 2);  // a capped window: ~2526x1421
   CHECK(MakePlan(settings, 1280, 1024, kDesktop).scale == 1);  // 5:4: 1280x720 shown
-  // Capped at 4, then clamped to the device.
-  CHECK(MakePlan(settings, 7680, 4320, kDesktop).scale == 4);
+  // Capped at 3, then clamped to the device.
+  CHECK(MakePlan(settings, 7680, 4320, kDesktop).scale == 3);
+  CHECK_FALSE(MakePlan(settings, 7680, 4320, kDesktop).clamped);
   DeviceLimits small = kDesktop;
-  small.max_image_size = 4096;
+  small.max_image_size = 2560;
   const Plan clamped = MakePlan(settings, 7680, 4320, small);
-  CHECK(clamped.scale == 3);
+  CHECK(clamped.scale == 2);
   CHECK(clamped.clamped);
 }
 

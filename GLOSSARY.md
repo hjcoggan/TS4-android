@@ -96,5 +96,5 @@ _Avoid_: reset (that changes the file)
 A named group of setting values chosen together. Original is a Preset and is the default.
 
 **Resolution scale**:
-The Enhancement that renders the game at a whole multiple of its original 1280x720 and fits the result to the window. Auto picks the smallest multiple that covers the 16:9 area of the window the frame is shown in.
+The Enhancement that renders the game at a whole multiple of its original 1280x720 and fits the result to the window. Auto picks the smallest multiple that covers the 16:9 area of the window the frame is shown in. The largest multiple is 3x.
 _Avoid_: internal resolution, render resolution, supersampling (when the setting is meant)

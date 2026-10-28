@@ -20,7 +20,7 @@ REXCVAR_DEFINE_BOOL(safe, false, "TopSpin4",
 // runs: Native reads them as each frame begins, and the change callbacks of the two that Classic
 // has too set its filtering and the presenter's CAS (native_renderer.cpp, ApplyImageSettings).
 REXCVAR_DEFINE_STRING(ts4_resolution_scale, "1", "TopSpin4",
-                      "Resolution scale (Native renderer): 1, 2, 3 or 4 times 1280x720, or auto "
+                      "Resolution scale (Native renderer): 1, 2 or 3 times 1280x720, or auto "
                       "(the smallest that covers the window's 16:9 area)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_msaa, "original", "TopSpin4",

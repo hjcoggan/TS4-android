@@ -1,6 +1,6 @@
 # 09: Maxed-out pass and docs
 
-**What to build:** With every image setting at its maximum (Auto or 4x scale, 8x MSAA, 16x anisotropic filtering, High CAS), every 1.0 scene runs stably and shows no new artifacts. The docs reflect the shipped Enhancements. Spec: `../spec.md`.
+**What to build:** With every image setting at its maximum (Auto or 3x scale, 8x MSAA, 16x anisotropic filtering, High CAS; 4x scale was capped out on 2026-10-28, see ticket 14), every 1.0 scene runs stably and shows no new artifacts. The docs reflect the shipped Enhancements. Spec: `../spec.md`.
 
 **Blocked by:** 02 (Anisotropic filtering), 03 (CAS sharpening), 05 (Texture offsets at scale), 06 (Auto Resolution scale), 08 (MSAA 8x)
 

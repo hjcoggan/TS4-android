@@ -10,7 +10,7 @@ headless and hidden, in a window of --size (16:9, default 2560x1440):
   dual   Both renderers draw every frame (--ts4_native_dual_compare). Classic presents, so the
          presenter's dump of it at the output size (--ts4_dump_presented) is the ORIGINAL as a
          player sees it: the 1280x720 frame upscaled by the presenter. Native, at Resolution scale
-         4x and 8x MSAA (MATCHED), writes its own image of the same guest frame, put through the
+         3x and 8x MSAA (MATCHED), writes its own image of the same guest frame, put through the
          presenter's gamma ramp and shown at the output size. Same run, same frame: camera,
          players and timing match exactly, also in a match. These two Enhancements are Native
          only, so the original is untouched by them.
@@ -57,7 +57,7 @@ SCENES = ["boot-main-menu", "exhibition-match", "career-start", "academy-lesson"
 DEFAULT_SIZE = "2560x1440"
 
 # Native-only Enhancements: the original beside them stays pure in the same run.
-MATCHED = {"ts4_resolution_scale": "4", "ts4_msaa": "8"}
+MATCHED = {"ts4_resolution_scale": "3", "ts4_msaa": "8"}
 MAXIMUM = {**MATCHED, "ts4_anisotropic_filtering": "16", "ts4_sharpening": "high"}
 
 # The Oracle frame of the practice ground's scene point: Edge's window shot (ticket 02), cropped to

@@ -7,8 +7,8 @@ namespace TopSpin4.Launcher.Core;
 /// The player's Settings file (<c>topspin4.settings.toml</c>), written with the game's own rules
 /// (src/settings/config_file.h, which this mirrors): a top-level <c>version</c>, a line-preserving
 /// single-key rewrite, a temporary file and a rename, and a file of a newer build left alone.
-/// The version this build writes comes from the game's export (settings_file_version), so a game
-/// migration needs no change here.
+/// The version this build writes comes from the game's export (settings_file_version). A game
+/// migration must also be added to <c>Migrations</c> here: saving a setting migrates an older file first.
 /// </summary>
 public static class SettingsFile
 {
@@ -117,9 +117,72 @@ public static class SettingsFile
             : "version = " + version.ToString(CultureInfo.InvariantCulture) + "\n" + text;
     }
 
-    /// <summary>The text brought to this build's version (no migrations yet, so the version line is set).</summary>
-    public static string Migrate(string text, long currentVersion) =>
-        IsNewerThanBuild(text, currentVersion) ? text : WithVersion(text, currentVersion);
+    /// <summary>
+    /// The text with key's value <paramref name="from"/> (a string in either quote, or a bare number) changed to
+    /// <paramref name="to"/> in the same form, keeping the rest of the line. Any other value is left alone.
+    /// As ReplaceTomlValue in config_file.h.
+    /// </summary>
+    public static string ReplaceValue(string text, string key, string from, string to)
+    {
+        var output = new StringBuilder();
+        ForEachLine(text, (body, ending) =>
+        {
+            if (IsKeyLine(body, key, out var rest))
+            {
+                // rest is the end of body, so the value starts where the blanks after the equals sign end.
+                var value = rest.TrimStart(' ', '\t');
+                var length = 0;
+                var quote = "";
+                if (value.StartsWith('"') || value.StartsWith('\''))
+                {
+                    var close = value.IndexOf(value[0], 1);
+                    if (close >= 0)
+                    {
+                        length = close + 1;
+                        quote = value[..1];
+                    }
+                }
+                else
+                {
+                    var stop = value.AsSpan().IndexOfAny(" \t#\r");
+                    length = stop < 0 ? value.Length : stop;
+                }
+                var inner = quote.Length == 0 ? value[..length] : value[1..(length - 1)];
+                if (length != 0 && inner == from)
+                {
+                    output.Append(body.AsSpan(0, body.Length - value.Length)).Append(quote).Append(to).Append(quote)
+                        .Append(value.AsSpan(length)).Append(ending);
+                    return true;
+                }
+            }
+            output.Append(body).Append(ending);
+            return true;
+        });
+        return output.ToString();
+    }
+
+    /// <summary>
+    /// The game's settings migrations, in order (Migrations in config_file.h, which this mirrors): the one at index i
+    /// takes a file of version i + 1 to version i + 2.
+    /// </summary>
+    private static readonly Func<string, string>[] Migrations =
+    [
+        // 1 -> 2: the Resolution scale's 4x was removed (the largest is 3x), so a saved 4 becomes 3.
+        text => ReplaceValue(text, "ts4_resolution_scale", "4", "3"),
+    ];
+
+    /// <summary>
+    /// The text brought to <paramref name="currentVersion"/> (the game's export): its migrations run from the file's
+    /// version on, and the version line is set. A file of a newer build is returned as it is.
+    /// </summary>
+    public static string Migrate(string text, long currentVersion)
+    {
+        if (IsNewerThanBuild(text, currentVersion)) return text;
+        var version = Math.Max(Version(text) ?? 1, 1);
+        // The game's own list is as long as its version says; this one stops at the migrations it knows.
+        for (var i = version - 1; i < Math.Min(Migrations.Length, currentVersion - 1); i++) text = Migrations[i](text);
+        return WithVersion(text, currentVersion);
+    }
 
     /// <summary>The value written after <paramref name="key"/> with quotes and trailing comment removed, or null when the key is absent.</summary>
     public static string? ValueOf(string text, string key)

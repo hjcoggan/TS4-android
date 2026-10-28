@@ -16,7 +16,7 @@ A player who wants the best-looking Top Spin 4 their PC can produce has no way t
 
 Four Enhancements, each a player setting that defaults to the original behaviour:
 
-- **Resolution scale** (Native only): Original (1x), Auto, 2x, 3x or 4x. Auto picks the smallest multiple of 1280x720 that covers the 16:9 area of the window the frame is shown in, and follows the window while playing. A choice the GPU can't handle is clamped to the largest scale it supports, and the port says it was clamped. Higher scales render blur, bloom and shadows correctly and don't add extra texture sharpening on top of the supersampling.
+- **Resolution scale** (Native only): Original (1x), Auto, 2x or 3x. The largest scale is 3x (owner decision 2026-10-28: at 4x with 8x MSAA the heaviest frames need ~15 ms of GPU time and stutter on a variable-refresh display; bringing 4x back is ticket 14). Auto picks the smallest multiple of 1280x720 that covers the 16:9 area of the window the frame is shown in, up to 3x, and follows the window while playing. A choice the GPU can't handle is clamped to the largest scale it supports, and the port says it was clamped. Higher scales render blur, bloom and shadows correctly and don't add extra texture sharpening on top of the supersampling.
 - **MSAA** (Native only): Original (the game's own 2x), 4x or 8x. It raises the sample count only on the passes where the game already uses MSAA.
 - **Anisotropic filtering** (both renderers): Original (the game's own filtering), 4x, 8x or 16x.
 - **Sharpening (CAS)** (both renderers): Off, Low, Medium or High.
@@ -33,8 +33,8 @@ With every setting at its default, both renderers look like the Oracle again, in
 4. As a player, I want an Auto Resolution scale, so that I get a frame at least as large as my window without working out the multiple myself.
 5. As a player who resizes the window or switches to fullscreen, I want Auto to follow the new window size, so that the image stays sharp without a restart.
 6. As a player who moves the game to another monitor, I want Auto to pick the scale for that monitor's size, so that it fits the display I'm on.
-7. As a player, I want to choose a fixed 2x, 3x or 4x scale, so that I can trade performance for sharpness myself.
-8. As a player with a GPU that can't render 4x, I want the scale clamped to what my GPU supports and to be told it was clamped, so that the game doesn't crash or lose the device.
+7. As a player, I want to choose a fixed 2x or 3x scale, so that I can trade performance for sharpness myself.
+8. As a player with a GPU that can't render the scale I chose, I want the scale clamped to what my GPU supports and to be told it was clamped, so that the game doesn't crash or lose the device.
 9. As a player, I want the frame filtered down to my window when the scale renders above it, so that I get supersampled anti-aliasing, not a cropped or overflowing frame.
 10. As a player at 2x or above, I want bloom, blur and shadow edges to look as soft as they do at 1x, so that a higher resolution doesn't make the effects look harsh or broken.
 11. As a player at 2x or above, I want textures sharpened no more than the supersampling already does, so that the crowd, court and foliage don't shimmer more at higher scales.

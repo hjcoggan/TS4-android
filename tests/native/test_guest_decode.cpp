@@ -272,14 +272,14 @@ TEST_CASE("1440p into a 1440p window is drawn at the window's size, nothing filt
   CHECK(plan.output_height == 1440);
 }
 
-TEST_CASE("2880p into a 1440p window is a box downsample") {
-  const OutputPlan plan = PlanOutput(4, 2560, 1440);
-  CHECK(plan.target_scale == 4);
+TEST_CASE("2160p into a 1080p window is a box downsample") {
+  const OutputPlan plan = PlanOutput(3, 1920, 1080);
+  CHECK(plan.target_scale == 3);
   CHECK(plan.downsample);
   CHECK(plan.filter == DownsampleFilter::kBox);
   CHECK(plan.halvings == 1);
-  CHECK(plan.output_width == 2560);
-  CHECK(plan.output_height == 1440);
+  CHECK(plan.output_width == 1920);
+  CHECK(plan.output_height == 1080);
 }
 
 TEST_CASE("2160p into a 1440p window uses the non-integer filter") {
@@ -298,8 +298,8 @@ TEST_CASE("1440p into a 1080p window downsamples") {
   CHECK(plan.output_height == 1080);
 }
 
-TEST_CASE("2880p into a 1080p window halves once, then filters the rest") {
-  const OutputPlan plan = PlanOutput(4, 1920, 1080);
+TEST_CASE("2160p into a 720p window halves once, then filters the rest") {
+  const OutputPlan plan = PlanOutput(3, 1280, 720);
   CHECK(plan.filter == DownsampleFilter::kBilinear);
   CHECK(plan.halvings == 1);
 }
@@ -309,7 +309,7 @@ TEST_CASE("a window wider than 16:9 is filtered to its 16:9 area") {
   CHECK(plan.downsample);
   CHECK(plan.output_width == 2560);
   CHECK(plan.output_height == 1440);
-  const OutputPlan tall = PlanOutput(4, 1920, 1200);
+  const OutputPlan tall = PlanOutput(3, 1920, 1200);
   CHECK(tall.output_width == 1920);
   CHECK(tall.output_height == 1080);
 }

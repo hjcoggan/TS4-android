@@ -128,7 +128,7 @@ inline const std::vector<Setting>& PlayerSettings() {
        "yet, so Classic draws until it is). Takes effect at the next start",
        Section::kGraphics, "Renderer", 10},
       // Image Enhancements (.scratch/image-quality/spec.md). Native only:
-      {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3", "4"},
+      {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3"},
        "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
        "filtered down to the window when larger; auto picks the smallest that covers the "
        "16:9 area of the window, and follows it. The GPU's limit may clamp it",

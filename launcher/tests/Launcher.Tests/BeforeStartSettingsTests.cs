@@ -110,6 +110,63 @@ public sealed class BeforeStartSettingsTests : IDisposable
         Assert.Equal(SettingChange.FileIsNewer, new BeforeStartSettings(schema, SettingsPath).Set(renderer, "classic"));
     }
 
+    [Fact]
+    public void Saving_into_a_version_1_file_migrates_a_resolution_scale_of_4_to_3_as_the_game_does()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(SettingsPath, "version = 1\r\n# mine\r\nts4_resolution_scale = \"4\"  # big\r\nts4_msaa = \"4\"\r\n");
+        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+
+        new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+
+        Assert.Equal(
+            "version = 2\r\n# mine\r\nts4_resolution_scale = \"3\"  # big\r\nts4_msaa = \"4\"\r\nts4_renderer = \"native\"\n",
+            File.ReadAllText(SettingsPath));
+    }
+
+    [Fact]
+    public void Saving_into_a_version_1_file_keeps_any_other_resolution_scale()
+    {
+        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+        foreach (var scale in new[] { "1", "auto", "2", "3" })
+        {
+            Directory.CreateDirectory(_folder);
+            File.WriteAllText(SettingsPath, $"version = 1\nts4_resolution_scale = \"{scale}\"\n");
+
+            new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+
+            Assert.Equal($"version = 2\nts4_resolution_scale = \"{scale}\"\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
+        }
+    }
+
+    [Fact]
+    public void A_version_2_file_is_not_migrated_again_and_an_export_without_a_version_runs_no_migration()
+    {
+        Directory.CreateDirectory(_folder);
+        var schema = SettingsSchema.Parse(Export.Replace("\"format\": 1,", "\"format\": 1, \"settings_file_version\": 2,"));
+        File.WriteAllText(SettingsPath, "version = 2\nts4_resolution_scale = \"4\"\n");
+        new BeforeStartSettings(schema, SettingsPath).Set(schema.Settings[0], "native");
+        Assert.Equal("version = 2\nts4_resolution_scale = \"4\"\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
+
+        // The game's version decides how many migrations run: at version 1 there are none.
+        File.WriteAllText(SettingsPath, "version = 1\nts4_resolution_scale = \"4\"\n");
+        Settings().Set(Settings().Settings[0], "native");
+        Assert.Equal("version = 1\nts4_resolution_scale = \"4\"\nts4_renderer = \"native\"\n", File.ReadAllText(SettingsPath));
+    }
+
+    [Theory]
+    [InlineData("ts4_resolution_scale = \"4\"\n", "ts4_resolution_scale = \"3\"\n")]
+    [InlineData("  ts4_resolution_scale='4' # x\r\n", "  ts4_resolution_scale='3' # x\r\n")]
+    [InlineData("ts4_resolution_scale = 4\n", "ts4_resolution_scale = 3\n")]
+    [InlineData("ts4_resolution_scale = 4 # x", "ts4_resolution_scale = 3 # x")]
+    [InlineData("ts4_resolution_scale = \"2\"\n", "ts4_resolution_scale = \"2\"\n")]
+    [InlineData("ts4_resolution_scale = \"40\"\n", "ts4_resolution_scale = \"40\"\n")]
+    [InlineData("ts4_resolution_scale = \"4\n", "ts4_resolution_scale = \"4\n")]
+    [InlineData("ts4_resolution_scale_old = \"4\"\nts4_msaa = \"4\"\n", "ts4_resolution_scale_old = \"4\"\nts4_msaa = \"4\"\n")]
+    [InlineData("ts4_resolution_scale =\n", "ts4_resolution_scale =\n")]
+    public void Replacing_a_value_changes_only_that_keys_value_and_keeps_the_line(string text, string expected) =>
+        Assert.Equal(expected, SettingsFile.ReplaceValue(text, "ts4_resolution_scale", "4", "3"));
+
     [Theory]
     [InlineData("version = 3\n", 3L)]
     [InlineData("version = -2 # old\n", -2L)]

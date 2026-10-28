@@ -40,7 +40,7 @@ TEST_CASE("The page lists the Graphics settings in registry order with labels, v
   CHECK(rows[1].value_label == "Classic");
   CHECK(rows[2].label == "Resolution scale");
   CHECK(rows[2].value_label == "1x");
-  CHECK(rows[2].choices.size() == 5);
+  CHECK(rows[2].choices.size() == 4);  // 1x, Auto, 2x, 3x
   CHECK(rows[3].value_label == "Original");
   CHECK(rows[5].label == "Sharpening");
   CHECK(rows[5].value_label == "Off");

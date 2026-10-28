@@ -101,7 +101,7 @@ def test_a_pair_per_frame_with_the_original_in_frame_order_and_the_oracle():
     first, second = pairs
     assert first["original"] == "/o10.png"
     assert [v["image"] for v in first["variants"]] == ["/m10.png", "/x10.png"]
-    assert first["variants"][0]["name"] == "Resolution scale 4x, MSAA 8x"
+    assert first["variants"][0]["name"] == "Resolution scale 3x, MSAA 8x"
     assert first["variants"][1]["name"].startswith("Maximum")
     assert first["crops"][0]["name"] == "title"
     assert "oracle" not in first and second["oracle"] == "/e20.png"

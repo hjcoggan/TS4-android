@@ -11,7 +11,7 @@ box fits any output size:
     {"out": "analysis/before-after/page", "title": "...", "intro": "...",
      "pairs": [{"name": "Exhibition, first point", "note": "...",
                 "original": "presented.png",
-                "variants": [{"name": "Resolution scale 4x and MSAA 8x", "image": "scaled.png",
+                "variants": [{"name": "Resolution scale 3x and MSAA 8x", "image": "scaled.png",
                               "note": "the same frame"}],
                 "oracle": "edge.png",
                 "crops": [{"name": "far baseline", "box": [0.3, 0.3, 0.2, 0.1]}]}]}
