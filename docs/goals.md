@@ -12,7 +12,7 @@ An enhanced port (ADR-0001) of the Reference build (ADR-0002), recompiled with R
 - **Renderer:** the Native renderer by default, with the Classic renderer selectable (ADR-0005). 1.0 waits until the Native renderer matches Classic in every 1.0 mode.
 - **Enhancements in 1.0:** resolution scaling, MSAA, anisotropic filtering and CAS sharpening (`.scratch/image-quality/`), and button remapping.
 - **Extras:** the Agassi preorder outfit is available through an unlock option. Stereoscopic 3D stays disabled.
-- **Saves and settings:** stored in a per-user directory, in the game's own save format, so Career saves can be copied between the Oracle and the port.
+- **Saves and settings:** stored in `userdata` beside the game exe (portable install, ADR-0009), in the game's own save format, so Career saves can be copied between the Oracle and the port.
 
 ## After 1.0
 

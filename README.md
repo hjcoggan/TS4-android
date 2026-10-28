@@ -13,7 +13,7 @@ Two files, both from your own copy of the game:
 1. **A disc image (`.iso`)** of your own Top Spin 4 Xbox 360 disc. Only one edition works: the disc with media ID `60819732`. The Launcher tells you if the file you picked is another edition or another game.
 2. **Title Update 1**, the update file Top Spin 4 received on Xbox 360. The port is built on it and does not run without it.
 
-The Launcher never changes your disc image or update file. It copies the game files it needs (about 6 GB) into your user folder once.
+The Launcher never changes your disc image or update file. It copies the game files it needs (about 6 GB) into the game folder (beside `topspin4.exe`) once. Everything the game and the Launcher write, including your settings and saves, stays in that folder, so copying it copies the whole install and deleting it removes everything. The folder must be one you can write to (not Program Files).
 
 ### Dumping your own disc
 
@@ -31,7 +31,7 @@ Every setting is in the Launcher's **Settings**, one tab per section, so you can
 - On a keyboard, press **F4**.
 - On a controller, hold **Back** and **Start** together.
 
-In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in your user folder, so the Launcher and the game show the same values.
+In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in the game folder (`userdata`), so the Launcher and the game show the same values.
 
 ### Renderer
 

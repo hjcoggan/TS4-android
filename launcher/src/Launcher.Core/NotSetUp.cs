@@ -17,6 +17,8 @@ public static class NotSetUp
         "disc" => "The game could not find the prepared disc files. Choose your disc image to set up again.",
         "title-update" => "The game could not find the prepared Title Update 1 files. Choose the Title Update 1 file to set up again.",
         "disc-and-title-update" => "The game has not been set up yet. Choose your disc image and Title Update 1 below.",
+        // The window shows its own refusal naming the folder; this is only the fallback (src/user_paths.h, kNotSetUpUnwritable).
+        "folder-not-writable" => "The game's folder can't be written to. Move the game folder somewhere you can write to, and start the Launcher again.",
         _ => "The game needs to be set up before it can start.",
     };
 }

@@ -51,20 +51,23 @@ public partial class MainWindow : Window
         InitializeComponent();
         // The command line wins, then the place the player moved the game files to (the location file the
         // game reads too), then the default folder.
-        var userRoot = Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot());
+        var userRoot = Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.UserDataRoot(_launcherDirectory));
         var locationFile = new GameFilesLocation(userRoot);
-        var cacheRoot = locationFile.Resolve(App.Options.CacheRoot, UserDirectories.PreparedDataRoot());
+        var cacheRoot = locationFile.Resolve(App.Options.CacheRoot, UserDirectories.PreparedDataRoot(_launcherDirectory));
+        // A portable install writes beside the exe (ADR-0009): a folder that can't be written to is refused on the
+        // setup page, never replaced by a per-user one. With --user-data the developer's folder is the one checked.
+        var refusal = UserDirectories.Refusal(App.Options.UserDataRoot is null ? Path.TrimEndingDirectorySeparator(_launcherDirectory) : userRoot);
         var preparation = new Preparation(cacheRoot);
         _location = new GameFilesLocationModel(preparation, locationFile);
         _settingsPath = SettingsFile.PathIn(userRoot);
         _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
         _home = new HomeModel(preparation, _gameExe);
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
-        // The disc row reads the disc's art the moment it accepts the disc; the art folder sits beside the settings.
-        _artFolder = Path.Combine(userRoot, DiscArt.FolderName);
+        // The disc row reads the disc's art the moment it accepts the disc; the art folder is userdata\art.
+        _artFolder = UserDirectories.ArtFolder(userRoot);
         // Once the disc is extracted (and at each start) the art is read again from there if the art folder is missing or incomplete.
         _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, _artFolder, Log),
-            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log));
+            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log), refusal: refusal);
         _shell = new LauncherShell(_flow);
 
         _setupPage = new SetupPage(_flow);
@@ -98,7 +101,8 @@ public partial class MainWindow : Window
         };
 
         // The game started without setup done: the setup page says why (or the home page, if this Launcher finds the files).
-        if (App.Options.NotSetUp is { } reason) Say(NotSetUp.Describe(reason));
+        // A refused folder keeps its own message, which already says why.
+        if (App.Options.NotSetUp is { } reason && refusal is null) Say(NotSetUp.Describe(reason));
 
         // Arrow keys and pad moves both go through XYFocus, so focus follows the layout.
         XYFocus.SetNavigationModes(this, XYFocusNavigationModes.Enabled);

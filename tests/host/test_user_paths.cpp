@@ -1,47 +1,54 @@
-// src/user_paths.h: the per-user folder for saves and settings, resolved as the launcher
-// resolves its own (launcher/src/Launcher.Core/UserDirectories.cs).
+// src/user_paths.h: the portable install. Every default folder is resolved from the folder that
+// holds topspin4.exe, as the Launcher resolves its own from its folder
+// (launcher/src/Launcher.Core/UserDirectories.cs). ADR-0009.
 
 #include <catch_amalgamated.hpp>
 
 #include <fstream>
-#include <map>
 #include <optional>
 #include <string>
 
 #include "user_paths.h"
 
-using topspin4::user_paths::AppFolder;
-
 namespace {
 
-const std::filesystem::path kAppData = LR"(C:\Users\player\AppData\Roaming)";
-
-auto Environment(std::map<std::string, std::string> variables) {
-  return [variables](std::string_view name) -> std::optional<std::string> {
-    auto found = variables.find(std::string(name));
-    if (found == variables.end()) return std::nullopt;
-    return found->second;
-  };
-}
+namespace fs = std::filesystem;
+namespace user_paths = topspin4::user_paths;
 
 }  // namespace
 
-TEST_CASE("On Windows saves and settings go under the roaming app data folder") {
-  CHECK(AppFolder(Environment({{"HOME", "/home/deck"}}), false, kAppData) ==
-        std::filesystem::path(LR"(C:\Users\player\AppData\Roaming\TopSpin4Recomp)"));
+TEST_CASE("Saves and settings, the prepared data and the shader cache default to the exe folder") {
+  const fs::path exe_folder = LR"(D:\Games\TopSpin4)";
+
+  CHECK(user_paths::UserDataRootIn(exe_folder) == fs::path(LR"(D:\Games\TopSpin4\userdata)"));
+  CHECK(user_paths::PreparedDataRootIn(exe_folder) == exe_folder);
+  CHECK(user_paths::CacheRootIn(exe_folder) == fs::path(LR"(D:\Games\TopSpin4\cache)"));
+  CHECK(user_paths::kUserDataFolder == "userdata");
 }
 
-TEST_CASE("Under Proton saves and settings go under the Linux user's XDG data folder") {
-  CHECK(AppFolder(Environment({{"HOME", "/home/deck"}}), true, kAppData) ==
-        std::filesystem::path(LR"(Z:\home\deck\.local\share\TopSpin4Recomp)"));
-  CHECK(AppFolder(Environment({{"HOME", "/home/deck"}, {"XDG_DATA_HOME", "/run/media/sd/data/"}}),
-                     true, kAppData) ==
-        std::filesystem::path(LR"(Z:\run\media\sd\data\TopSpin4Recomp)"));
+TEST_CASE("Under Wine the roots stay beside the exe, on the Linux user's drive, not in the prefix") {
+  // Wine reports the exe folder as a Z: path; nothing is looked up in the prefix or under XDG.
+  const fs::path exe_folder = LR"(Z:\home\deck\games\TopSpin4)";
+
+  CHECK(user_paths::UserDataRootIn(exe_folder) == fs::path(LR"(Z:\home\deck\games\TopSpin4\userdata)"));
+  CHECK(user_paths::PreparedDataRootIn(exe_folder) == exe_folder);
+  CHECK(user_paths::CacheRootIn(exe_folder) == fs::path(LR"(Z:\home\deck\games\TopSpin4\cache)"));
 }
 
-TEST_CASE("Under Wine without a Linux home they stay in the prefix") {
-  CHECK(AppFolder(Environment({{"XDG_DATA_HOME", "relative/is/ignored"}}), true, kAppData) ==
-        std::filesystem::path(LR"(C:\Users\player\AppData\Roaming\TopSpin4Recomp)"));
+TEST_CASE("A folder that can be written to is accepted and one that cannot is refused") {
+  const fs::path root = fs::temp_directory_path() / "ts4-writable-test";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  CHECK(user_paths::IsWritableFolder(root));
+  // Made on the way, as the game makes userdata on first run.
+  CHECK(user_paths::IsWritableFolder(root / "not-yet-made"));
+  CHECK(fs::is_directory(root / "not-yet-made"));
+  // A folder under a file cannot exist, so cannot be written to.
+  std::ofstream(root / "a-file") << "x";
+  CHECK_FALSE(user_paths::IsWritableFolder(root / "a-file" / "below"));
+  CHECK(user_paths::kNotSetUpUnwritable == "folder-not-writable");
+  std::error_code error;
+  fs::remove_all(root, error);
 }
 
 TEST_CASE("The prepared data folders are named as the Launcher names them") {
@@ -215,11 +222,50 @@ TEST_CASE("One folder on the command line leaves the other one to be found") {
 
 TEST_CASE("The shader cache follows the recorded place, beside the prepared data") {
   using topspin4::user_paths::CacheRoot;
-  const fs::path default_cache = LR"(C:\Users\player\AppData\Local\TopSpin4Recomp\cache)";
+  const fs::path default_cache = LR"(E:\Install\cache)";
 
   CHECK(CacheRoot(std::nullopt, default_cache) == default_cache);
   CHECK(CacheRoot(fs::path(LR"(D:\Games\TopSpin4)"), default_cache) ==
         fs::path(LR"(D:\Games\TopSpin4\cache)"));
   // The Launcher's move carries the folder of this name (Preparation.ShaderCacheFolderName).
   CHECK(topspin4::user_paths::kCacheFolder == "cache");
+}
+
+TEST_CASE("A location file in userdata moves the prepared data and the cache off the exe folder") {
+  Places places;
+  const fs::path exe_folder = places.root / "install";
+  const fs::path moved = places.root / "moved";
+  Places::Finished(exe_folder / "gamedata");
+  Places::Finished(moved / "gamedata");
+  const auto user_data = user_paths::UserDataRootIn(exe_folder);
+  const auto location_file = user_data / std::string(user_paths::kLocationFileName);
+
+  // No location file: the exe folder holds both.
+  auto recorded = ReadLocationFile(location_file);
+  CHECK_FALSE(recorded);
+  CHECK(PreparedFolder({}, recorded, user_paths::PreparedDataRootIn(exe_folder), "gamedata") ==
+        exe_folder / "gamedata");
+  CHECK(user_paths::CacheRoot(recorded, user_paths::CacheRootIn(exe_folder)) == exe_folder / "cache");
+
+  // The Launcher records the place in userdata; the game then reads both from there.
+  fs::create_directories(user_data);
+  std::ofstream(location_file, std::ios::binary) << moved.string() << "\n";
+  recorded = ReadLocationFile(location_file);
+  REQUIRE(recorded);
+  CHECK(PreparedFolder({}, recorded, user_paths::PreparedDataRootIn(exe_folder), "gamedata") ==
+        moved / "gamedata");
+  CHECK(user_paths::CacheRoot(recorded, user_paths::CacheRootIn(exe_folder)) == moved / "cache");
+}
+
+TEST_CASE("Folders given on the command line win over the exe folder and the location file") {
+  Places places;
+  const fs::path exe_folder = places.root / "install";
+  Places::Finished(exe_folder / "gamedata");
+  Places::Finished(exe_folder / "updatedata");
+
+  CHECK(PreparedFolder(places.command_line, std::nullopt, user_paths::PreparedDataRootIn(exe_folder),
+                       "gamedata") == places.command_line);
+  CHECK_FALSE(SetupNeededReason({}, {}, std::nullopt, user_paths::PreparedDataRootIn(exe_folder)));
+  CHECK_FALSE(SetupNeededReason(places.command_line, places.root / "dev" / "updatedata", std::nullopt,
+                                places.root / "elsewhere"));
 }

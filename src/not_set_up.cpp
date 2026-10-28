@@ -8,6 +8,7 @@
 #include <rex/filesystem.h>
 
 #include "command_line.h"
+#include "user_paths.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -59,8 +60,11 @@ void ReportNotSetUp(std::string_view reason, const std::filesystem::path& user_d
   }
   if (!StartLauncher(reason, user_data_root)) {
     MessageBoxW(nullptr,
-                L"Top Spin 4 needs to be set up first. Run topspin4-launcher.exe from the game's "
-                L"folder and follow the steps on its setup page, then start the game again.",
+                reason == user_paths::kNotSetUpUnwritable
+                    ? L"The game's folder can't be written to. Move the game folder somewhere you can "
+                      L"write to, such as your Documents or a games drive, and start the Launcher again."
+                    : L"Top Spin 4 needs to be set up first. Run topspin4-launcher.exe from the game's "
+                      L"folder and follow the steps on its setup page, then start the game again.",
                 L"Top Spin 4", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST);
   }
   std::_Exit(0);

@@ -9,8 +9,8 @@ public sealed record PreparedData(string GameDataRoot, string UpdateDataRoot, bo
 
 /// <summary>
 /// Disc and TU1 preparation: checks that the player's disc image and TU1 package are the
-/// Reference build, then extracts the disc and unpacks TU1 into a per-user cache
-/// (<see cref="UserDirectories.PreparedDataRoot()"/>). Both inputs are checked before anything
+/// Reference build, then extracts the disc and unpacks TU1 beside the game exe
+/// (<see cref="UserDirectories.PreparedDataRoot"/>). Both inputs are checked before anything
 /// is written. A later launch finds the cache complete with a cheap check and needs neither
 /// input; a preparation that stopped part way never counts as complete and is resumed.
 /// </summary>

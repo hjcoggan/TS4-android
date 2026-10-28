@@ -1,47 +1,55 @@
-using System.Runtime.InteropServices;
-
 namespace TopSpin4.Launcher.Core;
 
 /// <summary>
-/// Per-user folders. Prepared data (~5.7 GB, derivable again from the disc) goes under
-/// <c>%LOCALAPPDATA%</c>, apart from saves and settings, which will go under <c>%APPDATA%</c>
-/// (spec, "Saves"). Under Proton the Windows folders sit inside the game's Wine prefix, so
-/// the Linux user's XDG data folder is used instead, as .NET itself maps LocalApplicationData
-/// on Linux, and reached through Wine's Z: drive.
+/// The portable install (ADR-0009): every default folder is resolved from the folder the Launcher
+/// runs from, which holds <c>topspin4.exe</c> too. The prepared disc and Title Update 1
+/// (<c>gamedata</c>, <c>updatedata</c>, ~5.7 GB, derivable again from the disc) and the game's
+/// shader cache (<c>cache</c>) sit directly in it; the Settings file, saves, achievements, the
+/// disc art and the game files location file go in <c>userdata</c>. Nothing defaults to
+/// <c>%APPDATA%</c>, <c>%LOCALAPPDATA%</c> or the XDG data folder, on Windows or under Proton, so
+/// the same text in the game's src/user_paths.h applies (keep the folder names equal). The command
+/// line (<c>--user-data</c>, <c>--cache</c>) and a recorded game files location still win.
 /// </summary>
 public static class UserDirectories
 {
-    public const string FolderName = "TopSpin4Recomp";
+    public const string UserDataFolderName = "userdata";
 
-    /// <summary>Where this user's prepared data lives on this machine.</summary>
-    public static string PreparedDataRoot() =>
-        PreparedDataRoot(System.Environment.GetEnvironmentVariable, UnderWine(),
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData));
+    /// <summary>Where the prepared data lives: the folder the Launcher runs from.</summary>
+    public static string PreparedDataRoot(string launcherDirectory) => Install(launcherDirectory);
 
-    public static string PreparedDataRoot(Func<string, string?> environment, bool underWine, string localApplicationData)
-    {
-        if (underWine && XdgDataHome(environment) is { } unix)
-            return "Z:" + unix.TrimEnd('/').Replace('/', '\\') + '\\' + FolderName;
-        return Path.Combine(localApplicationData, FolderName);
-    }
+    /// <summary>Where the game keeps its Settings file and saves, and the Launcher its art and location file.</summary>
+    public static string UserDataRoot(string launcherDirectory) => Path.Combine(Install(launcherDirectory), UserDataFolderName);
+
+    /// <summary>The disc art folder inside a user data folder.</summary>
+    public static string ArtFolder(string userDataRoot) => Path.Combine(userDataRoot, DiscArt.FolderName);
 
     /// <summary>
-    /// Where the game keeps its Settings file (and saves): the roaming app data folder, as in
-    /// the game's src/user_paths.cpp (the same XDG folder under Proton).
+    /// The player's reason a folder cannot be used, or null when it can be written to. The folder is made
+    /// if missing and a file is written in it and removed again. There is no fallback to the user's own
+    /// folders, so an install never ends up split between two places.
     /// </summary>
-    public static string SettingsRoot() =>
-        PreparedDataRoot(System.Environment.GetEnvironmentVariable, UnderWine(),
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData));
-
-    // XDG_DATA_HOME when it is absolute (the spec says to ignore a relative one), else ~/.local/share.
-    private static string? XdgDataHome(Func<string, string?> environment)
+    public static string? Refusal(string folder)
     {
-        if (environment("XDG_DATA_HOME") is { } data && data.StartsWith('/')) return data;
-        return environment("HOME") is { } home && home.StartsWith('/') ? home.TrimEnd('/') + "/.local/share" : null;
+        if (CanWrite(folder)) return null;
+        return $"This folder can't be written to: {folder}. Move the game folder somewhere you can write to, " +
+               "such as your Documents or a games drive, and start the Launcher again.";
     }
 
-    // Wine's ntdll exports wine_get_version; Windows' does not.
-    private static bool UnderWine() =>
-        OperatingSystem.IsWindows() && NativeLibrary.TryLoad("ntdll.dll", out var ntdll)
-        && NativeLibrary.TryGetExport(ntdll, "wine_get_version", out _);
+    private static string Install(string launcherDirectory) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(launcherDirectory));
+
+    private static bool CanWrite(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+            var probe = Path.Combine(folder, ".topspin4-write-test");
+            File.WriteAllText(probe, "x");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            return false;
+        }
+    }
 }

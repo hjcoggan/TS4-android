@@ -85,7 +85,7 @@ The separate program players open to start the game. On first run it prepares th
 _Avoid_: setup tool (when the GUI is meant)
 
 **Disc art**:
-The pictures the Launcher shows (background, box art, logo, setup background and the title icon), read from the player's own disc and written to an `art` folder in the per-user folder. The Launcher never ships any of it. A source the disc lacks gives no picture; a damaged one is logged and gives none.
+The pictures the Launcher shows (background, box art, logo, setup background and the title icon), read from the player's own disc and written to `userdata\art` beside the game exe. The Launcher never ships any of it. A source the disc lacks gives no picture; a damaged one is logged and gives none.
 _Avoid_: assets, skin, theme (the theme only reads the Disc art)
 
 **Direct shortcut**:

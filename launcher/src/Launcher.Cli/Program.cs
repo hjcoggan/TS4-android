@@ -1,6 +1,6 @@
 using TopSpin4.Launcher.Core;
 
-// topspin4-setup: prepares the player's disc image and TU1 into the per-user cache and prints
+// topspin4-setup: prepares the player's disc image and TU1 beside the tool (or --cache) and prints
 // where the runtime finds them. The launcher UI (ticket 30) replaces it for players.
 const string Usage =
     "Usage: topspin4-setup [--disc <image.iso>] [--tu <TU1 package>] [--cache <folder>]\n" +
@@ -33,7 +33,9 @@ Console.CancelKeyPress += (_, stop) =>
 };
 
 // The command line wins, then the place the Launcher recorded for the game files, then the default folder.
-var root = new GameFilesLocation(UserDirectories.SettingsRoot()).Resolve(cache, UserDirectories.PreparedDataRoot());
+// The default folders are beside this tool (ADR-0009), which sits beside the game exe.
+var root = new GameFilesLocation(UserDirectories.UserDataRoot(AppContext.BaseDirectory))
+    .Resolve(cache, UserDirectories.PreparedDataRoot(AppContext.BaseDirectory));
 var preparation = new Preparation(root);
 var lastLine = "";
 var progress = new SyncProgress(report =>

@@ -1,4 +1,4 @@
-// src/settings: the player settings file in the per-user folder (ticket 10), adapted from
+// src/settings: the player settings file in the userdata folder (ticket 10), adapted from
 // WWE All Stars' settings (ADR-0004).
 
 #include <catch_amalgamated.hpp>

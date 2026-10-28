@@ -1,7 +1,7 @@
 namespace TopSpin4.Launcher.Core;
 
 /// <summary>
-/// The small location file in the per-user folder that says where the prepared game files are
+/// The small location file in the user data folder (<c>userdata</c>) that says where the prepared game files are
 /// when the player moved them off the default folder. The game reads the same file when it looks
 /// for prepared data (src/user_paths.h): the command line first, then this file, then the default
 /// prepared-data folder. One line: the folder that holds <c>gamedata</c> and <c>updatedata</c>. The

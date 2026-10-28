@@ -4,7 +4,7 @@ using System.Text;
 namespace TopSpin4.Launcher.Core;
 
 /// <summary>
-/// The art folder the Disc art module fills (<c>art</c> in the per-user folder): one image file
+/// The art folder the Disc art module fills (<c>userdata\art</c> beside the game exe): one image file
 /// per slot, stored as it came off the disc (a PNG stays a PNG, a JPEG a JPEG), the title icon
 /// again as <c>topspin4.ico</c>, and <c>index.txt</c>, which names what was found and the disc it
 /// came from. The index is written after the files it names and before the files it no longer

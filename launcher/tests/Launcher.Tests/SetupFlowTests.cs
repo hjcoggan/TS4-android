@@ -64,6 +64,38 @@ public sealed class SetupFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task A_folder_that_cannot_be_written_to_is_refused_on_the_setup_page_and_setup_stays_disabled()
+    {
+        var refusal = UserDirectories.Refusal(Path.Combine(WriteText("a-file"), "below"));
+        var flow = new SetupFlow(Preparation(), _time, refusal: refusal);
+        await flow.ChooseDisc(WriteDisc());
+        await flow.ChooseTitleUpdate(WriteTu());
+
+        Assert.Equal(SetupPhase.Refused, flow.Phase);
+        Assert.Equal(refusal, flow.Message);
+        Assert.Equal(RowState.Accepted, flow.Disc.State);
+        Assert.Equal(RowState.Accepted, flow.TitleUpdate.State);
+        Assert.False(flow.CanPrepare);
+        await flow.PrepareAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(SetupPhase.Refused, flow.Phase);
+        Assert.False(Directory.Exists(Cache));
+    }
+
+    [Fact]
+    public async Task A_refused_folder_shows_the_setup_page_even_when_the_game_files_are_there()
+    {
+        var first = Flow();
+        await first.ChooseDisc(WriteDisc());
+        await first.ChooseTitleUpdate(WriteTu());
+        await first.PrepareAsync(TestContext.Current.CancellationToken);
+        var flow = new SetupFlow(Preparation(), _time, refusal: "This folder can't be written to: X.");
+
+        Assert.Equal(SetupPhase.Refused, flow.Phase);
+        Assert.Equal(LauncherPage.Setup, new LauncherShell(flow).Page);
+        Assert.Null(flow.Prepared);
+    }
+
+    [Fact]
     public async Task A_supported_disc_gives_an_accepted_row_naming_the_edition()
     {
         var flow = Flow();

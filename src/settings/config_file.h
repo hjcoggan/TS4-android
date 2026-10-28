@@ -19,7 +19,7 @@
 
 namespace topspin4::settings {
 
-// The player's settings file, in the per-user folder (src/user_paths.h), so that replacing the
+// The player's settings file, in the userdata folder (src/user_paths.h), so that replacing the
 // game folder keeps it.
 inline std::filesystem::path SettingsPath(const std::filesystem::path& user_data_root) {
   return user_data_root / "topspin4.settings.toml";

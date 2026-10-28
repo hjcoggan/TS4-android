@@ -25,15 +25,15 @@ public sealed record DiscArtResult(IReadOnlyList<DiscArtSlot> Found, IReadOnlyLi
 
 /// <summary>
 /// The Disc art module. Reads the Launcher's pictures from the player's own disc, the
-/// <c>.iso</c> or the prepared disc folder, and writes them to an art folder in the per-user
-/// folder (<see cref="DiscArtFolder"/> reads them back). Each source stands alone: one that the
+/// <c>.iso</c> or the prepared disc folder, and writes them to an art folder, <c>userdata\art</c>
+/// (<see cref="DiscArtFolder"/> reads them back). Each source stands alone: one that the
 /// disc lacks gives nothing and no error; one that is damaged is logged and gives nothing,
 /// and the others still count. Nothing from the disc is kept in the repository or the
 /// Launcher itself (ADR-0006).
 /// </summary>
 public static class DiscArt
 {
-    /// <summary>The name of the art folder inside the per-user folder.</summary>
+    /// <summary>The name of the art folder inside the user data folder.</summary>
     public const string FolderName = "art";
 
     private const string NxeArt = "nxeart";

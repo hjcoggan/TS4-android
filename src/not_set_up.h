@@ -1,5 +1,6 @@
 // The game started without setup done (ticket 06): no game folders on the command line and the
-// prepared disc or Title Update 1 not found (user_paths.h, SetupNeededReason). It starts the
+// prepared disc or Title Update 1 not found (user_paths.h, SetupNeededReason), or its own folder
+// cannot be written to (kNotSetUpUnwritable, ADR-0009). It starts the
 // Launcher beside the exe with --not-set-up <reason> and ends; with no Launcher beside it, a
 // message box says setup is needed. A headless run (the developer scripts, unattended) shows
 // neither: it writes the reason to stderr and ends.

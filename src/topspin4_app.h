@@ -73,11 +73,17 @@ class TopSpin4App : public rex::ReXApp {
     return rex::ReXApp::SetupEnvironment();
   }
 
-  // Saves and settings go to the per-user folder and the shader cache beside the launcher's
-  // prepared data, wherever the player moved it (src/user_paths.h), instead of the SDK's
-  // Documents/topspin4. The developer scripts pass both folders on the command line, which wins.
+  // A portable install (ADR-0009): saves and settings go to userdata beside the exe, and the shader
+  // cache beside the launcher's prepared data, wherever the player moved it (src/user_paths.h),
+  // instead of the SDK's Documents/topspin4. The developer scripts pass both folders on the
+  // command line, which wins.
   void OnConfigurePaths(rex::PathConfig& paths) override {
+    // An exe folder that cannot be written to is refused, never replaced by a per-user folder: the
+    // Launcher opens and says so. Not asked when the command line gave the user data folder.
     if (REXCVAR_GET(user_data_root).empty()) {
+      if (!topspin4::user_paths::IsWritableFolder(topspin4::user_paths::ExecutableFolder())) {
+        topspin4::ReportNotSetUp(topspin4::user_paths::kNotSetUpUnwritable, std::filesystem::path());
+      }
       paths.user_data_root = topspin4::user_paths::DefaultUserDataRoot();
     }
     // Started directly after the Launcher's setup: the prepared disc and TU1 are where the

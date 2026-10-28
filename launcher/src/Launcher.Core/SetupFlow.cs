@@ -9,6 +9,11 @@ public enum SetupPhase
     Failed,
     /// <summary>The prepared files hold everything; Play is available.</summary>
     Ready,
+    /// <summary>
+    /// The folder the install lives in can't be written to (ADR-0009); <see cref="SetupFlow.Message"/> says so
+    /// and nothing can be set up or played from here.
+    /// </summary>
+    Refused,
 }
 
 /// <summary>
@@ -42,16 +47,22 @@ public sealed class SetupFlow
     /// read again from there when the art folder is missing or incomplete (<see cref="DiscArt.RestoreFromFolder"/>).
     /// Like <paramref name="readDiscArt"/> it can fail or throw without consequence.
     /// </param>
+    /// <param name="refusal">
+    /// Why the install folder can't be used (<see cref="UserDirectories.Refusal"/>), or null. The flow then
+    /// stays <see cref="SetupPhase.Refused"/> with this as its message: setup is disabled and the setup page
+    /// shows, even when the prepared files are there.
+    /// </param>
     public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null,
-        Action<string>? readPreparedArt = null)
+        Action<string>? readPreparedArt = null, string? refusal = null)
     {
         _preparation = preparation;
         _time = time ?? TimeProvider.System;
         _log = log;
         _readDiscArt = readDiscArt;
         _readPreparedArt = readPreparedArt;
-        Prepared = preparation.Existing();
-        Phase = Prepared is null ? SetupPhase.NeedsInputs : SetupPhase.Ready;
+        Prepared = refusal is null ? preparation.Existing() : null;
+        Phase = refusal is not null ? SetupPhase.Refused : Prepared is null ? SetupPhase.NeedsInputs : SetupPhase.Ready;
+        Message = refusal;
         Disc = Fresh(preparation.NeedsDisc);
         TitleUpdate = Fresh(preparation.NeedsTitleUpdate);
     }
@@ -96,7 +107,7 @@ public sealed class SetupFlow
         Phase is SetupPhase.NeedsInputs or SetupPhase.Failed && Disc.Accepted && TitleUpdate.Accepted;
 
     /// <summary>A stopped or failed setup left files that setup resumes from.</summary>
-    public bool CanStartOver => Phase != SetupPhase.Preparing && Phase != SetupPhase.Ready && _preparation.HasPartial;
+    public bool CanStartOver => Phase is not (SetupPhase.Preparing or SetupPhase.Ready or SetupPhase.Refused) && _preparation.HasPartial;
 
     /// <summary>"Resume setup" while earlier files are waiting, else "Set up the game".</summary>
     public string PrimaryLabel => CanStartOver ? ResumeLabel : SetUpLabel;
@@ -257,7 +268,7 @@ public sealed class SetupFlow
     /// </summary>
     public void SetUpAgain()
     {
-        if (Phase is SetupPhase.Preparing || _preparation.Existing() is not null) return;
+        if (Phase is SetupPhase.Preparing or SetupPhase.Refused || _preparation.Existing() is not null) return;
         Prepared = null;
         Phase = SetupPhase.NeedsInputs;
         Message = null;
