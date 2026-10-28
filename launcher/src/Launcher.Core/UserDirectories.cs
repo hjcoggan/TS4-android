@@ -25,6 +25,14 @@ public static class UserDirectories
         return Path.Combine(localApplicationData, FolderName);
     }
 
+    /// <summary>
+    /// Where the game keeps its Settings file (and saves): the roaming app data folder, as in
+    /// the game's src/user_paths.cpp (the same XDG folder under Proton).
+    /// </summary>
+    public static string SettingsRoot() =>
+        PreparedDataRoot(System.Environment.GetEnvironmentVariable, UnderWine(),
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData));
+
     // XDG_DATA_HOME when it is absolute (the spec says to ignore a relative one), else ~/.local/share.
     private static string? XdgDataHome(Func<string, string?> environment)
     {

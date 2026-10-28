@@ -56,10 +56,15 @@
           <TextBlock x:Name="PlayMessage" Classes="body" TextAlignment="Center"
                      Text="Everything is ready." />
           <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
-          <!-- Seam, ticket 14: the before-start settings (renderer, GPU) read from the game's settings export go here. -->
+          <!-- Before-start settings, read from the game's settings export (BeforeStartSettings). -->
           <StackPanel x:Name="BeforeStartSettingsHost" Spacing="8" />
-          <!-- Seam, ticket 15: the Safe start button goes here and calls StartGame with the safe flag. -->
-          <StackPanel x:Name="SafeStartHost" Spacing="8" HorizontalAlignment="Center" />
+          <TextBlock x:Name="SettingsMessage" Classes="error" TextAlignment="Center" IsVisible="False" />
+          <!-- Safe start: one session on the defaults; the Settings file is left alone. -->
+          <StackPanel x:Name="SafeStartHost" Spacing="8" HorizontalAlignment="Center">
+            <Button x:Name="SafeStartButton" Classes="secondary" Content="Safe start" HorizontalAlignment="Center" />
+            <TextBlock Classes="small" TextAlignment="Center"
+                       Text="If the game won't start: runs once with the default settings and leaves your settings file unchanged." />
+          </StackPanel>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
