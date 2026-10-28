@@ -60,3 +60,11 @@ The Launcher shows Top Spin 4's own art, **read from the player's own disc** at 
 
 - Text and graphics within the art are the game's own; the Launcher shows them unchanged and does not add 2K's trademarks anywhere else.
 - No new ADR is needed: reading art from the player's disc at runtime follows ADR-0006 in the same way the game's data does.
+
+## Amendments (2026-10-28, after ticket 01)
+
+Settled with the owner after `docs/research/disc-art.md`:
+
+- **Five slots, not four.** Home background `nxebg.jpg` (nxeart), box art `nxeslot.jpg` (nxeart), logo `Bitmaps\Logo.PNG` from `Media/XUI/PressStart.xzp` (not Startup or Common, which hold no usable art), title icon from the XDBF title image in `default.xex`, and a **setup background**: `PressStart.PNG` from `PressStart.xzp`, used on Setup and Settings in place of the subdued home background.
+- **Title icon from the XEX.** Launcher.Core decrypts (published retail AES key) and LZX-decompresses `default.xex` to reach the icon, with MonoGame's `LzxDecoder.cs` vendored under its MS-PL licence. No fallback to the nxeart thumbnail.
+- **Images are stored as they come.** JPEGs stay JPEG and PNGs stay PNG; "writes them as PNG" above means "writes the image files". The `.ico` wraps the 64 px PNG.
