@@ -152,6 +152,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_movie_clock.cpp
         tests/host/test_present_hold.cpp
         tests/native/test_core_dynamic_state.cpp
+        tests/native/test_depth_staging.cpp
         tests/native/test_debug_labels.cpp
         tests/native/test_draw_skips.cpp
         tests/native/test_fault_finder.cpp

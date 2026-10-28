@@ -36,6 +36,7 @@
 #include <rex/ui/presenter.h>
 
 #include "native/core_dynamic_state.h"
+#include "native/depth_staging.h"
 #include "native/debug_labels.h"
 #include "native/geometry_cache.h"
 #include "native/gpu_timer.h"
@@ -350,6 +351,8 @@ struct RenderTarget {
   VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
   // An MSAA target's single-sample twin, which resolves copy from (SingleSample).
   std::unique_ptr<RenderTarget> single;
+  // g.write_serial when a pass last began with this target attached (it may have written it).
+  uint64_t writes = 0;
 };
 
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -475,6 +478,10 @@ struct State {
   VkBuffer depth_staging = VK_NULL_HANDLE;
   VkDeviceMemory depth_staging_memory = VK_NULL_HANDLE;
   VkDeviceSize depth_staging_size = 0;
+  // Which depth target, as of which write, the staging buffer holds (depth_staging.h).
+  DepthStaging depth_staging_holds;
+  uint32_t depth_staging_width = 0, depth_staging_height = 0;  // the extent copied into it
+  uint64_t write_serial = 0;
   uint64_t readbacks_delivered = 0;
   std::vector<RenderTarget*> render_target_order;
   std::vector<uint8_t> readback_scratch;
@@ -1549,6 +1556,9 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth) {
               PassName({color->width, color->height, color->format, gamma, depth != nullptr}));
   }
   g_vk.dfn->vkCmdBeginRendering(g.slot->main_cb, &rendering_info);
+  if (depth) {
+    depth->writes = ++g.write_serial;
+  }
   g.rendering = true;
   g.active_color = color;
   g.active_gamma = gamma;
@@ -2314,6 +2324,8 @@ namespace {
 
 // Copies the current depth target's depth into the destination as R32 float,
 // through a staging buffer since Vulkan cannot blit depth to colour.
+void CopyDepthToStaging(RenderTarget& found, uint32_t width, uint32_t height, VkDeviceSize size);
+
 void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
   const auto it = g.render_targets.find(DepthTargetKey(d3d));
   RenderTarget* found = it != g.render_targets.end() ? it->second.get() : g.last_depth;
@@ -2330,16 +2342,46 @@ void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
   if (!found) {
     return;
   }
-  // An MSAA depth target is copied from sample 0 of its single-sample twin.
-  RenderTarget& depth = SingleSample(*found);
-  const textures::ResolveTarget target = textures::GetResolveTarget(fetch, false, depth.scale);
+  const textures::ResolveTarget target = textures::GetResolveTarget(fetch, false, found->scale);
   if (!target.image || target.format != VK_FORMAT_R32_SFLOAT) {
     return;
   }
-  const uint32_t width = std::min(depth.width, target.width);
-  const uint32_t height = std::min(depth.height, target.height);
-  const VkDeviceSize size = VkDeviceSize(depth.width) * depth.height * 4;
+  const uint32_t width = std::min(found->width, target.width);
+  const uint32_t height = std::min(found->height, target.height);
+  const VkDeviceSize size = VkDeviceSize(found->width) * found->height * 4;
+  // The game resolves the same depth twice in a row: with no write between, the staging buffer
+  // still holds it (depth_staging.h), so only the copy into this texture is recorded.
+  const bool held = g.depth_staging_holds.Holds(found, found->writes) &&
+                    g.depth_staging_size >= size && width <= g.depth_staging_width &&
+                    height <= g.depth_staging_height;
+  const VkCommandBuffer cb = g.slot->main_cb;
+  const auto& dfn = *g_vk.dfn;
+  VkBufferImageCopy region = {};
+  region.bufferRowLength = found->width;
+  region.imageExtent = {width, height, 1};
+  if (!held) {
+    CopyDepthToStaging(*found, width, height, size);
+    if (!g.depth_staging) {
+      return;
+    }
+  }
+  ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, *target.layout,
+               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  dfn.vkCmdCopyBufferToImage(cb, g.depth_staging, target.image,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  *target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+}
+
+// Copies sample 0 of a depth target (through its single-sample twin when MSAA) into the staging
+// buffer, width x height of it, for ResolveDepth. Leaves g.depth_staging null if it cannot.
+void CopyDepthToStaging(RenderTarget& found, uint32_t width, uint32_t height, VkDeviceSize size) {
+  // An MSAA depth target is copied from sample 0 of its single-sample twin.
+  RenderTarget& depth = SingleSample(found);
   if (g.depth_staging_size < size) {
+    g.depth_staging_holds.Forget();
     if (g.depth_staging) {
       // Frames still in flight may use the old buffer.
       Retired retired;
@@ -2375,14 +2417,9 @@ void ResolveDepth(const uint8_t* d3d, const textures::FetchConstant& fetch) {
   buffer_barrier.size = VK_WHOLE_SIZE;
   dfn.vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                            0, nullptr, 1, &buffer_barrier, 0, nullptr);
-  ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, *target.layout,
-               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  dfn.vkCmdCopyBufferToImage(cb, g.depth_staging, target.image,
-                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  ImageBarrier(cb, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  *target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  g.depth_staging_holds.Copied(&found, found.writes);
+  g.depth_staging_width = width;
+  g.depth_staging_height = height;
 }
 
 }  // namespace
