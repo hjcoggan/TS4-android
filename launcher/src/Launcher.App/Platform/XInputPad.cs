@@ -21,7 +21,7 @@ internal static partial class XInputPad
             for (uint user = 0; user < 4; user++)
             {
                 if (XInputGetState(user, out var raw) != 0) continue;
-                state = new PadState(raw.Buttons, raw.LeftX, raw.LeftY);
+                state = new PadState(raw.Buttons, raw.LeftX, raw.LeftY, raw.LeftTrigger, raw.RightTrigger);
                 return true;
             }
         }

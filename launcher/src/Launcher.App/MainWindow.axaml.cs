@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _padTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private LauncherPage? _shownPage;
     private bool _gameRunning;
+    private bool _padHeldForBinding;
 
     public MainWindow()
     {
@@ -60,6 +61,7 @@ public partial class MainWindow : Window
         Activated += (_, _) => Refresh();
 
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, (_, e) => _settingsPage.OfferKeyUp(e), RoutingStrategies.Tunnel);
         _padTimer.Tick += (_, _) => PollPad();
         Opened += (_, _) => _padTimer.Start();
         Closed += (_, _) => _padTimer.Stop();
@@ -228,8 +230,19 @@ public partial class MainWindow : Window
 
     private void PollPad()
     {
+        _settingsPage.Tick();
         if (!IsActive || !XInputPad.TryRead(out var state))
         {
+            _pad.Update(default, Environment.TickCount64);
+            return;
+        }
+        // A binding row waiting for a pad button takes every press, so the menu must not also act on it; nor on
+        // the press that answered, until the pad is let go (B would otherwise go back as it is captured).
+        if (_settingsPage.Capturing) _padHeldForBinding = true;
+        _settingsPage.OfferPad(state);
+        if (_padHeldForBinding)
+        {
+            _padHeldForBinding = state.Buttons != 0;
             _pad.Update(default, Environment.TickCount64);
             return;
         }
@@ -238,6 +251,12 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // A binding row waiting for a key takes every key, Esc cancelling it, so none moves the focus or goes back.
+        if (_settingsPage.OfferKeyDown(e))
+        {
+            e.Handled = true;
+            return;
+        }
         var action = e.Key switch
         {
             Key.Up => PadAction.Up,
