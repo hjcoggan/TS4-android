@@ -88,25 +88,6 @@ struct ModelContext {
   AppliesLookup applies = AppliesFromCvar;
 };
 
-inline std::string ChoiceLabel(const Setting& setting, std::string_view value) {
-  if (setting.kind == Setting::Kind::kBool) return value == "true" ? "On" : "Off";
-  if (value.empty()) return "Not set";
-  if (setting.kind == Setting::Kind::kText) return std::string(value);
-  if (setting.key.starts_with("ts4_pad_")) {
-    for (size_t i = 0; i < pad::kInputCount; ++i) {
-      if (pad::kInputs[i].name == value) {
-        return std::string(detail::kPadLabels[i]).substr(std::string("Pad: ").size());
-      }
-    }
-  }
-  std::string label(value);
-  if (std::all_of(label.begin(), label.end(), [](char c) { return std::isdigit((unsigned char)c); })) {
-    return label + "x";  // resolution scale, MSAA, anisotropic filtering
-  }
-  label[0] = char(std::toupper((unsigned char)label[0]));
-  return label;
-}
-
 class SettingsModel {
  public:
   // file_values: what the Settings file holds (key to value; ignored in a Safe start).
@@ -285,7 +266,7 @@ class SettingsModel {
     Row row;
     row.kind = RowKind::kPreset;
     row.key = std::string(kPresetKey);
-    row.label = "Graphics preset";
+    row.label = std::string(kPresetLabel);
     row.section = Section::kGraphics;
     bool next = false, pinned = false;
     std::string unavailable;  // the covered settings this renderer cannot use
@@ -311,16 +292,7 @@ class SettingsModel {
     }
     row.value = active;
     row.value_label = row.choices[row.choice].label;
-    for (const Preset& preset : presets) {
-      row.help += (row.help.empty() ? "" : " ") + preset.label + ":";
-      for (size_t m = 0; m < preset.values.size(); ++m) {
-        const Setting* member = FindSetting(preset.values[m].first);
-        if (!member) continue;
-        row.help += std::string(m ? ", " : " ") + std::string(member->label) + " " +
-                    ChoiceLabel(*member, preset.values[m].second);
-      }
-      row.help += ".";
-    }
+    row.help = PresetHelp();
     row.mark = pinned ? Mark::kLaunchOption : context_.safe_start ? Mark::kSafeStart
                : next ? Mark::kNextStart : Mark::kNow;
     row.note = NoteFor(row, next);

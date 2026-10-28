@@ -7,14 +7,17 @@ using TopSpin4.Launcher.Core;
 namespace TopSpin4.Launcher.Pages;
 
 /// <summary>
-/// The settings page: draws <see cref="SettingsPageModel"/>. The model is read from the game's
-/// export the first time the page opens (a short run of the game exe) and kept.
+/// The settings page: draws <see cref="SettingsPageModel"/>, one tab per section of the game's
+/// Settings page. The model is read from the game's export the first time the page opens (a short
+/// run of the game exe) and kept; every change is written to the Settings file at once and the
+/// page is drawn again from the file, so what it shows is what the game will read.
 /// </summary>
 public partial class SettingsPage : UserControl
 {
     private readonly Func<Task<SettingsPageModel>> _load;
     private SettingsPageModel? _model;
     private bool _loading;
+    private string? _error;
 
     public SettingsPage() : this(() => Task.FromResult(SettingsPageModel.Unavailable(""))) { }
 
@@ -23,6 +26,10 @@ public partial class SettingsPage : UserControl
         InitializeComponent();
         _load = load;
         BackButton.Click += (_, _) => BackPressed?.Invoke();
+        ResetButton.Click += (_, _) =>
+        {
+            if (_model is { } model) Apply(model.ResetToDefaults());
+        };
     }
 
     public event Action? BackPressed;
@@ -45,42 +52,65 @@ public partial class SettingsPage : UserControl
         Draw();
     }
 
+    // The change was written (or refused): say why when it was not, and show what the file holds now.
+    private void Apply(SettingChange change)
+    {
+        _error = change == SettingChange.Saved ? null : SettingsStore.Describe(change);
+        Draw();
+    }
+
     private void Draw()
     {
         if (_model is not { } model) return;
         StatusText.IsVisible = false;
-        ErrorText.IsVisible = model.UnavailableReason is not null;
-        ErrorText.Text = model.UnavailableReason;
+        var error = model.UnavailableReason ?? _error;
+        ErrorText.IsVisible = !string.IsNullOrEmpty(error);
+        ErrorText.Text = error;
         InGameNoteText.Text = model.InGameNote;
-        RowsHost.Children.Clear();
-        foreach (var row in model.Rows) RowsHost.Children.Add(Row(model, row));
+        var tabs = model.Tabs;
+        var selected = Tabs.SelectedIndex;
+        ResetButton.IsVisible = tabs.Count > 0;
+        Tabs.IsVisible = tabs.Count > 0;
+        Tabs.ItemsSource = tabs.Select(tab => new TabItem { Header = tab.Name, Content = Rows(model, tab) }).ToList();
+        Tabs.SelectedIndex = tabs.Count == 0 ? -1 : Math.Clamp(selected, 0, tabs.Count - 1);
+    }
+
+    private Control Rows(SettingsPageModel model, SettingsTab tab)
+    {
+        var rows = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(0, 14, 0, 0) };
+        foreach (var row in tab.Rows) rows.Children.Add(Row(model, row));
+        return rows;
     }
 
     private Control Row(SettingsPageModel model, SettingRow row)
     {
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(new TextBlock { Text = row.Label, FontSize = 22, FontWeight = FontWeight.Bold, Foreground = Brushes.White });
-        var options = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        foreach (var option in row.Options)
+        if (row.Editable)
         {
-            var radio = new RadioButton { Content = option.Label, GroupName = row.Setting.Key, IsChecked = option.Value == row.Value };
-            radio.Click += (_, _) =>
+            var options = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            foreach (var option in row.Options)
             {
-                var change = model.Choose(row, option.Value);
-                ErrorText.Text = BeforeStartSettings.Describe(change);
-                ErrorText.IsVisible = change != SettingChange.Saved;
-                // Show what the file now holds, whatever was written.
-                var current = model.Rows.Single(candidate => candidate.Setting.Key == row.Setting.Key).Value;
-                foreach (var other in options.Children.OfType<RadioButton>())
-                    other.IsChecked = (string?)other.Tag == current;
-            };
-            radio.Tag = option.Value;
-            options.Children.Add(radio);
+                var radio = new RadioButton { Content = option.Label, GroupName = row.Key, IsChecked = option.Value == row.Value };
+                radio.Click += (_, _) => Apply(model.Choose(row, option.Value));
+                options.Children.Add(radio);
+            }
+            panel.Children.Add(options);
+            // A Preset the player has moved off is Custom: no option is checked, so say it.
+            if (row.Kind == SettingRowKind.Preset && row.Options.All(option => option.Value != row.Value))
+                panel.Children.Add(new TextBlock { Text = row.ValueLabel, Classes = { "body" } });
         }
-        panel.Children.Add(options);
-        var help = new TextBlock { Text = row.Help, TextAlignment = TextAlignment.Left };
-        help.Classes.Add("small");
-        panel.Children.Add(help);
-        return new Border { Background = (IBrush)this.FindResource("PanelBrush")!, CornerRadius = new Avalonia.CornerRadius(4), Padding = new Avalonia.Thickness(18), Child = panel };
+        else
+        {
+            // Shown, not changed here: a binding (remapping is the next page's job) or a setting this renderer ignores.
+            panel.Children.Add(new TextBlock { Text = row.ValueLabel, Classes = { "body" } });
+        }
+        if (row.Note is not null) panel.Children.Add(new TextBlock { Text = row.Note, Classes = { "small" }, TextAlignment = TextAlignment.Left });
+        panel.Children.Add(new TextBlock { Text = row.Help, Classes = { "small" }, TextAlignment = TextAlignment.Left });
+        return new Border
+        {
+            Background = (IBrush)this.FindResource("PanelBrush")!, CornerRadius = new Avalonia.CornerRadius(4),
+            Padding = new Avalonia.Thickness(18), Child = panel, Opacity = row.Available ? 1 : 0.6,
+        };
     }
 }

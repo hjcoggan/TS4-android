@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "settings/config_file.h"
+#include "settings/presets.h"
 #include "settings/registry.h"
 #include "settings/renderer_choice.h"
 #include "settings/schema.h"
@@ -516,7 +517,7 @@ TEST_CASE("The settings export reads back as the same registry") {
   const std::string text = SchemaJson();
   std::string_view in = text;
   const Json root = ParseJson(in);
-  CHECK(root.at("format").text == "1");
+  CHECK(root.at("format").text == "2");
   CHECK(root.at("settings_file_version").text == std::to_string(CurrentVersion()));
   REQUIRE(root.at("sections").items.size() == std::size(kSections));
   for (size_t i = 0; i < std::size(kSections); ++i) {
@@ -544,6 +545,74 @@ TEST_CASE("The settings export reads back as the same registry") {
     CHECK(row.at("label").text == setting.label);
     CHECK(row.at("order").text == std::to_string(setting.order));
     CHECK(row.at("help").text == setting.help);
+    // Each choice's label as the in-game page shows it; the bindings say whose they are.
+    REQUIRE(row.at("choice_labels").items.size() == setting.choices.size());
+    for (size_t c = 0; c < setting.choices.size(); ++c) {
+      CHECK(row.at("choice_labels").items[c].text == ChoiceLabel(setting, setting.choices[c]));
+    }
+  }
+}
+
+TEST_CASE("The export carries the Graphics Presets with each covered setting's value") {
+  const std::string text = SchemaJson();
+  std::string_view in = text;
+  const Json root = ParseJson(in);
+  CHECK(root.at("preset_section").text == "Graphics");
+  CHECK(root.at("preset_label").text == kPresetLabel);
+  const std::vector<Preset>& presets = GraphicsPresets();
+  const Json& exported = root.at("presets");
+  REQUIRE(exported.items.size() == presets.size());
+  for (size_t i = 0; i < presets.size(); ++i) {
+    CAPTURE(presets[i].value);
+    CHECK(exported.items[i].at("value").text == presets[i].value);
+    CHECK(exported.items[i].at("label").text == presets[i].label);
+    const Json& values = exported.items[i].at("values");
+    REQUIRE(values.names.size() == presets[i].values.size());
+    for (size_t v = 0; v < presets[i].values.size(); ++v) {
+      CHECK(values.names[v] == presets[i].values[v].first);
+      CHECK(values.members[v].text == presets[i].values[v].second);
+    }
+  }
+  // The two the page offers, as literals: Original is the defaults, Enhanced the best look.
+  CHECK(exported.items[0].at("value").text == "original");
+  CHECK(exported.items[1].at("values").at("ts4_msaa").text == "4");
+  CHECK(exported.items[1].at("values").at("ts4_resolution_scale").text == "auto");
+  // The help is the in-game row's own.
+  CHECK(root.at("preset_help").text == PresetHelp());
+  CHECK(PresetHelp().find("Enhanced: Resolution scale Auto, MSAA 4x") != std::string::npos);
+}
+
+TEST_CASE("The export says which settings are bindings, for which device and for which action") {
+  const std::string text = SchemaJson();
+  std::string_view in = text;
+  const Json root = ParseJson(in);
+  size_t pads = 0, keys = 0, others = 0;
+  for (const Json& row : root.at("settings").items) {
+    const Json& binding = row.at("binding");
+    const std::string key = row.at("key").text;
+    CAPTURE(key);
+    if (key.starts_with("ts4_pad_")) {
+      ++pads;
+      CHECK(binding.at("device").text == "pad");
+    } else if (key.starts_with("keybind_")) {
+      ++keys;
+      CHECK(binding.at("device").text == "keyboard");
+    } else {
+      ++others;
+      CHECK(binding.names.empty());  // null: not a binding
+      continue;
+    }
+    CHECK_FALSE(binding.at("action").text.empty());
+  }
+  CHECK(pads == 16);
+  CHECK(keys == 24);
+  CHECK(others == 7);
+  for (const Json& row : root.at("settings").items) {
+    if (row.at("key").text == "ts4_pad_ls") CHECK(row.at("binding").at("action").text == "LS click");
+    if (row.at("key").text == "keybind_lstick_up") {
+      CHECK(row.at("binding").at("action").text == "left stick up");
+    }
+    if (row.at("key").text == "ts4_pad_ls") CHECK(row.at("choice_labels").items[8].text == "LS click");
   }
 }
 
@@ -552,10 +621,12 @@ TEST_CASE("The export takes applies_when from the lookup, and the switch is foun
     return key == "ts4_msaa" ? std::optional(Applies::kNow) : std::nullopt;
   });
   CHECK(text.find("\"key\": \"ts4_msaa\", \"kind\": \"choice\", \"default\": \"original\", "
-                  "\"choices\": [\"original\", \"4\", \"8\"], \"applies_when\": \"now\"") !=
+                  "\"choices\": [\"original\", \"4\", \"8\"], "
+                  "\"choice_labels\": [\"Original\", \"4x\", \"8x\"], \"applies_when\": \"now\"") !=
         std::string::npos);
   CHECK(text.find("\"key\": \"ts4_renderer\", \"kind\": \"choice\", \"default\": \"classic\", "
-                  "\"choices\": [\"classic\", \"native\"], \"applies_when\": \"next_start\"") !=
+                  "\"choices\": [\"classic\", \"native\"], "
+                  "\"choice_labels\": [\"Classic\", \"Native\"], \"applies_when\": \"next_start\"") !=
         std::string::npos);
   CHECK(SchemaRequested({"topspin4.exe", "--print-settings-schema"}));
   CHECK_FALSE(SchemaRequested({"topspin4.exe", "--print-settings-schema-now"}));
