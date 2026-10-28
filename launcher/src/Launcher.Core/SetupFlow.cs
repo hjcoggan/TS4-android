@@ -25,8 +25,8 @@ public sealed class SetupFlow
     private readonly Preparation _preparation;
     private readonly TimeProvider _time;
     private readonly Action<string>? _log;
-    private readonly Slot _discCheck = new();
-    private readonly Slot _titleUpdateCheck = new();
+    private readonly RowCheck _discCheck = new();
+    private readonly RowCheck _titleUpdateCheck = new();
     private OverallProgress? _overall;
     private string? _stepLabel;
 
@@ -68,8 +68,7 @@ public sealed class SetupFlow
             var step = _stepLabel ?? "Starting";
             if (ProgressIsIndeterminate) return step;
             var line = $"{step}  {(int)(ProgressFraction * 100)}%";
-            if (_overall?.TimeLeft is { } left)
-                line += left.TotalMinutes >= 1 ? $", {(int)Math.Ceiling(left.TotalMinutes)} min left" : ", under a minute left";
+            if (_overall?.TimeLeft is { } left) line += ", " + SetupProgress.TimeLeftText(left);
             return line;
         }
     }
@@ -87,7 +86,10 @@ public sealed class SetupFlow
     /// <summary>"Resume setup" while earlier files are waiting, else "Set up the game".</summary>
     public string PrimaryLabel => CanStartOver ? ResumeLabel : SetUpLabel;
 
-    /// <summary>A file is being read or setup is running, so the rows can't be changed.</summary>
+    /// <summary>
+    /// Setup is running, so the rows can't be changed. A file that is only being checked does not
+    /// make the flow busy: choosing again cancels that check.
+    /// </summary>
     public bool Busy => Phase == SetupPhase.Preparing;
 
     /// <summary>Checks the disc image the player chose and shows the result on row 1; null empties the row.</summary>
@@ -98,18 +100,20 @@ public sealed class SetupFlow
     public Task ChooseTitleUpdate(string? path) =>
         Choose(path, _titleUpdateCheck, row => TitleUpdate = row, TitleUpdate.Needed, _preparation.CheckTitleUpdate, "Title Update 1");
 
-    private async Task Choose(string? path, Slot slot, Action<SetupRow> set, bool needed,
+    private async Task Choose(string? path, RowCheck running, Action<SetupRow> set, bool needed,
         Func<string?, CancellationToken, InputCheck> check, string name)
     {
         if (Phase == SetupPhase.Preparing || !needed) return;
-        slot.Running?.Cancel();
+        // A newer choice cancels the check still running for this row; that check's own call disposes its source.
+        running.Source?.Cancel();
         if (string.IsNullOrWhiteSpace(path))
         {
             set(new SetupRow());
             Changed?.Invoke();
             return;
         }
-        var mine = slot.Running = new CancellationTokenSource();
+        using var mine = new CancellationTokenSource();
+        running.Source = mine;
         set(new SetupRow(RowState.Checking, path));
         Changed?.Invoke();
         InputCheck result;
@@ -120,6 +124,10 @@ public sealed class SetupFlow
         catch (OperationCanceledException)
         {
             return;
+        }
+        finally
+        {
+            if (running.Source == mine) running.Source = null;
         }
         if (mine.IsCancellationRequested) return;
         set(Row(path, result));
@@ -209,6 +217,24 @@ public sealed class SetupFlow
         if (!_preparation.NeedsTitleUpdate && TitleUpdate.Needed) TitleUpdate = Fresh(false);
     }
 
+    /// <summary>
+    /// Brings a flow that finished setup back to its input rows because the prepared files went away
+    /// (Home's "Set up again"). Only what the prepared files now lack is asked for; the rest shows as
+    /// already set up. Does nothing while the files are all there or setup is running.
+    /// </summary>
+    public void SetUpAgain()
+    {
+        if (Phase is SetupPhase.Preparing || _preparation.Existing() is not null) return;
+        Prepared = null;
+        Phase = SetupPhase.NeedsInputs;
+        Message = null;
+        MessageDetails = null;
+        Error = null;
+        Disc = Fresh(_preparation.NeedsDisc);
+        TitleUpdate = Fresh(_preparation.NeedsTitleUpdate);
+        Changed?.Invoke();
+    }
+
     /// <summary>Shows a line on the setup page, e.g. when an action outside setup could not be carried out.</summary>
     public void Notice(string note)
     {
@@ -240,14 +266,8 @@ public sealed class SetupFlow
     };
 
     /// <summary>The check still running for one row, so a newer choice can cancel it.</summary>
-    private sealed class Slot
+    private sealed class RowCheck
     {
-        public CancellationTokenSource? Running;
-    }
-
-    /// <summary>Reports on the reporting thread, unlike Progress&lt;T&gt;, which posts to the thread pool.</summary>
-    private sealed class SyncProgress(Action<SetupProgress> report) : IProgress<SetupProgress>
-    {
-        public void Report(SetupProgress value) => report(value);
+        public CancellationTokenSource? Source;
     }
 }

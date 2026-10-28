@@ -80,9 +80,12 @@ public sealed class SettingsPageModel
     /// <summary>Why the settings cannot be shown, or null when they can.</summary>
     public string? UnavailableReason { get; }
 
-    /// <summary>Said under the rows: more is in the game, and how to open it (Glossary: Settings page).</summary>
+    /// <summary>
+    /// Said under the rows: every setting is on this page, and the same ones can also be changed in
+    /// game, and how to open that page (ADR-0008; Glossary: Settings page).
+    /// </summary>
     public string InGameNote =>
-        "More settings are in the game: choose PC SETTINGS in OPTIONS, press F4, or hold Back and Start on a controller.";
+        "Every setting is on this page. You can also change them while playing: choose PC SETTINGS in OPTIONS, press F4, or hold Back and Start on a controller.";
 
     /// <summary>One tab per section of the export, in its order; the Graphics tab opens with the Preset row. Empty when unavailable.</summary>
     public IReadOnlyList<SettingsTab> Tabs
@@ -155,7 +158,7 @@ public sealed class SettingsPageModel
     {
         if (_schema is null || _store is null) return BindingResult.Of(SettingChange.NotWritten);
         if (row.Binding is not { } binding || _schema.Settings.FirstOrDefault(candidate => candidate.Key == row.Key) is not { } setting
-            || !setting.Allows(value) || (binding.Device == "keyboard" && value.Length == 0))
+            || !setting.Allows(value) || (binding.Device == BindingDevice.Keyboard && value.Length == 0))
             return BindingResult.Of(SettingChange.Refused);
         var values = _store.Values();
         var old = values[setting.Key];
@@ -165,7 +168,7 @@ public sealed class SettingsPageModel
         var clashes = new List<string>();
         foreach (var other in _schema.Settings.Where(other => other.Key != setting.Key && other.Binding?.Device == binding.Device))
         {
-            var (replacement, said) = binding.Device == "pad"
+            var (replacement, said) = binding.Device == BindingDevice.Pad
                 ? PadClash(other, values[other.Key], value, old)
                 : KeyClash(other, values[other.Key], value, old);
             if (replacement is null) continue;

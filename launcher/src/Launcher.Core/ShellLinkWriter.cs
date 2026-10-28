@@ -4,7 +4,7 @@ namespace TopSpin4.Launcher.Core;
 
 /// <summary>
 /// Writes a .lnk file through the Windows shell's IShellLink (also available under Wine/Proton).
-/// <see cref="DirectShortcut"/> deletes an old shortcut first, so this only ever creates a file.
+/// <see cref="DirectShortcut"/> writes to a staging file and moves it over the old shortcut, so this only ever creates a file.
 /// </summary>
 public sealed class ShellLinkWriter : IShortcutWriter
 {

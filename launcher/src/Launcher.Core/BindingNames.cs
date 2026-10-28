@@ -14,9 +14,9 @@ public static class BindingNames
 
     private static readonly (ushort Button, string Name)[] PadButtons =
     [
-        (PadState.A, "a"), (PadState.B, "b"), (0x4000, "x"), (0x8000, "y"),
-        (0x0100, "lb"), (0x0200, "rb"), (0x0040, "ls"), (0x0080, "rs"),
-        (0x0020, "back"), (0x0010, "start"),
+        (PadState.A, "a"), (PadState.B, "b"), (PadState.X, "x"), (PadState.Y, "y"),
+        (PadState.LeftShoulder, "lb"), (PadState.RightShoulder, "rb"), (PadState.LeftThumb, "ls"), (PadState.RightThumb, "rs"),
+        (PadState.Back, "back"), (PadState.Start, "start"),
         (PadState.DPadUp, "up"), (PadState.DPadDown, "down"), (PadState.DPadLeft, "left"), (PadState.DPadRight, "right"),
     ];
 

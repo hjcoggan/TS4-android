@@ -175,3 +175,14 @@ TEST_CASE("One folder on the command line leaves the other one to be found") {
   CHECK(SetupNeededReason(places.command_line, {}, std::nullopt, places.default_root) == "title-update");
   CHECK(SetupNeededReason({}, places.command_line, std::nullopt, places.default_root) == "disc");
 }
+
+TEST_CASE("The shader cache follows the recorded place, beside the prepared data") {
+  using topspin4::user_paths::CacheRoot;
+  const fs::path default_cache = LR"(C:\Users\player\AppData\Local\TopSpin4Recomp\cache)";
+
+  CHECK(CacheRoot(std::nullopt, default_cache) == default_cache);
+  CHECK(CacheRoot(fs::path(LR"(D:\Games\TopSpin4)"), default_cache) ==
+        fs::path(LR"(D:\Games\TopSpin4\cache)"));
+  // The Launcher's move carries the folder of this name (Preparation.ShaderCacheFolderName).
+  CHECK(topspin4::user_paths::kCacheFolder == "cache");
+}

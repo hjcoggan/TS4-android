@@ -38,7 +38,6 @@ public partial class MainWindow : Window
     private bool _pressing;
     private readonly DispatcherTimer _padTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private LauncherPage? _shownPage;
-    private bool _gameRunning;
     private bool _padHeldForBinding;
 
     public MainWindow()
@@ -48,7 +47,7 @@ public partial class MainWindow : Window
         // game reads too), then the default folder.
         var userRoot = Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot());
         var locationFile = new GameFilesLocation(userRoot);
-        var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? locationFile.Current(UserDirectories.PreparedDataRoot()));
+        var cacheRoot = locationFile.Resolve(App.Options.CacheRoot, UserDirectories.PreparedDataRoot());
         var preparation = new Preparation(cacheRoot);
         _location = new GameFilesLocationModel(preparation, locationFile);
         _settingsPath = SettingsFile.PathIn(userRoot);
@@ -98,6 +97,9 @@ public partial class MainWindow : Window
     {
         switch (action)
         {
+            case HomeAction.SetUpAgain:
+                _flow.SetUpAgain();
+                break;
             case HomeAction.Settings:
                 _shell.OpenSettings();
                 await _settingsPage.OpenAsync();
@@ -124,7 +126,7 @@ public partial class MainWindow : Window
     private async Task<SettingsPageModel> LoadSettingsPage()
     {
         if (!File.Exists(_gameExe))
-            return SettingsPageModel.Unavailable($"{LaunchArguments.GameExeName} was not found next to the Launcher, so the game's settings cannot be read.");
+            return SettingsPageModel.Unavailable($"{LaunchArguments.GameExeNotFound}, so the game's settings cannot be read.");
         try
         {
             return SettingsPageModel.From(await SettingsExport.ReadAsync(_gameExe), _settingsPath);
@@ -138,7 +140,7 @@ public partial class MainWindow : Window
     private void OpenHelp()
     {
         if (HelpDocument.Find(_launcherDirectory) is { } readme) Open(readme);
-        else Say($"{HelpDocument.FileName} was not found next to the Launcher.");
+        else Say(LaunchArguments.NotFoundNextToLauncher(HelpDocument.FileName) + ".");
         Refresh();
     }
 
@@ -169,7 +171,7 @@ public partial class MainWindow : Window
     {
         if (!File.Exists(_gameExe))
         {
-            _home.Say($"{LaunchArguments.GameExeName} was not found next to the Launcher, so there is nothing to make a shortcut to.");
+            _home.Say($"{LaunchArguments.GameExeNotFound}, so there is nothing to make a shortcut to.");
             Refresh();
             return;
         }
@@ -223,7 +225,7 @@ public partial class MainWindow : Window
     private async Task StartGame(bool safe = false)
     {
         // Not while the game files are being moved: the old copy is removed at the end of the move.
-        if (_home.Prepared is not { } prepared || _gameRunning || _location.Moving) return;
+        if (_home.Prepared is not { } prepared || _home.Status == HomeStatus.GameRunning || _location.Moving) return;
         if (!_home.CanPlay)
         {
             Refresh();
@@ -235,26 +237,35 @@ public partial class MainWindow : Window
         if (App.Options.UserDataRoot is { } userData) extra.Add("--user_data_root=" + Path.GetFullPath(userData));
         foreach (var argument in safe ? LaunchArguments.SafeStart(prepared, extra) : LaunchArguments.Play(prepared, extra))
             start.ArgumentList.Add(argument);
+        Process? game;
         try
         {
-            using var game = Process.Start(start);
-            if (game is null) return;
-            _gameRunning = true;
-            Hide();
-            await game.WaitForExitAsync();
-            _gameRunning = false;
-            _home.SessionEnded(game.ExitCode);
-            Show();
-            Activate();
-            Refresh();
+            game = Process.Start(start);
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            _gameRunning = false;
-            Show();
-            _home.Say("The game could not be started: " + error.Message);
+            // The system would not run the exe: a failed start, so Safe start comes up front.
+            Log("Start game: " + error.Message);
+            _home.StartFailed(error.Message);
             Refresh();
+            return;
         }
+        if (game is null)
+        {
+            _home.StartFailed("no process was started.");
+            Refresh();
+            return;
+        }
+        using (game)
+        {
+            _home.GameStarted();
+            Hide();
+            await game.WaitForExitAsync();
+            _home.SessionEnded(game.ExitCode);
+        }
+        Show();
+        Activate();
+        Refresh();
     }
 
     // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.

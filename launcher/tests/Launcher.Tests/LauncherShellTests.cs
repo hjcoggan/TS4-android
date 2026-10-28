@@ -51,6 +51,23 @@ public sealed class LauncherShellTests : IDisposable
     }
 
     [Fact]
+    public void Prepared_files_that_went_away_take_the_player_back_to_the_setup_page_on_set_up_again()
+    {
+        PrepareCache();
+        var flow = new SetupFlow(Preparation());
+        var shell = new LauncherShell(flow);
+        Directory.Delete(Path.Combine(_root, "cache", "gamedata"), recursive: true);
+        Assert.Equal(LauncherPage.Home, shell.Page);
+        var changed = 0;
+        shell.Changed += () => changed++;
+
+        flow.SetUpAgain();
+
+        Assert.Equal(LauncherPage.Setup, shell.Page);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
     public void Settings_opens_from_home_and_back_returns_home()
     {
         PrepareCache();

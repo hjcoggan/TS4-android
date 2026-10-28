@@ -115,4 +115,15 @@ inline std::optional<std::string_view> SetupNeededReason(
 // folder (the same XDG folder under Proton), as it is large and derivable again.
 std::filesystem::path DefaultCacheRoot();
 
+// Its folder inside the place that holds the prepared folders (Preparation.ShaderCacheFolderName in
+// the Launcher, whose move carries it along).
+inline constexpr std::string_view kCacheFolder = "cache";
+
+// The cache root when the player moved the game files: it stays beside the prepared data, in the
+// recorded place. Without a recorded place it is the default cache root.
+inline std::filesystem::path CacheRoot(const std::optional<std::filesystem::path>& recorded_root,
+                                          const std::filesystem::path& default_cache_root) {
+  return recorded_root ? *recorded_root / kCacheFolder : default_cache_root;
+}
+
 }  // namespace topspin4::user_paths

@@ -31,7 +31,7 @@
       <StackPanel Spacing="8">
         <TextBlock x:Name="TroubleHeading" FontSize="20" FontWeight="Bold" Foreground="White" />
         <TextBlock Classes="small" TextAlignment="Left"
-                   Text="If the game won't start: runs once with the default settings and leaves your settings file unchanged." />
+                   Text="If the game won't start: runs once with the default settings and leaves your Settings file unchanged." />
         <StackPanel x:Name="TroubleHost" Orientation="Horizontal" Spacing="12" />
       </StackPanel>
     </Border>

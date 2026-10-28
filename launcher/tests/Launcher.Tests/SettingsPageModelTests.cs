@@ -227,8 +227,8 @@ public sealed class SettingsPageModelTests : IDisposable
         var pad = Row(page, "ts4_pad_a");
         var keys = Row(page, "keybind_a");
 
-        Assert.Equal(("pad", "A"), (pad.Binding!.Device, pad.Binding.Action));
-        Assert.Equal(("keyboard", "A"), (keys.Binding!.Device, keys.Binding.Action));
+        Assert.Equal((BindingDevice.Pad, "A"), (pad.Binding!.Device, pad.Binding.Action));
+        Assert.Equal((BindingDevice.Keyboard, "A"), (keys.Binding!.Device, keys.Binding.Action));
         Assert.False(pad.Editable);
         Assert.False(keys.Editable);
         Assert.Equal("A", pad.ValueLabel);
@@ -244,6 +244,10 @@ public sealed class SettingsPageModelTests : IDisposable
     {
         var line = Page().InGameNote;
 
+        // Every setting is on this page (ADR-0008); the game's page is a second way to the same ones.
+        Assert.Contains("Every setting", line);
+        Assert.Contains("also", line);
+        Assert.DoesNotContain("More settings", line);
         Assert.Contains("PC SETTINGS", line);
         Assert.Contains("OPTIONS", line);
         Assert.Contains("F4", line);
@@ -271,6 +275,27 @@ public sealed class SettingsPageModelTests : IDisposable
 
         Assert.Empty(page.Tabs);
         Assert.Contains(reason, page.UnavailableReason);
+    }
+
+    [Fact]
+    public void A_binding_for_a_device_the_launcher_does_not_know_gives_a_reason_not_a_wrong_row()
+    {
+        var export = ExportFixture.Json([ExportFixture.Setting("ts4_wheel_a", "choice", "a", ["a"], "now", "both", "Controls", "Wheel: A", 10,
+            binding: ("wheel", "A"))]);
+
+        var page = SettingsPageModel.FromExport(export, SettingsPath);
+
+        Assert.Empty(page.Tabs);
+        Assert.Contains("wheel", page.UnavailableReason);
+    }
+
+    [Fact]
+    public void Player_facing_text_writes_Settings_file_as_the_glossary_does()
+    {
+        Assert.Contains("Settings file", SettingsStore.Describe(SettingChange.FileIsNewer));
+        Assert.Contains("Settings file", SettingsStore.Describe(SettingChange.NotWritten));
+        Assert.DoesNotContain("settings file", SettingsStore.Describe(SettingChange.FileIsNewer));
+        Assert.DoesNotContain("settings file", SettingsStore.Describe(SettingChange.NotWritten));
     }
 
     [Fact]

@@ -12,7 +12,7 @@ public sealed class GameFilesLocationModel(Preparation preparation, GameFilesLoc
     private const double Gigabyte = 1 << 30;
 
     /// <summary>The folder that holds the game files.</summary>
-    public string Path => preparation.CacheRoot;
+    public string Folder => preparation.CacheRoot;
 
     /// <summary>Setup has run: a change moves files instead of only choosing a place.</summary>
     public bool FilesPrepared => preparation.Existing() is not null;
@@ -44,7 +44,7 @@ public sealed class GameFilesLocationModel(Preparation preparation, GameFilesLoc
     {
         get
         {
-            var free = $"{preparation.FreeBytes / Gigabyte:0.#} GB free on {System.IO.Path.GetPathRoot(Path)}";
+            var free = $"{preparation.FreeBytes / Gigabyte:0.#} GB free on {Path.GetPathRoot(Folder)}";
             return FilesPrepared ? free : $"{free}; setup needs about {preparation.NeededBytes / Gigabyte:0.#} GB";
         }
     }
@@ -57,7 +57,7 @@ public sealed class GameFilesLocationModel(Preparation preparation, GameFilesLoc
 
     /// <summary>A warning, shown before setup starts, when the drive cannot hold the game files; else null.</summary>
     public string? Warning => EnoughSpace ? null
-        : $"Not enough free space on {System.IO.Path.GetPathRoot(Path)}: setup needs about {preparation.NeededBytes / Gigabyte:0.#} GB " +
+        : $"Not enough free space on {Path.GetPathRoot(Folder)}: setup needs about {preparation.NeededBytes / Gigabyte:0.#} GB " +
           $"and {preparation.FreeBytes / Gigabyte:0.#} GB is free. Free some space or choose another place.";
 
     /// <summary>
@@ -123,13 +123,7 @@ public sealed class GameFilesLocationModel(Preparation preparation, GameFilesLoc
         if (progress.Step == SetupStep.CheckingExistingFiles) return "Checking files from an earlier, unfinished move";
         var line = $"Moving the game files  {(int)(progress.Fraction * 100)}%";
         if (progress.TimeLeft is { } left)
-            line += left.TotalMinutes >= 1 ? $", {(int)Math.Ceiling(left.TotalMinutes)} min left" : ", under a minute left";
+            line += ", " + SetupProgress.TimeLeftText(left);
         return line;
-    }
-
-    /// <summary>Reports on the reporting thread, unlike Progress&lt;T&gt;, which posts to the thread pool.</summary>
-    private sealed class SyncProgress(Action<SetupProgress> report) : IProgress<SetupProgress>
-    {
-        public void Report(SetupProgress value) => report(value);
     }
 }

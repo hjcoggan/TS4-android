@@ -35,16 +35,29 @@ public sealed class DirectShortcut(IShortcutWriter writer, IEnumerable<string> f
         foreach (var folder in _folders)
         {
             var link = Path.Combine(folder, FileName);
+            // The new shortcut is written beside the old one and moved over it, so a write that fails keeps the old one.
+            var staged = Path.Combine(folder, "~" + FileName);
             try
             {
                 Directory.CreateDirectory(folder);
-                if (File.Exists(link)) File.Delete(link);
-                writer.Write(link, target, "", workingDirectory);
+                writer.Write(staged, target, "", workingDirectory);
+                File.Move(staged, link, overwrite: true);
                 created.Add(link);
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 failures.Add($"{folder}: {error.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(staged)) File.Delete(staged);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    // A leftover staging file is harmless; the shortcut itself is what was asked for.
+                }
             }
         }
         if (failures.Count > 0)

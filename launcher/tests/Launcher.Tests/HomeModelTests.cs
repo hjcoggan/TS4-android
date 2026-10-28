@@ -217,6 +217,53 @@ public sealed class HomeModelTests : IDisposable
     }
 
     [Fact]
+    public void While_the_game_runs_the_status_says_so_and_play_is_not_offered_until_it_exits()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe());
+
+        home.GameStarted();
+
+        Assert.Equal(HomeStatus.GameRunning, home.Status);
+        Assert.False(home.CanPlay);
+        Assert.Contains("running", home.StatusLine);
+
+        home.SessionEnded(0);
+
+        Assert.Equal(HomeStatus.Ready, home.Status);
+        Assert.True(home.CanPlay);
+    }
+
+    [Fact]
+    public void A_game_that_could_not_be_started_says_why_and_puts_safe_start_up_front()
+    {
+        var home = new HomeModel(PreparedCache(), GameExe());
+        home.GameStarted();
+
+        home.StartFailed("Access is denied.");
+
+        Assert.NotEqual(HomeStatus.GameRunning, home.Status);
+        Assert.True(home.CanPlay);
+        Assert.Contains("Access is denied.", home.Note);
+        Assert.True(home.SafeStartProminent);
+
+        home.GameStarted();
+        home.SessionEnded(0);
+
+        Assert.False(home.SafeStartProminent);
+        Assert.Null(home.Note);
+    }
+
+    [Fact]
+    public void Missing_game_files_offer_set_up_again_first_and_otherwise_it_is_not_offered()
+    {
+        var missing = new HomeModel(Preparation(), GameExe());
+
+        Assert.Equal(HomeAction.SetUpAgain, missing.Actions[0]);
+        Assert.Contains(HomeAction.Settings, missing.Actions);
+        Assert.DoesNotContain(HomeAction.SetUpAgain, new HomeModel(PreparedCache(), GameExe()).Actions);
+    }
+
+    [Fact]
     public void A_missing_game_exe_outranks_the_last_session_in_the_status()
     {
         var home = new HomeModel(PreparedCache(), GameExe(exists: false));

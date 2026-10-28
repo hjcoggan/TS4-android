@@ -293,6 +293,54 @@ public sealed class SetupFlowTests : IDisposable
         Assert.True(later.Prepared!.Reused);
     }
 
+    [Theory]
+    [InlineData(185, "4 min left")]
+    [InlineData(60, "1 min left")]
+    [InlineData(59, "under a minute left")]
+    [InlineData(1, "under a minute left")]
+    public void The_time_left_is_said_in_whole_minutes_rounded_up_or_as_under_a_minute(int seconds, string said) =>
+        Assert.Equal(said, SetupProgress.TimeLeftText(TimeSpan.FromSeconds(seconds)));
+
+    [Fact]
+    public async Task Prepared_files_that_went_away_bring_the_flow_back_to_its_input_rows()
+    {
+        var first = Flow();
+        await first.ChooseDisc(WriteDisc());
+        await first.ChooseTitleUpdate(WriteTu());
+        await first.PrepareAsync(TestContext.Current.CancellationToken);
+        var flow = Flow();
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        Directory.Delete(Path.Combine(Cache, "gamedata"), recursive: true);
+        var changes = 0;
+        flow.Changed += () => changes++;
+
+        flow.SetUpAgain();
+
+        Assert.Equal(SetupPhase.NeedsInputs, flow.Phase);
+        Assert.Null(flow.Prepared);
+        Assert.True(flow.Disc.Needed);
+        Assert.Equal(RowState.Empty, flow.Disc.State);
+        Assert.False(flow.TitleUpdate.Needed, "Title Update 1 is still prepared.");
+        Assert.Equal(1, changes);
+        await flow.ChooseDisc(WriteDisc());
+        await flow.ChooseTitleUpdate(null);
+        Assert.True(flow.CanPrepare);
+    }
+
+    [Fact]
+    public async Task Setting_up_again_changes_nothing_while_the_prepared_files_are_all_there()
+    {
+        var first = Flow();
+        await first.ChooseDisc(WriteDisc());
+        await first.ChooseTitleUpdate(WriteTu());
+        await first.PrepareAsync(TestContext.Current.CancellationToken);
+        var flow = Flow();
+
+        flow.SetUpAgain();
+
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+    }
+
     [Fact]
     public async Task A_row_whose_files_are_already_set_up_is_accepted_without_a_choice()
     {

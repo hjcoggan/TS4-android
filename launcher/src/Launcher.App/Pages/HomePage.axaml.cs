@@ -27,16 +27,18 @@ public partial class HomePage : UserControl
     public event Action? PlayPressed;
     public event Action<HomeAction>? ActionPressed;
 
-    public Control EntryControl => PlayButton.IsEnabled ? PlayButton : (Control)_buttons[HomeAction.Settings];
+    public Control EntryControl => PlayButton.IsEnabled ? PlayButton : _buttons[_home.Actions[0]];
 
     private static string Label(HomeAction action) => action switch
     {
+        HomeAction.SetUpAgain => "Set up again",
         HomeAction.Settings => "Settings",
         HomeAction.CreateShortcut => "Create shortcut",
         HomeAction.OpenCrashReport => "Open crash report",
         HomeAction.Help => "Help",
         HomeAction.OpenLogs => "Open logs",
-        _ => "Safe start",
+        HomeAction.SafeStart => "Safe start",
+        _ => throw new ArgumentOutOfRangeException(nameof(action), action, "A home action with no label"),
     };
 
     private Button Button(HomeAction action)

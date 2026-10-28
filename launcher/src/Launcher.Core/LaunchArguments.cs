@@ -6,6 +6,12 @@ public static class LaunchArguments
     /// <summary>The game exe, which sits beside the Launcher.</summary>
     public const string GameExeName = "topspin4.exe";
 
+    /// <summary>"topspin4.exe was not found next to the Launcher": the first half of every message about the missing exe.</summary>
+    public static string GameExeNotFound => NotFoundNextToLauncher(GameExeName);
+
+    /// <summary>"&lt;file&gt; was not found next to the Launcher", for the files that ship beside it.</summary>
+    public static string NotFoundNextToLauncher(string fileName) => $"{fileName} was not found next to the Launcher";
+
     /// <summary>The game exe beside the Launcher, or null when it is not there.</summary>
     public static string? FindGameExe(string launcherDirectory)
     {

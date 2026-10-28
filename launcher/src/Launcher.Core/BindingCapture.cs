@@ -28,8 +28,8 @@ public sealed class BindingCapture
     /// <summary>What to tell the player while waiting; empty when not.</summary>
     public string Prompt => Row?.Binding?.Device switch
     {
-        "pad" => "Press the pad button to use. Esc cancels.",
-        "keyboard" => "Press the key to use. Esc cancels.",
+        BindingDevice.Pad => "Press the pad button to use. Esc cancels.",
+        BindingDevice.Keyboard => "Press the key to use. Esc cancels.",
         _ => "",
     };
 
@@ -64,7 +64,7 @@ public sealed class BindingCapture
             Cancel();
             return null;
         }
-        if (row.Binding?.Device != "keyboard" || _held.Contains(key)) return null;
+        if (row.Binding?.Device != BindingDevice.Keyboard || _held.Contains(key)) return null;
         if (BindingNames.Key(key, ctrl, alt, shift) is not { } name) return null;
         Row = null;
         return new CapturedBinding(row, name);
@@ -79,7 +79,7 @@ public sealed class BindingCapture
     /// <summary>The pad was read. The row and input when a button or trigger is the answer, else null.</summary>
     public CapturedBinding? PadChanged(PadState state)
     {
-        if (Row is not { } row || row.Binding?.Device != "pad") return null;
+        if (Row is not { } row || row.Binding?.Device != BindingDevice.Pad) return null;
         var pressed = BindingNames.PadInput(state);
         if (pressed is null)
         {

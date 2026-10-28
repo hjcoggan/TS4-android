@@ -7,6 +7,8 @@
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
 
+#include "command_line.h"
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -31,8 +33,10 @@ bool StartLauncher(std::string_view reason, const std::filesystem::path& user_da
   const std::filesystem::path launcher = folder / kLauncherName;
   std::error_code error;
   if (!std::filesystem::exists(launcher, error)) return false;
-  std::wstring command = L"\"" + launcher.wstring() + L"\" --not-set-up " + Widen(reason);
-  if (!user_data_root.empty()) command += L" --user-data \"" + user_data_root.wstring() + L"\"";
+  std::wstring command = command_line::QuoteArgument(launcher.wstring()) + L" --not-set-up " + Widen(reason);
+  if (!user_data_root.empty()) {
+    command += L" --user-data " + command_line::QuoteArgument(user_data_root.wstring());
+  }
   STARTUPINFOW startup{};
   startup.cb = sizeof(startup);
   PROCESS_INFORMATION process{};

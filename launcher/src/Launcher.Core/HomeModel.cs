@@ -4,6 +4,8 @@ namespace TopSpin4.Launcher.Core;
 public enum HomeStatus
 {
     Ready,
+    /// <summary>The game was started from this window and has not exited yet.</summary>
+    GameRunning,
     /// <summary>The game exe is not beside the Launcher, so PLAY cannot start anything.</summary>
     GameExeMissing,
     /// <summary>The prepared folders are gone or incomplete; setup has to run again.</summary>
@@ -17,6 +19,8 @@ public enum HomeStatus
 /// <summary>The labelled actions of the home screen. PLAY is not one: it is the screen's main button.</summary>
 public enum HomeAction
 {
+    /// <summary>Takes the player to the setup page; offered when the game files are missing.</summary>
+    SetUpAgain,
     Settings,
     /// <summary>Creates or replaces the Direct shortcut on the Desktop and in the Start menu.</summary>
     CreateShortcut,
@@ -40,9 +44,12 @@ public sealed class HomeModel(Preparation preparation, string? gameExe)
     public string? GameExe { get; } = gameExe;
 
     private GameExitReport? _lastExit;
+    private bool _running;
+    private bool _startFailed;
 
     public HomeStatus Status =>
-        GameExe is null || !File.Exists(GameExe) ? HomeStatus.GameExeMissing
+        _running ? HomeStatus.GameRunning
+        : GameExe is null || !File.Exists(GameExe) ? HomeStatus.GameExeMissing
         : preparation.Existing() is null ? HomeStatus.GameFilesMissing
         : _lastExit?.Kind switch
         {
@@ -54,8 +61,12 @@ public sealed class HomeModel(Preparation preparation, string? gameExe)
     /// <summary>PLAY works whenever the exe and the prepared folders are there, also after a failed session.</summary>
     public bool CanPlay => Status is HomeStatus.Ready or HomeStatus.LastSessionGpuFailure or HomeStatus.LastSessionCrashed;
 
-    /// <summary>Safe start is offered prominently, not only under "Trouble starting?", after a GPU failure or a crash.</summary>
-    public bool SafeStartProminent => Status is HomeStatus.LastSessionGpuFailure or HomeStatus.LastSessionCrashed;
+    /// <summary>
+    /// Safe start is offered prominently, not only under "Trouble starting?", after a GPU failure, a
+    /// crash or a game that could not be started at all.
+    /// </summary>
+    public bool SafeStartProminent =>
+        Status is HomeStatus.LastSessionGpuFailure or HomeStatus.LastSessionCrashed || _startFailed && CanPlay;
 
     /// <summary>The crash report the game saved for the last session, when it crashed and one is on disk.</summary>
     public string? CrashReportPath => _lastExit?.CrashReportPath;
@@ -69,16 +80,25 @@ public sealed class HomeModel(Preparation preparation, string? gameExe)
         HomeStatus.Ready => "Ready to play.",
         HomeStatus.LastSessionGpuFailure => "The last session stopped on the graphics card. You can play again.",
         HomeStatus.LastSessionCrashed => "The last session crashed. You can play again.",
-        HomeStatus.GameExeMissing =>
-            $"{LaunchArguments.GameExeName} was not found next to the Launcher. Put the Launcher in the game's folder.",
+        HomeStatus.GameRunning => "The game is running.",
+        HomeStatus.GameExeMissing => $"{LaunchArguments.GameExeNotFound}. Put the Launcher in the game's folder.",
         _ => "The game files are missing. Set up the game again.",
     };
 
-    /// <summary>The actions shown as labelled buttons beside PLAY, in order.</summary>
-    public IReadOnlyList<HomeAction> Actions =>
-        CrashReportPath is null
-            ? [HomeAction.Settings, HomeAction.CreateShortcut, HomeAction.Help, HomeAction.OpenLogs]
-            : [HomeAction.Settings, HomeAction.CreateShortcut, HomeAction.Help, HomeAction.OpenLogs, HomeAction.OpenCrashReport];
+    /// <summary>
+    /// The actions shown as labelled buttons beside PLAY, in order. When the game files are missing
+    /// "Set up again" comes first; after a crash that left a report, "Open crash report" comes last.
+    /// </summary>
+    public IReadOnlyList<HomeAction> Actions
+    {
+        get
+        {
+            List<HomeAction> actions = [HomeAction.Settings, HomeAction.CreateShortcut, HomeAction.Help, HomeAction.OpenLogs];
+            if (Status == HomeStatus.GameFilesMissing) actions.Insert(0, HomeAction.SetUpAgain);
+            if (CrashReportPath is not null) actions.Add(HomeAction.OpenCrashReport);
+            return actions;
+        }
+    }
 
     /// <summary>The recovery actions kept in the small "Trouble starting?" area.</summary>
     public IReadOnlyList<HomeAction> TroubleStartingActions { get; } = [HomeAction.SafeStart];
@@ -95,9 +115,29 @@ public sealed class HomeModel(Preparation preparation, string? gameExe)
     /// </summary>
     public void SessionEnded(int exitCode)
     {
+        _running = false;
+        _startFailed = false;
         var log = LogsFolder is { } folder ? GameExitReport.NewestSessionLog(folder) : null;
         _lastExit = GameExitReport.FromExit(exitCode, log);
         Note = _lastExit.Message;
+    }
+
+    /// <summary>The game was started from this window: PLAY is off until <see cref="SessionEnded"/>.</summary>
+    public void GameStarted()
+    {
+        _running = true;
+        _startFailed = false;
+    }
+
+    /// <summary>
+    /// The game could not be started at all (the system refused to run it). That counts as a failed
+    /// start: <paramref name="reason"/> goes in the note and Safe start moves up front.
+    /// </summary>
+    public void StartFailed(string reason)
+    {
+        _running = false;
+        _startFailed = true;
+        Note = "The game could not be started: " + reason;
     }
 
     /// <summary>Shows a line under the status, e.g. when an action could not be carried out.</summary>

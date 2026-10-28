@@ -142,6 +142,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
     add_executable(topspin4_host_tests EXCLUDE_FROM_ALL
         tests/host/test_frame_dumps.cpp
         tests/host/test_user_paths.cpp
+        tests/host/test_command_line.cpp
         tests/host/test_settings.cpp
         tests/host/test_page_model.cpp
         tests/host/test_presets_controls.cpp

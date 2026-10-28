@@ -55,7 +55,7 @@ public partial class GameFilesLocationPanel : UserControl
     {
         var idle = _model.CanChange;
         var prepared = _model.FilesPrepared;
-        PathText.Text = (prepared ? "Game files are in " : "Game files go to ") + _model.Path;
+        PathText.Text = (prepared ? "Game files are in " : "Game files go to ") + _model.Folder;
         SpaceText.IsVisible = idle;
         WarningText.IsVisible = idle && _model.Warning is not null;
         if (idle)

@@ -51,6 +51,12 @@
     <Setter Property="TextAlignment" Value="Left" />
     <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
   </Style>
+  <!-- The name of a setting on the Settings page. -->
+  <Style Selector="TextBlock.rowtitle">
+    <Setter Property="FontSize" Value="22" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
   <Style Selector="TextBlock.error">
     <Setter Property="FontSize" Value="20" />
     <Setter Property="TextWrapping" Value="Wrap" />

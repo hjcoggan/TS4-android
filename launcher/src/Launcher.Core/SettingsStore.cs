@@ -51,9 +51,9 @@ public sealed class SettingsStore(SettingsSchema schema, string settingsPath)
     public static string Describe(SettingChange change) => change switch
     {
         SettingChange.Saved => "",
-        SettingChange.FileIsNewer => "Your settings file was written by a newer version of the game, so the Launcher left it alone. Change this setting in the game.",
+        SettingChange.FileIsNewer => "Your Settings file was written by a newer version of the game, so the Launcher left it alone. Change this setting in the game.",
         SettingChange.Refused => "The game does not allow that value.",
-        _ => "The settings file could not be written.",
+        _ => "The Settings file could not be written.",
     };
 }
 

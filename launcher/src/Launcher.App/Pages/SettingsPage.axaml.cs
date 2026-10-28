@@ -4,7 +4,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using TopSpin4.Launcher.Core;
 
 namespace TopSpin4.Launcher.Pages;
@@ -23,7 +22,7 @@ public partial class SettingsPage : UserControl
     private string? _error;
     private string? _notice;
     private readonly BindingCapture _capture = new();
-    private readonly Dictionary<string, Button> _rowButtons = [];
+    private readonly Dictionary<string, Control> _rowButtons = [];
     private string? _focusAfterDraw;
     private string? _captureKey;
     private bool _focusKeyboard;
@@ -66,12 +65,13 @@ public partial class SettingsPage : UserControl
     {
         _error = change == SettingChange.Saved ? null : SettingsStore.Describe(change);
         _notice = null;
-        // Every change draws the tab again, which drops the control that was just pressed: put focus back on its twin.
-        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as RadioButton;
-        var key = focused?.Tag as string;
-        var keyboard = focused?.Classes.Contains(":focus-visible") == true;
+        // Every change draws the tab again, which drops the control that was just pressed: Draw puts focus back on its twin.
+        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is RadioButton { Tag: string key } focused)
+        {
+            _focusAfterDraw = key;
+            _focusKeyboard = focused.Classes.Contains(":focus-visible");
+        }
         Draw();
-        if (key is not null) Dispatcher.UIThread.Post(() => RestoreFocus(key, keyboard), DispatcherPriority.Background);
     }
 
     /// <summary>Whether a binding row is waiting for a key or pad button (the window then routes input here, not to the focus).</summary>
@@ -131,13 +131,6 @@ public partial class SettingsPage : UserControl
         Draw();
     }
 
-    // The radio button with this identity in the tab as drawn now; the outline shows only for a keyboard or pad player.
-    private void RestoreFocus(string key, bool keyboard)
-    {
-        var twin = Tabs.GetVisualDescendants().OfType<RadioButton>().FirstOrDefault(radio => radio.Tag as string == key);
-        twin?.Focus(keyboard ? NavigationMethod.Directional : NavigationMethod.Pointer);
-    }
-
     private void Draw()
     {
         if (_model is not { } model) return;
@@ -173,7 +166,7 @@ public partial class SettingsPage : UserControl
     private Control Row(SettingsPageModel model, SettingRow row)
     {
         var panel = new StackPanel { Spacing = 6 };
-        panel.Children.Add(new TextBlock { Text = row.Label, FontSize = 22, FontWeight = FontWeight.Bold, Foreground = Brushes.White });
+        panel.Children.Add(new TextBlock { Text = row.Label, Classes = { "rowtitle" } });
         if (row.Kind == SettingRowKind.Action)
         {
             var reset = new Button { Content = row.Label, Classes = { "secondary" }, HorizontalAlignment = HorizontalAlignment.Left };
@@ -228,6 +221,7 @@ public partial class SettingsPage : UserControl
                     Tag = row.Key + "=" + option.Value,
                 };
                 radio.Click += (_, _) => Apply(model.Choose(row, option.Value));
+                _rowButtons[(string)radio.Tag] = radio;
                 options.Children.Add(radio);
             }
             panel.Children.Add(options);

@@ -25,13 +25,13 @@ Title Update 1 is a content package your console stored when it downloaded the u
 
 ### Changing settings
 
-The Launcher's Settings page shows the renderer. Every setting is in the game's own Settings page, which you can open while playing:
+Every setting is in the Launcher's **Settings**, one tab per section, so you can set the game up before you play. You can also change every setting in the game, while playing, on its own Settings page:
 
 - In the game's OPTIONS menu, choose **PC SETTINGS**.
 - On a keyboard, press **F4**.
 - On a controller, hold **Back** and **Start** together.
 
-In the Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the settings file in your user folder, so the Launcher and the game show the same values.
+In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in your user folder, so the Launcher and the game show the same values.
 
 ### Renderer
 
@@ -40,7 +40,7 @@ In the Settings page, press A (or Enter) on a row to change it. To remap a key o
 
 ### If the game will not start
 
-Open the Launcher and use **Safe start** under "Trouble starting?". It runs one session on the default settings and leaves your settings file unchanged.
+Open the Launcher and use **Safe start** under "Trouble starting?". It runs one session on the default settings and leaves your Settings file unchanged.
 
 After a crash or a graphics failure the Launcher comes back with Safe start up front, and after a crash with **Open crash report** to attach to your issue.
 

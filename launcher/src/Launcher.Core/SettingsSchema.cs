@@ -2,8 +2,20 @@ using System.Text.Json;
 
 namespace TopSpin4.Launcher.Core;
 
-/// <summary>What a controller or key binding setting is for: its device ("pad" or "keyboard") and the game input, as the game names it.</summary>
-public sealed record BindingDescription(string Device, string Action);
+/// <summary>The device a binding setting is for. The export names them "pad" and "keyboard".</summary>
+public enum BindingDevice { Pad, Keyboard }
+
+/// <summary>What a controller or key binding setting is for: its device and the game input, as the game names it.</summary>
+public sealed record BindingDescription(BindingDevice Device, string Action)
+{
+    /// <summary>The device as the export names it; a name this Launcher does not know is a format it cannot read.</summary>
+    public static BindingDevice ParseDevice(string name) => name switch
+    {
+        "pad" => BindingDevice.Pad,
+        "keyboard" => BindingDevice.Keyboard,
+        _ => throw new FormatException($"a binding for the device \"{name}\", which this Launcher does not know"),
+    };
+}
 
 /// <summary>One player setting as the game's own export describes it (src/settings/schema.h).</summary>
 public sealed record SettingDescription(
@@ -111,7 +123,7 @@ public sealed class SettingsSchema
                     item.GetProperty("help").GetString()!,
                     binding.ValueKind == JsonValueKind.Null
                         ? null
-                        : new BindingDescription(binding.GetProperty("device").GetString()!, binding.GetProperty("action").GetString()!)));
+                        : new BindingDescription(BindingDescription.ParseDevice(binding.GetProperty("device").GetString()!), binding.GetProperty("action").GetString()!)));
             }
             var presets = root.GetProperty("presets").EnumerateArray().Select(preset => new PresetDescription(
                 preset.GetProperty("value").GetString()!,

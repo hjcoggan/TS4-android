@@ -74,14 +74,11 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   // Saves and settings go to the per-user folder and the shader cache beside the launcher's
-  // prepared data (src/user_paths.h), instead of the SDK's Documents/topspin4. The developer
-  // scripts pass both folders on the command line, which wins.
+  // prepared data, wherever the player moved it (src/user_paths.h), instead of the SDK's
+  // Documents/topspin4. The developer scripts pass both folders on the command line, which wins.
   void OnConfigurePaths(rex::PathConfig& paths) override {
     if (REXCVAR_GET(user_data_root).empty()) {
       paths.user_data_root = topspin4::user_paths::DefaultUserDataRoot();
-    }
-    if (REXCVAR_GET(cache_root).empty()) {
-      paths.cache_root = topspin4::user_paths::DefaultCacheRoot();
     }
     // Started directly after the Launcher's setup: the prepared disc and TU1 are where the
     // Launcher left them (the place its location file records after a move, else the default
@@ -89,6 +86,10 @@ class TopSpin4App : public rex::ReXApp {
     namespace user_paths = topspin4::user_paths;
     const auto recorded =
         user_paths::ReadLocationFile(paths.user_data_root / std::string(user_paths::kLocationFileName));
+    // The shader cache stays beside the prepared data, so it follows the recorded place too.
+    if (REXCVAR_GET(cache_root).empty()) {
+      paths.cache_root = user_paths::CacheRoot(recorded, user_paths::DefaultCacheRoot());
+    }
     const auto use_prepared = [&](std::filesystem::path& root, const auto& folder) {
       root = user_paths::PreparedFolder(root, recorded, user_paths::DefaultPreparedDataRoot(), folder);
     };

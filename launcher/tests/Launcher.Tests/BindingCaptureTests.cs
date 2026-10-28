@@ -9,8 +9,8 @@ namespace TopSpin4.Launcher.Tests;
 /// </summary>
 public sealed class BindingCaptureTests
 {
-    private static SettingRow BindingRow(string device) =>
-        new("binding", SettingRowKind.Setting, device == "pad" ? "Pad: A" : "Keys: A", "", "a", "A", [],
+    private static SettingRow BindingRow(BindingDevice device) =>
+        new("binding", SettingRowKind.Setting, device == BindingDevice.Pad ? "Pad: A" : "Keys: A", "", "a", "A", [],
             Available: true, Editable: false, Remappable: true, Note: null, new BindingDescription(device, "A"));
 
     private static PadState Pad(ushort buttons = 0, byte left = 0, byte right = 0) => new(buttons, 0, 0, left, right);
@@ -18,14 +18,14 @@ public sealed class BindingCaptureTests
     [Theory]
     [InlineData(PadState.A, "a")]
     [InlineData(PadState.B, "b")]
-    [InlineData(0x4000, "x")]
-    [InlineData(0x8000, "y")]
-    [InlineData(0x0100, "lb")]
-    [InlineData(0x0200, "rb")]
-    [InlineData(0x0040, "ls")]
-    [InlineData(0x0080, "rs")]
-    [InlineData(0x0020, "back")]
-    [InlineData(0x0010, "start")]
+    [InlineData(PadState.X, "x")]
+    [InlineData(PadState.Y, "y")]
+    [InlineData(PadState.LeftShoulder, "lb")]
+    [InlineData(PadState.RightShoulder, "rb")]
+    [InlineData(PadState.LeftThumb, "ls")]
+    [InlineData(PadState.RightThumb, "rs")]
+    [InlineData(PadState.Back, "back")]
+    [InlineData(PadState.Start, "start")]
     [InlineData(PadState.DPadUp, "up")]
     [InlineData(PadState.DPadDown, "down")]
     [InlineData(PadState.DPadLeft, "left")]
@@ -98,10 +98,10 @@ public sealed class BindingCaptureTests
         var capture = new BindingCapture();
         Assert.False(capture.Waiting);
 
-        capture.Begin(BindingRow("keyboard") with { Binding = null }, nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard) with { Binding = null }, nowMs: 0);
         Assert.False(capture.Waiting);
 
-        capture.Begin(BindingRow("keyboard") with { Remappable = false }, nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard) with { Remappable = false }, nowMs: 0);
         Assert.False(capture.Waiting);
     }
 
@@ -109,7 +109,7 @@ public sealed class BindingCaptureTests
     public void The_next_key_pressed_is_captured_with_the_modifiers_held()
     {
         var capture = new BindingCapture();
-        var row = BindingRow("keyboard");
+        var row = BindingRow(BindingDevice.Keyboard);
         capture.Begin(row, nowMs: 0);
 
         Assert.True(capture.Waiting);
@@ -124,7 +124,7 @@ public sealed class BindingCaptureTests
     public void A_pad_button_pressed_after_the_buttons_that_started_the_capture_are_let_go_is_captured()
     {
         var capture = new BindingCapture();
-        var row = BindingRow("pad");
+        var row = BindingRow(BindingDevice.Pad);
         capture.Begin(row, nowMs: 0);
 
         Assert.Null(capture.PadChanged(Pad(PadState.A)));   // A is still down from choosing the row
@@ -142,13 +142,13 @@ public sealed class BindingCaptureTests
     public void A_key_row_ignores_the_pad_and_a_pad_row_ignores_keys()
     {
         var capture = new BindingCapture();
-        capture.Begin(BindingRow("keyboard"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard), nowMs: 0);
         Assert.Null(capture.PadChanged(Pad()));
         Assert.Null(capture.PadChanged(Pad(PadState.B)));
         Assert.True(capture.Waiting);
         capture.Cancel();
 
-        capture.Begin(BindingRow("pad"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Pad), nowMs: 0);
         Assert.Null(capture.KeyDown("W", false, false, false));
         Assert.True(capture.Waiting);
     }
@@ -156,7 +156,7 @@ public sealed class BindingCaptureTests
     [Fact]
     public void Esc_cancels_on_either_device_and_nothing_is_captured()
     {
-        foreach (var device in new[] { "keyboard", "pad" })
+        foreach (var device in new[] { BindingDevice.Keyboard, BindingDevice.Pad })
         {
             var capture = new BindingCapture();
             capture.Begin(BindingRow(device), nowMs: 0);
@@ -171,7 +171,7 @@ public sealed class BindingCaptureTests
     public void A_key_the_game_does_not_offer_is_ignored_and_the_capture_keeps_waiting()
     {
         var capture = new BindingCapture();
-        capture.Begin(BindingRow("keyboard"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard), nowMs: 0);
 
         Assert.Null(capture.KeyDown("F4", false, false, false));
         Assert.Null(capture.KeyDown("LWin", false, false, false));
@@ -184,7 +184,7 @@ public sealed class BindingCaptureTests
     {
         var capture = new BindingCapture();
         Assert.Null(capture.KeyDown("Return", false, false, false));   // Enter chose the row; the capture is not on yet
-        capture.Begin(BindingRow("keyboard"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard), nowMs: 0);
 
         Assert.Null(capture.KeyDown("Return", false, false, false));   // auto-repeat
         Assert.True(capture.Waiting);
@@ -198,7 +198,7 @@ public sealed class BindingCaptureTests
     public void The_capture_gives_up_after_the_timeout_and_captures_nothing_late()
     {
         var capture = new BindingCapture();
-        capture.Begin(BindingRow("keyboard"), nowMs: 1000);
+        capture.Begin(BindingRow(BindingDevice.Keyboard), nowMs: 1000);
 
         Assert.False(capture.Expire(1000 + BindingCapture.TimeoutMs - 1));
         Assert.True(capture.Waiting);
@@ -214,11 +214,11 @@ public sealed class BindingCaptureTests
         var capture = new BindingCapture();
         Assert.Equal("", capture.Prompt);
 
-        capture.Begin(BindingRow("pad"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Pad), nowMs: 0);
         Assert.Contains("pad button", capture.Prompt);
         Assert.Contains("Esc", capture.Prompt);
 
-        capture.Begin(BindingRow("keyboard"), nowMs: 0);
+        capture.Begin(BindingRow(BindingDevice.Keyboard), nowMs: 0);
         Assert.Contains("key", capture.Prompt);
         Assert.Contains("Esc", capture.Prompt);
     }

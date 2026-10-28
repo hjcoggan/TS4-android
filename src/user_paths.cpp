@@ -63,6 +63,6 @@ std::filesystem::path DefaultPreparedDataRoot() {
 #endif
 }
 
-std::filesystem::path DefaultCacheRoot() { return DefaultPreparedDataRoot() / "cache"; }
+std::filesystem::path DefaultCacheRoot() { return DefaultPreparedDataRoot() / kCacheFolder; }
 
 }  // namespace topspin4::user_paths

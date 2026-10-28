@@ -50,7 +50,8 @@ public sealed class DirectShortcutTests : IDisposable
         var created = Shortcut(writer).Create(GameExe);
 
         Assert.Equal([Path.Combine(Desktop, "Top Spin 4.lnk"), Path.Combine(StartMenu, "Top Spin 4.lnk")], created);
-        Assert.Equal(created, writer.Calls.Select(call => call.LinkPath));
+        // Written beside the final file (a new one, moved over the old), so a failed write never costs the old shortcut.
+        Assert.Equal(created.Select(Path.GetDirectoryName), writer.Calls.Select(call => Path.GetDirectoryName(call.LinkPath)));
         Assert.All(created, link => Assert.True(File.Exists(link)));
     }
 
@@ -68,6 +69,28 @@ public sealed class DirectShortcutTests : IDisposable
         Assert.Single(Directory.GetFiles(StartMenu));
         Assert.Equal(Path.GetFullPath(moved), File.ReadAllText(Path.Combine(Desktop, "Top Spin 4.lnk")));
         Assert.Equal(4, writer.Calls.Count);
+    }
+
+    // Fails the way a locked or full folder does, after the shell has been asked to write.
+    private sealed class FailingWriter : IShortcutWriter
+    {
+        public void Write(string linkPath, string target, string arguments, string workingDirectory) =>
+            throw new IOException("The disk is full.");
+    }
+
+    [Fact]
+    public void A_failed_write_keeps_the_old_shortcut_and_leaves_no_stray_file()
+    {
+        Shortcut(new FileWriter()).Create(GameExe);
+        var old = Path.Combine(Desktop, "Top Spin 4.lnk");
+        Assert.Equal(Path.GetFullPath(GameExe), File.ReadAllText(old));
+
+        var moved = Path.Combine(_root, "moved", LaunchArguments.GameExeName);
+        Assert.Throws<IOException>(() => new DirectShortcut(new FailingWriter(), [Desktop, StartMenu]).Create(moved));
+
+        Assert.Equal(Path.GetFullPath(GameExe), File.ReadAllText(old));
+        Assert.Equal([old], Directory.GetFiles(Desktop));
+        Assert.Single(Directory.GetFiles(StartMenu));
     }
 
     [Fact]

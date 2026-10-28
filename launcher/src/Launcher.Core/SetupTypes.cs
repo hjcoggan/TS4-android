@@ -83,6 +83,16 @@ public enum SetupStep
 public sealed record SetupProgress(SetupStep Step, long BytesDone, long BytesTotal, string? CurrentFile, TimeSpan? TimeLeft)
 {
     public double Fraction => BytesTotal > 0 ? (double)BytesDone / BytesTotal : 0;
+
+    /// <summary>"4 min left" (whole minutes, rounded up), or "under a minute left"; the one wording every progress line uses.</summary>
+    public static string TimeLeftText(TimeSpan left) =>
+        left.TotalMinutes >= 1 ? $"{(int)Math.Ceiling(left.TotalMinutes)} min left" : "under a minute left";
+}
+
+/// <summary>Reports on the reporting thread, unlike Progress&lt;T&gt;, which posts to the thread pool.</summary>
+public sealed class SyncProgress(Action<SetupProgress> report) : IProgress<SetupProgress>
+{
+    public void Report(SetupProgress value) => report(value);
 }
 
 /// <summary>Free space on the drive that holds a folder; tests replace it with a fake.</summary>

@@ -33,15 +33,15 @@ Console.CancelKeyPress += (_, stop) =>
 };
 
 // The command line wins, then the place the Launcher recorded for the game files, then the default folder.
-var root = Path.GetFullPath(cache ?? new GameFilesLocation(UserDirectories.SettingsRoot()).Current(UserDirectories.PreparedDataRoot()));
+var root = new GameFilesLocation(UserDirectories.SettingsRoot()).Resolve(cache, UserDirectories.PreparedDataRoot());
 var preparation = new Preparation(root);
 var lastLine = "";
-var progress = new Progress(report =>
+var progress = new SyncProgress(report =>
 {
     var line = report.Step switch
     {
         SetupStep.Extracting or SetupStep.UnpackingTitleUpdate =>
-            $"{Describe(report.Step)} {(int)(report.Fraction * 100),3}%" + (report.TimeLeft is { } left ? $", {Minutes(left)} left" : ""),
+            $"{Describe(report.Step)} {(int)(report.Fraction * 100),3}%" + (report.TimeLeft is { } left ? ", " + SetupProgress.TimeLeftText(left) : ""),
         _ => Describe(report.Step),
     };
     if (line == lastLine) return;
@@ -80,10 +80,3 @@ static string Describe(SetupStep step) => step switch
     _ => "Done",
 };
 
-static string Minutes(TimeSpan left) => left.TotalMinutes >= 1 ? $"{(int)Math.Ceiling(left.TotalMinutes)} min" : "under a minute";
-
-/// <summary>Reports on the reporting thread, unlike Progress&lt;T&gt;, which posts to the thread pool.</summary>
-sealed class Progress(Action<SetupProgress> report) : IProgress<SetupProgress>
-{
-    public void Report(SetupProgress value) => report(value);
-}

@@ -22,9 +22,19 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     /// <summary>Head room kept free beyond the prepared files (logs, caches, saves).</summary>
     public const long SpareBytes = 512L << 20;
 
-    private string _cacheRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(cacheRoot));
-    private PreparedFolder _gameData = new(Path.Combine(cacheRoot, GameDataFolderName), disc);
-    private PreparedFolder _updateData = new(Path.Combine(cacheRoot, UpdateDataFolderName), titleUpdate);
+    private const double Gigabyte = 1 << 30;
+
+    /// <summary>
+    /// The shader and pipeline cache the game keeps beside the prepared folders
+    /// (<c>CacheFolder</c> in src/user_paths.h; keep the names equal). A move carries it along.
+    /// </summary>
+    public const string ShaderCacheFolderName = "cache";
+
+    private static string Normalised(string root) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+
+    private string _cacheRoot = Normalised(cacheRoot);
+    private PreparedFolder _gameData = new(Path.Combine(Normalised(cacheRoot), GameDataFolderName), disc);
+    private PreparedFolder _updateData = new(Path.Combine(Normalised(cacheRoot), UpdateDataFolderName), titleUpdate);
 
     /// <summary>Preparation of the Reference build into <paramref name="cacheRoot"/>.</summary>
     public Preparation(string cacheRoot)
@@ -108,7 +118,7 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     public void Relocate(string newRoot)
     {
         if (Busy) throw new InvalidOperationException("The game files cannot change place while setup is running.");
-        _cacheRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(newRoot));
+        _cacheRoot = Normalised(newRoot);
         _gameData = new PreparedFolder(Path.Combine(_cacheRoot, GameDataFolderName), disc);
         _updateData = new PreparedFolder(Path.Combine(_cacheRoot, UpdateDataFolderName), titleUpdate);
     }
@@ -125,10 +135,11 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     {
         if (Existing() is null) throw new InvalidOperationException("There are no prepared game files to move.");
         if (Busy) throw new InvalidOperationException("The game files cannot change place while setup is running.");
-        var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(newRoot));
+        var target = Normalised(newRoot);
         if (string.Equals(target, _cacheRoot, StringComparison.OrdinalIgnoreCase))
             throw new SetupException(SetupError.BadPlace, "The game files are already in that folder.");
-        if (IsInside(target, _gameData.Directory) || IsInside(target, _updateData.Directory))
+        if (IsInside(target, _gameData.Directory) || IsInside(target, _updateData.Directory)
+            || IsInside(target, Path.Combine(_cacheRoot, ShaderCacheFolderName)))
             throw new SetupException(SetupError.BadPlace,
                 "That place is inside the current game files. Choose a folder of its own.");
 
@@ -139,10 +150,18 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
             var total = disc.TotalBytes + titleUpdate.TotalBytes;
             var gameData = new PreparedFolder(Path.Combine(target, GameDataFolderName), disc);
             var updateData = new PreparedFolder(Path.Combine(target, UpdateDataFolderName), titleUpdate);
+            // Both folders must fit before the first byte is copied, so a full drive never leaves half a move behind.
+            var needed = gameData.PendingBytes() + updateData.PendingBytes() + SpareBytes;
+            var free = space.FreeBytes(target);
+            if (free < needed)
+                throw new SetupException(SetupError.DiskFull,
+                    $"Not enough free space on {Path.GetPathRoot(target)}: the move needs about {needed / Gigabyte:0.#} GB " +
+                    $"and {free / Gigabyte:0.#} GB is free. Free some space or choose another place.");
             try
             {
                 var copied = Copy(_gameData, gameData, disc, "the game files", reporter, total, 0, cancel);
                 Copy(_updateData, updateData, titleUpdate, "Title Update 1", reporter, total, copied, cancel);
+                CopyShaderCache(_cacheRoot, target, cancel);
             }
             catch (UnauthorizedAccessException error)
             {
@@ -150,13 +169,14 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
                     $"Not allowed to write to {target}. Choose a place for the game files that you can write to.", error);
             }
 
-            var oldFolders = new[] { _gameData, _updateData };
+            var oldFolders = new[] { _gameData.Directory, _gameData.Partial, _updateData.Directory, _updateData.Partial,
+                Path.Combine(_cacheRoot, ShaderCacheFolderName) };
             record(target);
             _cacheRoot = target;
             _gameData = gameData;
             _updateData = updateData;
             reporter.Start(SetupStep.Done, 1, 1);
-            return oldFolders.All(Remove);
+            return oldFolders.Select(Remove).ToList().All(removed => removed);
         }
         finally
         {
@@ -202,13 +222,41 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
         return copied + manifest.TotalBytes;
     }
 
-    // Removes a prepared folder and any partial copy of it; false when something stayed behind.
-    private static bool Remove(PreparedFolder folder)
+    // The game's shader cache, carried to the new place so the next start does not rebuild it. It can be built
+    // again, so a missing one is fine and one that cannot be copied is skipped; only a stop is passed on.
+    // It lands under a temporary name and is renamed whole, so the game never reads half a cache.
+    private static void CopyShaderCache(string fromRoot, string toRoot, CancellationToken cancel)
+    {
+        var from = Path.Combine(fromRoot, ShaderCacheFolderName);
+        if (!Directory.Exists(from)) return;
+        var to = Path.Combine(toRoot, ShaderCacheFolderName);
+        var partial = to + ".partial";
+        try
+        {
+            if (Directory.Exists(partial)) Directory.Delete(partial, recursive: true);
+            foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+            {
+                cancel.ThrowIfCancellationRequested();
+                var target = Path.Combine(partial, Path.GetRelativePath(from, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target, overwrite: true);
+            }
+            Directory.CreateDirectory(partial);
+            if (Directory.Exists(to)) Directory.Delete(to, recursive: true);
+            Directory.Move(partial, to);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Remove(partial);
+        }
+    }
+
+    // Removes a folder; false when something stayed behind.
+    private static bool Remove(string path)
     {
         try
         {
-            foreach (var path in new[] { folder.Directory, folder.Partial })
-                if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
             return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)

@@ -38,7 +38,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(["Classic", "Native"], renderer.ChoiceLabels);
         Assert.Equal("Renderer help \"quoted\"", renderer.Help);
         Assert.True(schema.Settings[4].IsBool);
-        Assert.Equal(("pad", "A"), (schema.Settings[3].Binding!.Device, schema.Settings[3].Binding!.Action));
+        Assert.Equal((BindingDevice.Pad, "A"), (schema.Settings[3].Binding!.Device, schema.Settings[3].Binding!.Action));
         Assert.Null(renderer.Binding);
     }
 
@@ -262,6 +262,6 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.Contains(schema.Settings, setting => setting.Key == "ts4_renderer");
         Assert.Contains(schema.Presets, preset => preset.Value == "enhanced");
-        Assert.Contains(schema.Settings, setting => setting.Binding is { Device: "pad" });
+        Assert.Contains(schema.Settings, setting => setting.Binding is { Device: BindingDevice.Pad });
     }
 }

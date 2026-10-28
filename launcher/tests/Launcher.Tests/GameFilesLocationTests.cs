@@ -49,7 +49,7 @@ public sealed class GameFilesLocationTests : IDisposable
         _space.Free = 40L << 30;
         var model = Model(Preparation());
 
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         Assert.True(model.EnoughSpace);
         Assert.Null(model.Warning);
         Assert.Contains("40", model.SpaceLine);
@@ -83,7 +83,7 @@ public sealed class GameFilesLocationTests : IDisposable
         _space.Free = 40L << 30;
         model.Choose(Elsewhere);
 
-        Assert.Equal(Elsewhere, model.Path);
+        Assert.Equal(Elsewhere, model.Folder);
         Assert.True(model.EnoughSpace);
         Assert.Equal(Elsewhere, _space.Asked[^1]);
     }
@@ -122,7 +122,7 @@ public sealed class GameFilesLocationTests : IDisposable
         await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
 
         Assert.Null(model.Message);
-        Assert.Equal(Elsewhere, model.Path);
+        Assert.Equal(Elsewhere, model.Folder);
         AssertFilesIn(Elsewhere);
         Assert.NotNull(preparation.Existing());
         Assert.Equal(Path.Combine(Elsewhere, "gamedata"), preparation.Existing()!.GameDataRoot);
@@ -148,7 +148,7 @@ public sealed class GameFilesLocationTests : IDisposable
 
         Assert.NotNull(model.Message);
         Assert.False(model.Moving);
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         Assert.Equal(Default, new GameFilesLocation(UserFolder).Recorded);
         AssertFilesIn(Default);
         Assert.NotNull(preparation.Existing());
@@ -175,7 +175,7 @@ public sealed class GameFilesLocationTests : IDisposable
         await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
 
         Assert.Contains("Layoutall.bin", model.Message);
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         Assert.Null(new GameFilesLocation(UserFolder).Recorded);
         Assert.True(File.Exists(Path.Combine(Default, "gamedata", ".topspin4-prepared")));
         Assert.False(Directory.Exists(Path.Combine(Elsewhere, "gamedata")));
@@ -192,9 +192,90 @@ public sealed class GameFilesLocationTests : IDisposable
         await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
 
         Assert.Contains("space", model.Message);
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         Assert.False(Directory.Exists(Elsewhere));
         AssertFilesIn(Default);
+    }
+
+    [Fact]
+    public async Task A_move_to_a_drive_that_holds_one_folder_but_not_both_is_refused_before_anything_is_copied()
+    {
+        var preparation = Preparation();
+        await SetUp(preparation);
+        var model = ModelFor(preparation);
+        // Each folder alone fits, together they do not: the first must not be copied to find that out.
+        _space.Free = Launcher.Core.Preparation.SpareBytes + _disc.TotalBytes + TestTitleUpdate.Tu1Files.Sum(file => (long)file.Data.Length) - 1;
+
+        await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
+
+        Assert.StartsWith("Not enough free space on", model.Message);
+        Assert.Contains("choose another place", model.Message);
+        Assert.Equal(Default, model.Folder);
+        Assert.False(Directory.Exists(Path.Combine(Elsewhere, "gamedata")));
+        Assert.False(Directory.Exists(Path.Combine(Elsewhere, "gamedata.partial")));
+        AssertFilesIn(Default);
+        Assert.Null(new GameFilesLocation(UserFolder).Recorded);
+    }
+
+    [Fact]
+    public async Task A_move_carries_the_shader_cache_along_and_a_missing_cache_is_fine()
+    {
+        var preparation = Preparation();
+        await SetUp(preparation);
+        var cached = Path.Combine(Default, "cache", "native-pipelines", "pipelines.bin");
+        Directory.CreateDirectory(Path.GetDirectoryName(cached)!);
+        File.WriteAllBytes(cached, [1, 2, 3, 4]);
+        var model = ModelFor(preparation);
+
+        await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
+
+        Assert.Null(model.Message);
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(Path.Combine(Elsewhere, "cache", "native-pipelines", "pipelines.bin")));
+        Assert.False(Directory.Exists(Path.Combine(Default, "cache")));
+
+        // Moving on again with no cache to carry is no problem either.
+        Directory.Delete(Path.Combine(Elsewhere, "cache"), recursive: true);
+        var third = Path.Combine(_root, "third");
+        await model.ChangeAsync(third, TestContext.Current.CancellationToken);
+
+        Assert.Null(model.Message);
+        AssertFilesIn(third);
+        Assert.False(Directory.Exists(Path.Combine(third, "cache")));
+    }
+
+    [Theory]
+    [InlineData(@"\foo\bar")]
+    [InlineData("C:relative")]
+    [InlineData("relative/place")]
+    public void A_recorded_place_that_is_not_fully_qualified_is_ignored_as_the_game_ignores_it(string text)
+    {
+        Directory.CreateDirectory(UserFolder);
+        File.WriteAllText(LocationFile, text + "\n");
+
+        Assert.Null(new GameFilesLocation(UserFolder).Recorded);
+        Assert.Equal(Default, new GameFilesLocation(UserFolder).Current(Default));
+    }
+
+    [Fact]
+    public void The_command_line_wins_then_the_recorded_place_then_the_default_folder()
+    {
+        var location = new GameFilesLocation(UserFolder);
+        var fromCommandLine = Path.Combine(_root, "dev");
+
+        Assert.Equal(Default, location.Resolve(null, Default));
+        location.Record(Elsewhere);
+        Assert.Equal(Elsewhere, location.Resolve(null, Default));
+        Assert.Equal(fromCommandLine, location.Resolve(fromCommandLine, Default));
+        Assert.Equal(Path.GetFullPath("relative"), location.Resolve("relative", Default));
+    }
+
+    [Fact]
+    public void A_recorded_place_with_a_drive_and_a_root_is_used()
+    {
+        Directory.CreateDirectory(UserFolder);
+        File.WriteAllText(LocationFile, Elsewhere + "\n");
+
+        Assert.Equal(Elsewhere, new GameFilesLocation(UserFolder).Recorded);
     }
 
     [Theory]
@@ -208,7 +289,7 @@ public sealed class GameFilesLocationTests : IDisposable
 
         await model.ChangeAsync(which == "same" ? Default : Path.Combine(Default, "gamedata", "deeper"), TestContext.Current.CancellationToken);
 
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         AssertFilesIn(Default);
         Assert.Null(new GameFilesLocation(UserFolder).Recorded);
     }
@@ -225,7 +306,7 @@ public sealed class GameFilesLocationTests : IDisposable
         model.Choose(Elsewhere);
         await model.ChangeAsync(Elsewhere, TestContext.Current.CancellationToken);
 
-        Assert.Equal(Default, model.Path);
+        Assert.Equal(Default, model.Folder);
         Assert.Null(new GameFilesLocation(UserFolder).Recorded);
     }
 }
