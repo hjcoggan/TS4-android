@@ -9,6 +9,14 @@ Goals, 1.0 scope, milestones and way of work: `docs/goals.md`. Read it before st
 - Smoke run or codegen fails (unregistered target, crash, stall): `docs/agents/codegen-debugging.md`.
 - Native draws differently from Classic, or adding a D3D hook: `docs/agents/native-debugging.md`.
 
+## Project agents
+
+Delegate to the agents in `.claude/agents/` when the task fits; do small checks inline.
+
+- `implementer`: a fully specified `ready-for-agent` ticket (settings, scripts, tests, launcher). Not for parity bugs, codegen misses, crashes, stalls or RE.
+- `qa`: before ticking a ticket's boxes, resolving it, or handing a milestone to the owner. Pass the ticket path, diff range and evidence paths, not your conclusions.
+- `re-investigator`: one bounded reverse-engineering question about the TU1 Modules, to keep Ghidra output out of the main session.
+
 ## Agent skills
 
 ### Issue tracker

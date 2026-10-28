@@ -12,3 +12,6 @@
 - [ ] Saves and settings land in the expected Proton path
 - [ ] Every 1.0 scene passes on the packaged build
 - [ ] The owner play-tests and accepts
+
+## Comments
+- 2026-10-28 (Claude): the launcher UI (first-run disc and TU1 preparation, Play, the before-start settings, Safe start) is specified in `.scratch/game-settings/spec.md` and tracked in its tickets. Those tickets cover the launcher; the release-candidate boxes here stay as they are.

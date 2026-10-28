@@ -70,6 +70,31 @@ _Avoid_: new renderer, HD renderer
 A setting that changes the game away from original behaviour. Every Enhancement defaults to original behaviour.
 _Avoid_: fix, improvement (when it is an opt-in setting)
 
+## Settings
+
+**Settings file**:
+The player's saved settings. It is the one source of truth that the Settings page and the Launcher both read and write.
+_Avoid_: config, cvars file
+
+**Settings page**:
+The in-game screen, usable with a controller, where players change settings while playing. It opens from a PC SETTINGS row in the game's own OPTIONS menu, from F4, or with a pad combo, and it is the main way players change settings.
+_Avoid_: overlay, F6 menu, options menu (that is the game's own)
+
+**Launcher**:
+The separate program that prepares the disc and Title Update 1 and changes the few settings that only make sense before the game starts. After setup, the game starts without it.
+_Avoid_: setup tool (when the GUI is meant)
+
+**Launch option**:
+A setting given when the game is started, on the command line or in the environment. It wins over the Settings file for that session and is not saved.
+_Avoid_: override, flag (when the player-facing idea is meant)
+
+**Safe start**:
+A session that runs on all default settings without changing the Settings file.
+_Avoid_: reset (that changes the file)
+
+**Preset**:
+A named group of setting values chosen together. Original is a Preset and is the default.
+
 **Resolution scale**:
 The Enhancement that renders the game at a whole multiple of its original 1280x720 and fits the result to the window. Auto picks the smallest multiple that covers the 16:9 area of the window the frame is shown in.
 _Avoid_: internal resolution, render resolution, supersampling (when the setting is meant)
