@@ -33,6 +33,7 @@ set(TOPSPIN4_SOURCES
     src/native/write_watch.cpp
     src/remapped_input.cpp
     src/script_input.cpp
+    src/settings/schema_export.cpp
     src/settings/settings_cvars.cpp
     src/settings/settings_file.cpp
     src/user_paths.cpp
@@ -45,6 +46,14 @@ else()
 endif()
 
 rexglue_setup_target(topspin4 GPU_PLUGINS xenos)
+# A developer build keeps the SDK's F6 cvar overlay (src/developer_build.h). A release build
+# leaves it out so players have one settings screen:
+#   pwsh scripts/build.ps1 -Action Configure -CMakeArgs '-DTOPSPIN4_DEVELOPER_BUILD=OFF'
+# The scripts and the scene runner use the default, a developer build.
+option(TOPSPIN4_DEVELOPER_BUILD "Developer build: keep the F6 cvar overlay" ON)
+if(TOPSPIN4_DEVELOPER_BUILD)
+    target_compile_definitions(topspin4 PRIVATE TOPSPIN4_DEVELOPER_BUILD=1)
+endif()
 # D3D hooks in each Module's DLL, and the sink they reach the exe through (src/d3d/sink.h).
 include(cmake/d3d_hooks.cmake)
 target_link_libraries(topspin4 PRIVATE topspin4_d3d_sink)
@@ -162,6 +171,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/native/test_texture_layout.cpp
         tests/native/test_thread_budget.cpp
         tests/native/test_write_watch.cpp
+        src/settings/settings_cvars.cpp
         src/settings/settings_file.cpp
         src/script_input.cpp
         # The Native renderer's pure code, as WWE All Stars' native tests build it.
