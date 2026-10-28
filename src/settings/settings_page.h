@@ -9,6 +9,7 @@
 #include <functional>
 #include <string_view>
 
+#include "pad_bindings.h"
 #include "settings/page_model.h"
 
 namespace rex::input {
@@ -32,6 +33,18 @@ struct SessionStart {
 
 // Records how this session started. Call from OnPostInitLogging, once the file is loaded.
 void BeginSession(SessionStart start);
+
+// The controller bindings the game's input system was built with (none remapped: the defaults).
+// The page reads the pad with them undone, so a remap never moves the page's own navigation.
+// Leave it unset when a scripted run replaces the input system.
+void SetGamePadBindings(const pad::Bindings& bindings);
+
+// The session report's "settings" object: whether this was a Safe start and the Graphics Preset
+// in effect (original, enhanced or custom). For frame_dumps' session end.
+std::string SessionReportJson();
+
+// The Graphics Preset in effect now, from the cvars; for the log.
+std::string CurrentPreset();
 
 // Adds the page's fonts (Impact for headings, Segoe UI Bold for help text, when Windows has
 // them). Call from OnConfigureFonts.

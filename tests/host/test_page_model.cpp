@@ -11,7 +11,7 @@ namespace {
 
 // The cvar lifecycles the game declares: the image Enhancements are live, the renderer is not.
 std::optional<Applies> Lifecycles(std::string_view key) {
-  return key == "ts4_renderer" ? Applies::kNextStart : Applies::kNow;
+  return key == "ts4_renderer" || key.starts_with("ts4_pad_") ? Applies::kNextStart : Applies::kNow;
 }
 
 ValueMap Defaults() {
@@ -34,15 +34,16 @@ ModelContext Context(std::string_view renderer = kRendererNative) {
 TEST_CASE("The page lists the Graphics settings in registry order with labels, values and help") {
   SettingsModel model(Context(), {}, Defaults());
   const std::vector<Row> rows = model.Rows(Section::kGraphics);
-  REQUIRE(rows.size() == 5);
-  CHECK(rows[0].label == "Renderer");
-  CHECK(rows[0].value_label == "Classic");
-  CHECK(rows[1].label == "Resolution scale");
-  CHECK(rows[1].value_label == "1x");
-  CHECK(rows[1].choices.size() == 5);
-  CHECK(rows[2].value_label == "Original");
-  CHECK(rows[4].label == "Sharpening");
-  CHECK(rows[4].value_label == "Off");
+  REQUIRE(rows.size() == 6);  // the Preset row, then the five settings
+  CHECK(rows[0].kind == RowKind::kPreset);
+  CHECK(rows[1].label == "Renderer");
+  CHECK(rows[1].value_label == "Classic");
+  CHECK(rows[2].label == "Resolution scale");
+  CHECK(rows[2].value_label == "1x");
+  CHECK(rows[2].choices.size() == 5);
+  CHECK(rows[3].value_label == "Original");
+  CHECK(rows[5].label == "Sharpening");
+  CHECK(rows[5].value_label == "Off");
   for (const Row& row : rows) {
     CHECK_FALSE(row.help.empty());
     CHECK(row.available);
@@ -165,7 +166,7 @@ TEST_CASE("The page holds the game's input until it is closed and the pad releas
   CHECK(page.Update(Pad{0, 0, 0}, 1220).empty());
   const auto changes = page.Update(Pad{PageModel::kRight, 0, 0}, 1230);
   REQUIRE(changes.size() == 1);
-  CHECK(changes[0].key == "ts4_resolution_scale");
+  CHECK(changes[0].key == "ts4_renderer");  // row 0 is the Preset, row 1 the renderer
 
   CHECK(page.Update(Pad{PageModel::kB, 0, 0}, 1300).empty());
   CHECK_FALSE(page.is_open());

@@ -102,3 +102,18 @@ TEST_CASE("A physical input that drives no action sends no keystroke") {
   CHECK_FALSE(RemapKeystroke(kVkPadB, bindings).has_value());
   CHECK(RemapKeystroke(kVkPadA, bindings) == kVkPadA);
 }
+
+TEST_CASE("Unmap gives the page the physical pad back, so a remap cannot move its navigation") {
+  Bindings bindings = Bindings::Default();
+  Rebind(bindings, Input::kA, Input::kX);       // A <-> X
+  Rebind(bindings, Input::kUp, Input::kRB);     // up <-> rb
+  Rebind(bindings, Input::kRT, Input::kLB);     // rt <-> lb
+  for (uint16_t button : {kButtonA, kButtonX, kButtonDpadUp, kButtonRightShoulder, kButtonLeftShoulder,
+                          kButtonStart, uint16_t(kButtonB | kButtonDpadDown)}) {
+    const Pad physical = Pressed(button);
+    CHECK(Unmap(Remap(physical, bindings), bindings) == physical);
+  }
+  const Pad trigger = Pressed(0, 0, 200);
+  CHECK(Unmap(Remap(trigger, bindings), bindings).right_trigger > kTriggerThreshold);  // a button stands in, so 255
+  CHECK(Unmap(Pressed(kButtonA), Bindings::Default()) == Pressed(kButtonA));
+}

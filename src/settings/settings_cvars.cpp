@@ -10,6 +10,12 @@ REXCVAR_DEFINE_STRING(ts4_renderer, topspin4::settings::kRendererClassic.data(),
                       "draws until it is)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
+// Safe start (ticket 09): one session on all defaults. The Settings file is neither applied nor
+// written, and the log and session report say so. The Launcher's Safe start button passes it.
+REXCVAR_DEFINE_BOOL(safe, false, "TopSpin4",
+                    "Safe start: run this session on all default settings, without reading or "
+                    "writing the Settings file");
+
 // Image Enhancements (image-quality spec; src/native/image_quality.h). Each changes while the game
 // runs: Native reads them as each frame begins, and the change callbacks of the two that Classic
 // has too set its filtering and the presenter's CAS (native_renderer.cpp, ApplyImageSettings).

@@ -42,3 +42,9 @@ TEST_CASE("Under Wine without a Linux home they stay in the prefix") {
   CHECK(AppFolder(Environment({{"XDG_DATA_HOME", "relative/is/ignored"}}), true, kAppData) ==
         std::filesystem::path(LR"(C:\Users\player\AppData\Roaming\TopSpin4Recomp)"));
 }
+
+TEST_CASE("The prepared data folders are named as the Launcher names them") {
+  // launcher/src/Launcher.Core/Preparation.cs: GameDataFolderName and UpdateDataFolderName.
+  CHECK(topspin4::user_paths::kGameDataFolder == "gamedata");
+  CHECK(topspin4::user_paths::kUpdateDataFolder == "updatedata");
+}

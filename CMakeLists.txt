@@ -143,6 +143,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_user_paths.cpp
         tests/host/test_settings.cpp
         tests/host/test_page_model.cpp
+        tests/host/test_presets_controls.cpp
         tests/host/test_crash_report.cpp
         tests/host/test_pad_bindings.cpp
         tests/host/test_script_input.cpp

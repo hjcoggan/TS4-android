@@ -55,12 +55,14 @@ std::filesystem::path DefaultUserDataRoot() {
 #endif
 }
 
-std::filesystem::path DefaultCacheRoot() {
+std::filesystem::path DefaultPreparedDataRoot() {
 #if defined(_WIN32)
-  return AppFolder(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_LocalAppData)) / "cache";
+  return AppFolder(GetEnvironment, UnderWine(), KnownFolder(FOLDERID_LocalAppData));
 #else
-  return DefaultUserDataRoot() / "cache";
+  return DefaultUserDataRoot();
 #endif
 }
+
+std::filesystem::path DefaultCacheRoot() { return DefaultPreparedDataRoot() / "cache"; }
 
 }  // namespace topspin4::user_paths

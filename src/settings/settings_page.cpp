@@ -35,6 +35,7 @@ struct State {
   SessionStart session;  // UI thread only; file_values follows what the page saves
   ImFont* heading = nullptr;
   ImFont* body = nullptr;
+  pad::Bindings bindings = pad::Bindings::Default();  // what the game's input system was built with
 } g;
 
 // Colours of the game's OPTIONS screens (as sampled for WWE All Stars; Top Spin 4's own are
@@ -99,9 +100,18 @@ Pad ReadPad() {
   Pad pad;
   rex::input::X_INPUT_STATE state = {};
   if (g.input && g.input->HeldState(0, &state)) {
-    pad.buttons = state.gamepad.buttons;
-    pad.thumb_lx = state.gamepad.thumb_lx;
-    pad.thumb_ly = state.gamepad.thumb_ly;
+    // The held state is what the game would see, after the player's remap; the page works on the
+    // physical pad, so a remap cannot move its own navigation (ticket 06).
+    topspin4::pad::Pad game;
+    game.buttons = state.gamepad.buttons;
+    game.left_trigger = state.gamepad.left_trigger;
+    game.right_trigger = state.gamepad.right_trigger;
+    game.thumb_lx = state.gamepad.thumb_lx;
+    game.thumb_ly = state.gamepad.thumb_ly;
+    const topspin4::pad::Pad physical = topspin4::pad::Unmap(game, g.bindings);
+    pad.buttons = physical.buttons;
+    pad.thumb_lx = physical.thumb_lx;
+    pad.thumb_ly = physical.thumb_ly;
   }
   if (ImGui::IsKeyDown(ImGuiKey_UpArrow)) pad.buttons |= PageModel::kUp;
   if (ImGui::IsKeyDown(ImGuiKey_DownArrow)) pad.buttons |= PageModel::kDown;
@@ -110,6 +120,50 @@ Pad ReadPad() {
   if (ImGui::IsKeyDown(ImGuiKey_Enter)) pad.buttons |= PageModel::kA;
   if (ImGui::IsKeyDown(ImGuiKey_Escape)) pad.buttons |= PageModel::kB;
   return pad;
+}
+
+// The SDK's name for a key that went down this frame, with the modifiers held ("Shift+W"), or
+// empty. Only keys the SDK can name and read back are offered; Escape cancels and F4 is the page's
+// own key, so neither can be bound.
+std::string PressedKeyBinding() {
+  struct Mapped {
+    ImGuiKey key;
+    rex::ui::VirtualKey vk;
+  };
+  static const std::vector<Mapped> keys = [] {
+    std::vector<Mapped> list;
+    auto add = [&list](ImGuiKey key, uint16_t vk) {
+      list.push_back({key, static_cast<rex::ui::VirtualKey>(vk)});
+    };
+    for (int i = 0; i < 26; ++i) add(ImGuiKey(ImGuiKey_A + i), uint16_t('A' + i));
+    for (int i = 0; i < 10; ++i) add(ImGuiKey(ImGuiKey_0 + i), uint16_t('0' + i));
+    for (int i = 0; i < 12; ++i) {
+      if (i != 3) add(ImGuiKey(ImGuiKey_F1 + i), uint16_t(0x70 + i));  // F4 opens the page
+    }
+    add(ImGuiKey_LeftArrow, 0x25);   add(ImGuiKey_UpArrow, 0x26);
+    add(ImGuiKey_RightArrow, 0x27);  add(ImGuiKey_DownArrow, 0x28);
+    add(ImGuiKey_Space, 0x20);       add(ImGuiKey_Enter, 0x0D);
+    add(ImGuiKey_Tab, 0x09);         add(ImGuiKey_Backspace, 0x08);
+    add(ImGuiKey_Insert, 0x2D);      add(ImGuiKey_Delete, 0x2E);
+    add(ImGuiKey_Home, 0x24);        add(ImGuiKey_End, 0x23);
+    add(ImGuiKey_PageUp, 0x21);      add(ImGuiKey_PageDown, 0x22);
+    add(ImGuiKey_Semicolon, 0xBA);   add(ImGuiKey_Apostrophe, 0xDE);
+    add(ImGuiKey_Comma, 0xBC);       add(ImGuiKey_Period, 0xBE);
+    add(ImGuiKey_Minus, 0xBD);       add(ImGuiKey_Equal, 0xBB);
+    add(ImGuiKey_Slash, 0xBF);       add(ImGuiKey_Backslash, 0xDC);
+    add(ImGuiKey_LeftBracket, 0xDB); add(ImGuiKey_RightBracket, 0xDD);
+    add(ImGuiKey_GraveAccent, 0xC0);
+    return list;
+  }();
+  for (const Mapped& mapped : keys) {
+    if (!ImGui::IsKeyPressed(mapped.key, false)) continue;
+    std::string name = rex::ui::VirtualKeyToString(mapped.vk);
+    if (name.empty() || rex::ui::ParseVirtualKey(name) != mapped.vk) continue;
+    const ImGuiIO& io = ImGui::GetIO();
+    return std::string(io.KeyCtrl ? "Ctrl+" : "") + (io.KeyAlt ? "Alt+" : "") +
+           (io.KeyShift ? "Shift+" : "") + name;
+  }
+  return {};
 }
 
 // Carries out what the model says: a live change sets the cvar, a saved one goes to the
@@ -135,6 +189,7 @@ SettingsModel BuildModel() {
   context.renderer = std::string(topspin4::native::IsEnabled() ? kRendererNative : kRendererClassic);
   context.pinned = g.session.pinned;
   context.safe_start = g.session.safe_start;
+  context.sections = {Section::kGraphics, Section::kControls};
   ValueMap in_effect;
   for (const Setting& setting : PlayerSettings()) {
     in_effect[std::string(setting.key)] = rex::cvar::GetFlagByName(setting.key);
@@ -155,7 +210,15 @@ class PageDialog final : public rex::ui::ImGuiDialog {
 
  protected:
   void OnDraw(ImGuiIO&) override {
+    // A key binding row waiting for a key takes the first key pressed after A began the wait.
+    const bool was_capturing = model_.capturing();
     for (const SettingChange& change : model_.Update(ReadPad(), NowMs())) Apply(change);
+    if (was_capturing && model_.capturing()) {
+      const std::string binding = PressedKeyBinding();
+      if (!binding.empty()) {
+        for (const SettingChange& change : model_.BindKey(binding)) Apply(change);
+      }
+    }
     g.hold = model_.holds_input();
     if (!model_.holds_input()) {
       Close();
@@ -194,16 +257,30 @@ class PageDialog final : public rex::ui::ImGuiDialog {
       Text(draw, g.heading, 24, f, 130, 150, kGold, std::string(SectionName(model_.section())));
     }
 
-    // Rows fill y 188..564 above the rule: 56 apart, closer with more than six.
+    // Rows fill y 188..564 above the rule: 56 apart, closer with seven; a longer list (Controls)
+    // scrolls to keep the selected row in view.
     const std::vector<Row> rows = model_.rows();
-    const float step = std::min(56.0f, 376.0f / float(std::max<size_t>(rows.size(), 1)));
+    constexpr size_t kVisible = 7;
+    const size_t shown = std::min(rows.size(), kVisible);
+    const size_t selected_row = std::min(model_.selected_index(), rows.empty() ? 0 : rows.size() - 1);
+    const size_t first =
+        rows.size() <= kVisible
+            ? 0
+            : std::min(selected_row > kVisible / 2 ? selected_row - kVisible / 2 : 0,
+                       rows.size() - kVisible);
+    const float step = std::min(56.0f, 376.0f / float(std::max<size_t>(shown, 1)));
     const float bar = step - 8;
     const float label_size = std::min(32.0f, bar - 6), value_size = std::min(30.0f, bar - 8);
     const float inset = (bar - label_size - 2) / 2;
     float y = 188;
-    for (size_t i = 0; i < rows.size(); ++i) {
+    if (rows.size() > kVisible) {
+      Text(draw, g.body, 21, f, 640, 152, kGrey,
+           std::to_string(selected_row + 1) + " / " + std::to_string(rows.size()));
+    }
+    for (size_t i = first; i < first + shown; ++i) {
       const Row& row = rows[i];
-      const bool selected = i == model_.selected_index();
+      const bool selected = i == selected_row;
+      const bool waiting = model_.capturing() && model_.capture_key() == row.key;
       const ImVec2 a = f.At(120, y), b = f.At(750, y + bar);
       if (selected) {
         draw->AddRectFilledMultiColor(a, b, kBarTop, kBarTop, kBarBottom, kBarBottom);
@@ -216,6 +293,7 @@ class PageDialog final : public rex::ui::ImGuiDialog {
       Text(draw, g.heading, label_size, f, 140, y + inset, color, row.label);
       std::string value = row.available ? row.value_label : "Unavailable";
       if (row.pending) value += " *";
+      if (waiting) value = "Press a key...";
       const float width = TextWidth(g.heading, value_size, f, value);
       ImU32 value_color = selected ? kWhite : kGrey;
       if (!row.available) value_color = kDim;
@@ -223,7 +301,7 @@ class PageDialog final : public rex::ui::ImGuiDialog {
         value_color = kLaunchOrange;
       }
       Text(draw, g.heading, value_size, f, 600 - width / 2, y + inset + 1, value_color, value);
-      if (selected && row.editable) {
+      if (selected && row.editable && !row.capture && row.kind != RowKind::kAction) {
         Arrow(draw, f, 492, y + bar / 2, true);
         Arrow(draw, f, 686, y + bar / 2, false);
       }
@@ -232,11 +310,14 @@ class PageDialog final : public rex::ui::ImGuiDialog {
 
     Rule(draw, f, 568);
     if (rows.empty()) return;
-    const Row& row = rows[model_.selected_index()];
-    Text(draw, g.body, 21, f, 118, 578, kWhite, row.help, 620);
+    const Row& row = rows[selected_row];
+    std::string help = row.help;
+    if (row.capture) help += " Press A, then the key to use (Esc or B cancels).";
+    if (row.kind == RowKind::kAction) help += " Press A to reset.";
+    Text(draw, g.body, 21, f, 118, 578, kWhite, help, 620);
     ImFont* body = g.body ? g.body : ImGui::GetFont();
     const float help_bottom =
-        578 + body->CalcTextSizeA(21 * f.scale, FLT_MAX, 620 * f.scale_x, row.help.c_str()).y /
+        578 + body->CalcTextSizeA(21 * f.scale, FLT_MAX, 620 * f.scale_x, help.c_str()).y /
                   f.scale;
     const float note_y = std::max(640.0f, help_bottom + 6);
     if (!row.note.empty()) {
@@ -266,6 +347,21 @@ bool HoldGuestInput() { return g.hold; }
 }  // namespace
 
 void BeginSession(SessionStart start) { g.session = std::move(start); }
+
+void SetGamePadBindings(const pad::Bindings& bindings) { g.bindings = bindings; }
+
+std::string CurrentPreset() {
+  ValueMap in_effect;
+  for (const Setting& setting : PlayerSettings()) {
+    in_effect[std::string(setting.key)] = rex::cvar::GetFlagByName(setting.key);
+  }
+  return ActivePreset(in_effect,
+                      topspin4::native::IsEnabled() ? kRendererNative : kRendererClassic);
+}
+
+std::string SessionReportJson() {
+  return SessionSettingsJson(g.session.safe_start, CurrentPreset());
+}
 
 void AddFonts(ImFontAtlas* atlas) {
   // Sizes cover a 1440p window without upscaling the glyphs much.

@@ -47,6 +47,15 @@ inline std::filesystem::path AppFolder(const Environment& environment, bool unde
 // The folder for this process: the real environment, Wine detection and the known folder.
 std::filesystem::path DefaultUserDataRoot();
 
+// Where the Launcher prepares the disc and TU1 (UserDirectories.PreparedDataRoot): under the
+// local app data folder (the same XDG folder under Proton).
+std::filesystem::path DefaultPreparedDataRoot();
+
+// The folders inside it, named as the Launcher names them (Preparation.GameDataFolderName and
+// UpdateDataFolderName), mounted as game: and update:.
+inline constexpr std::string_view kGameDataFolder = "gamedata";
+inline constexpr std::string_view kUpdateDataFolder = "updatedata";
+
 // The shader and pipeline cache: beside the launcher's prepared data under the local app data
 // folder (the same XDG folder under Proton), as it is large and derivable again.
 std::filesystem::path DefaultCacheRoot();

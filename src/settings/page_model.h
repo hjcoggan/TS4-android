@@ -25,12 +25,18 @@
 #include <string_view>
 #include <vector>
 
+#include "settings/presets.h"
 #include "settings/registry.h"
 #include "settings/schema.h"
 
 namespace topspin4::settings {
 
-using ValueMap = std::map<std::string, std::string, std::less<>>;
+// What a row is: a registry setting, the Graphics Preset row (sets several at once, ticket 05) or
+// the Controls reset action (ticket 06).
+enum class RowKind { kSetting, kPreset, kAction };
+
+// The Controls reset row's key. It names no setting.
+inline constexpr std::string_view kResetControlsKey = "reset_controls";
 
 // When a row's change takes effect, or why it does not follow the Settings file.
 enum class Mark {
@@ -46,8 +52,10 @@ struct ChoiceView {
 };
 
 struct Row {
-  const Setting* setting = nullptr;
+  RowKind kind = RowKind::kSetting;
+  const Setting* setting = nullptr;  // null for a Preset or action row, and for an unknown key
   std::string key, label, help;
+  bool capture = false;       // a key binding: A starts waiting for a key press
   Section section = Section::kGraphics;
   Mark mark = Mark::kNow;
   bool available = true;      // does anything on this session's renderer
@@ -82,6 +90,13 @@ inline std::string ChoiceLabel(const Setting& setting, std::string_view value) {
   if (setting.kind == Setting::Kind::kBool) return value == "true" ? "On" : "Off";
   if (value.empty()) return "Not set";
   if (setting.kind == Setting::Kind::kText) return std::string(value);
+  if (setting.key.starts_with("ts4_pad_")) {
+    for (size_t i = 0; i < pad::kInputCount; ++i) {
+      if (pad::kInputs[i].name == value) {
+        return std::string(detail::kPadLabels[i]).substr(std::string("Pad: ").size());
+      }
+    }
+  }
   std::string label(value);
   if (std::all_of(label.begin(), label.end(), [](char c) { return std::isdigit((unsigned char)c); })) {
     return label + "x";  // resolution scale, MSAA, anisotropic filtering
@@ -112,56 +127,222 @@ class SettingsModel {
   const ModelContext& context() const { return context_; }
   const std::vector<Section>& sections() const { return context_.sections; }
 
-  // The rows of one section, in page order.
+  // The rows of one section, in page order. Graphics opens with the Preset row; Controls hides the
+  // key bindings unless keyboard and mouse is on, and ends with the reset row.
   std::vector<Row> Rows(Section section) const {
     std::vector<Row> rows;
+    if (section == Section::kGraphics && Shown(section)) rows.push_back(PresetRow());
     for (const Setting* setting : settings_) {
-      if (setting->section == section) rows.push_back(MakeRow(*setting));
+      if (setting->section != section) continue;
+      if (IsKeyBinding(*setting) && shown_.at("mnk_mode") != "true") continue;
+      rows.push_back(MakeRow(*setting));
     }
+    if (section == Section::kControls && Shown(section)) rows.push_back(ResetRow());
     return rows;
   }
 
-  // The row for a key, or none (setting null) if the page does not show it.
+  // The row for a key, or none (setting null, kind kSetting) if the page does not show it.
   Row RowFor(std::string_view key) const {
+    if (key == kPresetKey && Shown(Section::kGraphics)) return PresetRow();
+    if (key == kResetControlsKey && Shown(Section::kControls)) return ResetRow();
     for (const Setting* setting : settings_) {
       if (setting->key == key) return MakeRow(*setting);
     }
     return {};
   }
 
+  // The Graphics Preset in effect on the shown values: original, enhanced or custom.
+  std::string ActivePresetValue() const { return ActivePreset(shown_, context_.renderer); }
+
   // Changes a setting to a value the registry allows; returns what to carry out, empty if the
-  // value is refused or already shown. Presets (several settings at once) return several.
+  // value is refused or already shown. A Preset (its key and a Preset's value) sets all its
+  // settings at once. A pad binding another binding already uses swaps with it, as
+  // pad::Rebind does (src/pad_bindings.h): nothing is left unbound.
   std::vector<SettingChange> Change(std::string_view key, std::string_view value) {
+    if (key == kPresetKey) return ChoosePreset(value);
     const Setting* setting = FindSetting(key);
-    const auto shown = shown_.find(key);
-    if (!setting || shown == shown_.end() || !setting->Allows(value) || shown->second == value) {
-      return {};
+    if (!setting || shown_.find(key) == shown_.end() || !setting->Allows(value)) return {};
+    if (!IsPadBinding(*setting)) return SetOne(*setting, value);
+    const std::string old = shown_.at(std::string(key));
+    if (old == value) return {};
+    std::vector<SettingChange> changes = SetOne(*setting, value);
+    for (const Setting* other : settings_) {
+      if (other != setting && IsPadBinding(*other) && shown_.at(std::string(other->key)) == value) {
+        for (const SettingChange& swapped : SetOne(*other, old)) changes.push_back(swapped);
+      }
     }
-    shown->second = std::string(value);
-    SettingChange change{std::string(key), std::string(value)};
-    const bool now = !AppliesNext(*setting);
-    if (Pinned(*setting)) {
-      change.set_cvar = now;  // lasts until the game closes; never saved
-    } else if (context_.safe_start) {
-      change.set_cvar = now;
-    } else {
-      change.set_cvar = now;
-      change.save = true;  // a next-start change is saved but not applied
-    }
-    if (change.set_cvar) in_effect_[std::string(key)] = change.value;
-    return {change};
+    return changes;
   }
 
-  // The next (direction 1) or previous (-1) choice of an editable row, wrapping.
+  // Binds a key binding row to one key (as the SDK names it, with modifiers: "Shift+W"), replacing
+  // the keys it had. A key another binding already uses is taken from it; a binding that would be
+  // left with no key takes this one's old keys, so nothing is left unbound.
+  std::vector<SettingChange> BindKey(std::string_view key, std::string_view binding) {
+    const Setting* setting = FindSetting(key);
+    if (!setting || !IsKeyBinding(*setting) || binding.empty() || !setting->Allows(binding)) {
+      return {};
+    }
+    const std::string old = shown_.at(std::string(key));
+    if (old == binding) return {};
+    std::vector<SettingChange> changes = SetOne(*setting, binding);
+    for (const Setting* other : settings_) {
+      if (other == setting || !IsKeyBinding(*other)) continue;
+      std::vector<std::string> keys = SplitKeys(shown_.at(std::string(other->key)));
+      const auto used = std::find(keys.begin(), keys.end(), binding);
+      if (used == keys.end()) continue;
+      keys.erase(used);
+      std::string rest;
+      for (const std::string& kept : keys) rest += (rest.empty() ? "" : ",") + kept;
+      for (const SettingChange& taken : SetOne(*other, rest.empty() ? old : rest)) {
+        changes.push_back(taken);
+      }
+    }
+    return changes;
+  }
+
+  // Every pad and key binding back to its original value (the Controls reset row). Keyboard and
+  // mouse on or off is not a binding and stays.
+  std::vector<SettingChange> ResetControls() {
+    std::vector<SettingChange> changes;
+    for (const Setting* setting : settings_) {
+      if (!IsPadBinding(*setting) && !IsKeyBinding(*setting)) continue;
+      for (const SettingChange& change : SetOne(*setting, setting->default_value)) {
+        changes.push_back(change);
+      }
+    }
+    return changes;
+  }
+
+  // The next (direction 1) or previous (-1) choice of an editable row, wrapping. On the Preset row
+  // it is the next Preset (never Custom); on the reset row, the reset itself.
   std::vector<SettingChange> Step(std::string_view key, int direction) {
     const Row row = RowFor(key);
-    if (!row.setting || !row.editable || row.choices.empty()) return {};
+    if (row.kind == RowKind::kAction) return ResetControls();
+    if (row.kind == RowKind::kPreset) {
+      const std::vector<Preset>& presets = GraphicsPresets();
+      const size_t count = presets.size();
+      const size_t at = row.choice;  // count when Custom
+      const size_t next = direction < 0 ? (at == 0 ? count - 1 : (at >= count ? count - 1 : at - 1))
+                                        : (at >= count - 1 ? 0 : at + 1);
+      return ChoosePreset(presets[next].value);
+    }
+    if (!row.setting || !row.editable || row.choices.empty() || row.capture) return {};
     const size_t count = row.choices.size();
     const size_t next = (row.choice + (direction < 0 ? count - 1 : 1)) % count;
     return Change(key, row.choices[next].value);
   }
 
  private:
+  static bool IsPadBinding(const Setting& setting) {
+    return setting.kind == Setting::Kind::kChoice && setting.key.starts_with("ts4_pad_");
+  }
+  static bool IsKeyBinding(const Setting& setting) {
+    return setting.kind == Setting::Kind::kText && setting.key.starts_with("keybind_");
+  }
+  static std::vector<std::string> SplitKeys(std::string_view text) {
+    std::vector<std::string> keys;
+    while (!text.empty()) {
+      const size_t comma = text.find(',');
+      const std::string_view token = text.substr(0, comma);
+      if (!token.empty()) keys.emplace_back(token);
+      text = comma == std::string_view::npos ? std::string_view() : text.substr(comma + 1);
+    }
+    return keys;
+  }
+
+  // One setting to a value, with no swapping: what to carry out, or nothing if it is shown.
+  std::vector<SettingChange> SetOne(const Setting& setting, std::string_view value) {
+    const auto shown = shown_.find(setting.key);
+    if (shown == shown_.end() || !setting.Allows(value) || shown->second == value) return {};
+    shown->second = std::string(value);
+    SettingChange change{std::string(setting.key), std::string(value)};
+    const bool now = !AppliesNext(setting);
+    change.set_cvar = now;  // a next-start change is saved but not applied
+    // A Launch option's change lasts until the game closes and a Safe start's too; neither is saved.
+    change.save = !Pinned(setting) && !context_.safe_start;
+    if (change.set_cvar) in_effect_[std::string(setting.key)] = change.value;
+    return {change};
+  }
+
+  // Sets every covered setting of the Preset whose value differs. Custom is shown, never chosen.
+  std::vector<SettingChange> ChoosePreset(std::string_view value) {
+    std::vector<SettingChange> changes;
+    for (const Preset& preset : GraphicsPresets()) {
+      if (preset.value != value) continue;
+      for (const auto& [key, member] : preset.values) {
+        const Setting* setting = FindSetting(key);
+        if (!setting || shown_.find(key) == shown_.end()) continue;
+        for (const SettingChange& change : SetOne(*setting, member)) changes.push_back(change);
+      }
+    }
+    return changes;
+  }
+
+  Row PresetRow() const {
+    Row row;
+    row.kind = RowKind::kPreset;
+    row.key = std::string(kPresetKey);
+    row.label = "Graphics preset";
+    row.section = Section::kGraphics;
+    bool next = false, pinned = false;
+    std::string unavailable;  // the covered settings this renderer cannot use
+    const std::vector<Preset>& presets = GraphicsPresets();
+    for (size_t m = 0; m < presets[0].values.size(); ++m) {
+      const Setting* member = FindSetting(presets[0].values[m].first);
+      if (!member) continue;
+      bool varies = false;
+      for (const Preset& preset : presets) varies |= preset.values[m].second != presets[0].values[m].second;
+      if (!varies) continue;
+      next |= AppliesNext(*member);
+      pinned |= Pinned(*member);
+      if (!member->AvailableOn(context_.renderer)) {
+        unavailable += (unavailable.empty() ? "" : " and ") + std::string(member->label);
+      }
+    }
+    const std::string active = ActivePresetValue();
+    for (const Preset& preset : presets) row.choices.push_back({preset.value, preset.label});
+    row.choices.push_back({std::string(kCustomPreset), "Custom"});
+    row.choice = row.choices.size() - 1;
+    for (size_t i = 0; i < row.choices.size(); ++i) {
+      if (row.choices[i].value == active) row.choice = i;
+    }
+    row.value = active;
+    row.value_label = row.choices[row.choice].label;
+    for (const Preset& preset : presets) {
+      row.help += (row.help.empty() ? "" : " ") + preset.label + ":";
+      for (size_t m = 0; m < preset.values.size(); ++m) {
+        const Setting* member = FindSetting(preset.values[m].first);
+        if (!member) continue;
+        row.help += std::string(m ? ", " : " ") + std::string(member->label) + " " +
+                    ChoiceLabel(*member, preset.values[m].second);
+      }
+      row.help += ".";
+    }
+    row.mark = pinned ? Mark::kLaunchOption : context_.safe_start ? Mark::kSafeStart
+               : next ? Mark::kNextStart : Mark::kNow;
+    row.note = NoteFor(row, next);
+    if (!unavailable.empty()) {
+      row.note += (row.note.empty() ? "" : " ") + unavailable +
+                  (context_.renderer == kRendererClassic
+                       ? " need the Native renderer and do not count on Classic."
+                       : " do not apply on this renderer.");
+    }
+    return row;
+  }
+
+  Row ResetRow() const {
+    Row row;
+    row.kind = RowKind::kAction;
+    row.key = std::string(kResetControlsKey);
+    row.label = "Reset controls";
+    row.section = Section::kControls;
+    row.help = "Put every controller and keyboard binding back to the original layout.";
+    row.value = "reset";
+    row.value_label = "Original layout";
+    row.mark = Mark::kNow;
+    return row;
+  }
+
   bool Shown(Section section) const {
     return std::find(context_.sections.begin(), context_.sections.end(), section) !=
            context_.sections.end();
@@ -187,7 +368,8 @@ class SettingsModel {
     row.value = shown_.at(row.key);
     const bool next = AppliesNext(setting);
     row.available = setting.AvailableOn(context_.renderer);
-    row.editable = row.available && setting.kind != Setting::Kind::kText;
+    row.capture = row.available && IsKeyBinding(setting);
+    row.editable = row.available && (setting.kind != Setting::Kind::kText || row.capture);
     if (Pinned(setting)) {
       row.mark = Mark::kLaunchOption;
     } else if (context_.safe_start) {
@@ -274,7 +456,10 @@ class PageModel {
 
   // Closes the page from outside (its key pressed again). Input stays held until every button is
   // released, as when B closes it.
-  void Close() { open_ = false; }
+  void Close() {
+    open_ = false;
+    capture_key_.clear();
+  }
 
   // One poll of the pad. Returns the setting changes it made.
   std::vector<SettingChange> Update(const Pad& pad, uint64_t now_ms) {
@@ -292,6 +477,12 @@ class PageModel {
       return changes;
     }
     const uint16_t pressed = held & ~previous_;
+    if (capturing()) {
+      // Waiting for a key: the pad does nothing but cancel (a key press arrives as BindKey).
+      previous_ = held;
+      if (pressed & (kB | kStart | kBack)) capture_key_.clear();
+      return changes;
+    }
     if (pressed & (kB | kStart | kBack)) {
       open_ = false;
       previous_ = held;
@@ -316,12 +507,32 @@ class PageModel {
     }
     const std::vector<Row> rows = this->rows();
     if (rows.empty()) return changes;
+    if (row_ >= rows.size()) row_ = rows.size() - 1;  // key rows hide when keyboard and mouse goes off
     if (act & kUp) row_ = (row_ + rows.size() - 1) % rows.size();
     if (act & kDown) row_ = (row_ + 1) % rows.size();
     const Row& selected = rows[row_];
-    if (act & kLeft) changes = model_.Step(selected.key, -1);
-    if (act & (kRight | kA)) changes = model_.Step(selected.key, 1);
+    if (selected.kind == RowKind::kAction) {
+      if (pressed & kA) changes = model_.Step(selected.key, 1);  // a reset needs a deliberate A
+    } else if (selected.capture) {
+      if (pressed & kA) capture_key_ = selected.key;
+    } else {
+      if (act & kLeft) changes = model_.Step(selected.key, -1);
+      if (act & (kRight | kA)) changes = model_.Step(selected.key, 1);
+    }
     return changes;
+  }
+
+  // Whether a key binding row waits for a key press (A on it). The page then reads the keyboard
+  // and hands the key to BindKey; the pad can only cancel (B).
+  bool capturing() const { return !capture_key_.empty(); }
+  const std::string& capture_key() const { return capture_key_; }
+  void CancelCapture() { capture_key_.clear(); }
+
+  // The key pressed while capturing, as the SDK names it ("Shift+W"). Ends the capture.
+  std::vector<SettingChange> BindKey(std::string_view binding) {
+    const std::string key = std::move(capture_key_);
+    capture_key_.clear();
+    return key.empty() ? std::vector<SettingChange>{} : model_.BindKey(key, binding);
   }
 
   bool is_open() const { return open_; }
@@ -347,6 +558,7 @@ class PageModel {
   SettingsModel model_;
   size_t section_ = 0;
   size_t row_ = 0;
+  std::string capture_key_;  // the key binding row waiting for a key
   bool open_ = false;
   bool holding_ = false;
   bool waiting_release_ = false;

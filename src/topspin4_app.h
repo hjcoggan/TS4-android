@@ -34,6 +34,8 @@
 REXCVAR_DECLARE(std::string, user_data_root);
 REXCVAR_DECLARE(std::string, cache_root);
 REXCVAR_DECLARE(std::string, ts4_renderer);
+REXCVAR_DECLARE(std::string, ts4_input_script);
+REXCVAR_DECLARE(bool, safe);
 
 class TopSpin4App : public rex::ReXApp {
  public:
@@ -80,6 +82,18 @@ class TopSpin4App : public rex::ReXApp {
     if (REXCVAR_GET(cache_root).empty()) {
       paths.cache_root = topspin4::user_paths::DefaultCacheRoot();
     }
+    // Started directly after the Launcher's setup: the prepared disc and TU1 are where the
+    // Launcher left them, unless the command line (or config) names other folders.
+    namespace user_paths = topspin4::user_paths;
+    std::error_code error;
+    if (paths.game_data_root.empty()) {
+      const auto prepared = user_paths::DefaultPreparedDataRoot() / user_paths::kGameDataFolder;
+      if (std::filesystem::is_directory(prepared, error)) paths.game_data_root = prepared;
+    }
+    if (paths.update_data_root.empty()) {
+      const auto prepared = user_paths::DefaultPreparedDataRoot() / user_paths::kUpdateDataFolder;
+      if (std::filesystem::is_directory(prepared, error)) paths.update_data_root = prepared;
+    }
   }
 
   // The player's settings (ticket 10), once logging can report on them and before the runtime
@@ -101,17 +115,27 @@ class TopSpin4App : public rex::ReXApp {
     topspin4::crash::SetSettingsFile(path);
     // The Settings page shows what the file holds and which settings Launch options pin.
     settings::SessionStart session;
-    const settings::LoadReport report = settings::LoadSettingsFile(
-        path, [&session](std::string_view key, std::string_view value) {
-          session.file_values[std::string(key)] = std::string(value);
-          const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
-          if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
-                       flag->source == rex::cvar::Source::kEnvironment)) {
-            session.pinned.insert(std::string(key));
-            return true;
-          }
-          return rex::cvar::SetFlagByName(key, value);
-        });
+    // Safe start (--safe, ticket 09): the file is neither read, migrated, set aside nor written,
+    // so every setting keeps its default; the page's changes last until the game closes.
+    session.safe_start = REXCVAR_GET(safe);
+    settings::LoadReport report;
+    if (session.safe_start) {
+      REXLOG_WARN("Safe start: every setting is at its default, and the Settings file {} is "
+                  "neither applied nor written",
+                  settings::Utf8(path));
+    } else {
+      report = settings::LoadSettingsFile(
+          path, [&session](std::string_view key, std::string_view value) {
+            session.file_values[std::string(key)] = std::string(value);
+            const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(key);
+            if (flag && (flag->source == rex::cvar::Source::kCommandLine ||
+                         flag->source == rex::cvar::Source::kEnvironment)) {
+              session.pinned.insert(std::string(key));
+              return true;
+            }
+            return rex::cvar::SetFlagByName(key, value);
+          });
+    }
     // A setting given as a Launch option but absent from the file is pinned too.
     for (const settings::Setting& setting : settings::PlayerSettings()) {
       const rex::cvar::FlagEntry* flag = rex::cvar::GetFlagInfo(setting.key);
@@ -147,6 +171,21 @@ class TopSpin4App : public rex::ReXApp {
       REXLOG_WARN("{}", renderer.note);
     }
     topspin4::native::Request(renderer.renderer == settings::Renderer::kNative);
+    // The session report repeats both at the end.
+    REXLOG_INFO("Settings: {}Graphics preset {}", REXCVAR_GET(safe) ? "Safe start, " : "",
+                settings::ActivePreset(
+                    CvarValues(), renderer.renderer == settings::Renderer::kNative
+                                      ? settings::kRendererNative
+                                      : settings::kRendererClassic));
+  }
+
+  // Every player setting's value in its cvar now.
+  static topspin4::settings::ValueMap CvarValues() {
+    topspin4::settings::ValueMap values;
+    for (const topspin4::settings::Setting& setting : topspin4::settings::PlayerSettings()) {
+      values[std::string(setting.key)] = rex::cvar::GetFlagByName(setting.key);
+    }
+    return values;
   }
 
   // A cvar's value for Top Spin 4, unless the command line, environment or config set it.
@@ -175,6 +214,11 @@ class TopSpin4App : public rex::ReXApp {
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
     // input system, so no binding can steer it.
     topspin4::InstallRemappedInput(config);
+    // The Settings page reads the pad with that remap undone, so no binding can lock the player
+    // out of the page. A scripted run has no remap (its input system replaces this one).
+    if (REXCVAR_GET(ts4_input_script).empty()) {
+      topspin4::settings::SetGamePadBindings(topspin4::BindingsFromCvars());
+    }
     // A script's `set` changes a setting on the UI thread, where the settings page and the F6
     // overlay change theirs (the presenter's CAS must be switched there).
     rex::ui::WindowedAppContext* context = &app_context();
@@ -201,7 +245,8 @@ class TopSpin4App : public rex::ReXApp {
     topspin4::d3d::InstallHost(runtime()->cache_root());
     topspin4::frame_dumps::SetSessionEnd([]() -> std::string {
       topspin4::d3d::OnSessionEnd();
-      return "\"renderer\": " + topspin4::native::ReportJson();
+      return "\"renderer\": " + topspin4::native::ReportJson() + ",\n " +
+             topspin4::settings::SessionReportJson();
     });
     topspin4::frame_dumps::Install(runtime());
     // The crash report's facts known only now. Only the Vulkan backend is built, so the

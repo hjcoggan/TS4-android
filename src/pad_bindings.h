@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -151,6 +152,34 @@ inline Pad Remap(const Pad& physical, const Bindings& bindings) {
   uint16_t bound_buttons = 0;
   for (const InputInfo& info : kInputs) bound_buttons |= info.button;
   out.buttons |= physical.buttons & ~bound_buttons;
+  return out;
+}
+
+// The physical pad behind what the game sees: Remap undone. The Settings page reads the pad this
+// way, so a remap never moves the page's own navigation (ticket 06). Each action's value goes
+// back to the input that drives it; sticks and buttons outside the 16 pass through.
+inline Pad Unmap(const Pad& game, const Bindings& bindings) {
+  Pad out = game;
+  out.buttons = 0;
+  out.left_trigger = 0;
+  out.right_trigger = 0;
+  for (size_t a = 0; a < kInputCount; ++a) {
+    const Input action = Input(a);
+    const Input source = bindings.Source(action);
+    const uint8_t value = Value(game, action);
+    const bool action_is_trigger = action == Input::kLT || action == Input::kRT;
+    const bool pressed = action_is_trigger ? value > kTriggerThreshold : value != 0;
+    if (source == Input::kLT) {
+      out.left_trigger = std::max<uint8_t>(out.left_trigger, action_is_trigger ? value : (pressed ? 255 : 0));
+    } else if (source == Input::kRT) {
+      out.right_trigger = std::max<uint8_t>(out.right_trigger, action_is_trigger ? value : (pressed ? 255 : 0));
+    } else if (pressed) {
+      out.buttons |= kInputs[size_t(source)].button;
+    }
+  }
+  uint16_t bound_buttons = 0;
+  for (const InputInfo& info : kInputs) bound_buttons |= info.button;
+  out.buttons |= game.buttons & ~bound_buttons;
   return out;
 }
 
