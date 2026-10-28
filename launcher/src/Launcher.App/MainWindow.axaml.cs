@@ -25,12 +25,17 @@ public partial class MainWindow : Window
     private IReadOnlyList<string> _titleUpdates = [];
     private CancellationTokenSource? _stop;
     private SetupPhase? _shownPhase;
+    private readonly string _settingsPath;
+    private BeforeStartSettings? _beforeStart;
+    private bool _settingsRequested;
+    private bool _gameRunning;
 
     public MainWindow()
     {
         InitializeComponent();
         var cacheRoot = Path.GetFullPath(App.Options.CacheRoot ?? UserDirectories.PreparedDataRoot());
         _flow = new SetupFlow(new Preparation(cacheRoot));
+        _settingsPath = SettingsFile.PathIn(Path.GetFullPath(App.Options.UserDataRoot ?? UserDirectories.SettingsRoot()));
         FindInputs();
 
         _flow.Changed += () => Dispatcher.UIThread.Post(Refresh);
@@ -40,7 +45,8 @@ public partial class MainWindow : Window
         NextTitleUpdateButton.Click += (_, _) => _flow.ChooseTitleUpdate(Next(_titleUpdates, _flow.TitleUpdatePath));
         PrepareButton.Click += async (_, _) => await Prepare();
         CancelButton.Click += (_, _) => _stop?.Cancel();
-        PlayButton.Click += (_, _) => StartGame();
+        PlayButton.Click += async (_, _) => await StartGame();
+        SafeStartButton.Click += async (_, _) => await StartGame(safe: true);
 
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         _padTimer.Tick += (_, _) => PollPad();
@@ -94,14 +100,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Starts the game exe with Play's arguments and closes the Launcher. <paramref name="extra"/>
-    /// is the seam for Safe start (ticket 15: <c>["--safe"]</c>). Ticket 15 also needs the exit
-    /// code (the game's GPU failure code means "switch renderer"), so it will wait for the game
-    /// here instead of closing.
+    /// Starts the game exe with Play's arguments (Safe start's, with <c>--safe</c>, when
+    /// <paramref name="safe"/>) and waits for it. A normal exit closes the Launcher; the game's GPU
+    /// failure exit code brings the Launcher back with a note to switch renderer.
     /// </summary>
-    private void StartGame(IEnumerable<string>? extra = null)
+    private async Task StartGame(bool safe = false)
     {
-        if (_flow.Prepared is not { } prepared) return;
+        if (_flow.Prepared is not { } prepared || _gameRunning) return;
         var exe = App.Options.GameExe ?? LaunchArguments.FindGameExe(_launcherDirectory);
         if (exe is null || !File.Exists(exe))
         {
@@ -109,15 +114,74 @@ public partial class MainWindow : Window
             return;
         }
         var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(exe))! };
-        foreach (var argument in LaunchArguments.Play(prepared, extra)) start.ArgumentList.Add(argument);
+        // Only a Launcher started with --user-data points the game elsewhere; otherwise the game finds the same folder itself.
+        List<string> extra = [];
+        if (App.Options.UserDataRoot is { } userData) extra.Add("--user_data_root=" + Path.GetFullPath(userData));
+        foreach (var argument in safe ? LaunchArguments.SafeStart(prepared, extra) : LaunchArguments.Play(prepared, extra))
+            start.ArgumentList.Add(argument);
         try
         {
-            Process.Start(start)?.Dispose();
+            using var game = Process.Start(start);
+            if (game is null) return;
+            _gameRunning = true;
+            Hide();
+            await game.WaitForExitAsync();
+            _gameRunning = false;
+            if (GameExitReport.Describe(game.ExitCode) is { } message)
+            {
+                PlayMessage.Text = message;
+                Show();
+                PlayButton.Focus(NavigationMethod.Tab);
+                return;
+            }
             Close();
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
+            _gameRunning = false;
             PlayMessage.Text = "The game could not be started: " + error.Message;
+        }
+    }
+
+    // Reads the game's settings export once, when Play first shows, and draws the before-start settings.
+    private async Task LoadBeforeStartSettings()
+    {
+        var exe = App.Options.GameExe ?? LaunchArguments.FindGameExe(_launcherDirectory);
+        if (exe is null || !File.Exists(exe)) return;
+        try
+        {
+            _beforeStart = new BeforeStartSettings(await SettingsExport.ReadAsync(exe), _settingsPath);
+        }
+        catch (SettingsExportException error)
+        {
+            SettingsMessage.Text = error.Message;
+            SettingsMessage.IsVisible = true;
+            return;
+        }
+        DrawBeforeStartSettings();
+    }
+
+    private void DrawBeforeStartSettings()
+    {
+        if (_beforeStart is not { } settings) return;
+        BeforeStartSettingsHost.Children.Clear();
+        foreach (var setting in settings.Settings)
+        {
+            var row = new StackPanel { Spacing = 4, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
+            var button = new Button { Content = $"{setting.Label}: {settings.ValueOf(setting)}", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
+            button.Classes.Add("secondary");
+            button.Click += (_, _) =>
+            {
+                var change = settings.Cycle(setting);
+                SettingsMessage.Text = BeforeStartSettings.Describe(change);
+                SettingsMessage.IsVisible = change != SettingChange.Saved;
+                button.Content = $"{setting.Label}: {settings.ValueOf(setting)}";
+            };
+            row.Children.Add(button);
+            var help = new TextBlock { Text = setting.Help, TextAlignment = Avalonia.Media.TextAlignment.Center };
+            help.Classes.Add("small");
+            row.Children.Add(help);
+            BeforeStartSettingsHost.Children.Add(row);
         }
     }
 
@@ -129,6 +193,11 @@ public partial class MainWindow : Window
         var preparing = phase == SetupPhase.Preparing;
         SetupView.IsVisible = !ready;
         PlayView.IsVisible = ready;
+        if (ready && !_settingsRequested)
+        {
+            _settingsRequested = true;
+            _ = LoadBeforeStartSettings();
+        }
 
         DiscPanel.IsVisible = _flow.NeedsDisc;
         TitleUpdatePanel.IsVisible = _flow.NeedsTitleUpdate;
