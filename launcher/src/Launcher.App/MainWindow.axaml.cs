@@ -54,7 +54,9 @@ public partial class MainWindow : Window
         _gameExe = App.Options.GameExe ?? Path.Combine(_launcherDirectory, LaunchArguments.GameExeName);
         _home = new HomeModel(preparation, _gameExe);
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
-        _flow = new SetupFlow(preparation, log: Log);
+        // The disc row reads the disc's art the moment it accepts the disc; the art folder sits beside the settings.
+        var artFolder = Path.Combine(userRoot, DiscArt.FolderName);
+        _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, artFolder, Log));
         _shell = new LauncherShell(_flow);
 
         _setupPage = new SetupPage(_flow);

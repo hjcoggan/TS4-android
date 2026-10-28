@@ -84,6 +84,10 @@ _Avoid_: overlay, F6 menu, options menu (that is the game's own)
 The separate program players open to start the game. On first run it prepares the disc and Title Update 1; after that it is the home screen for playing and changing settings. The game can also start without it, from a Direct shortcut.
 _Avoid_: setup tool (when the GUI is meant)
 
+**Disc art**:
+The pictures the Launcher shows (background, box art, logo, setup background and the title icon), read from the player's own disc and written to an `art` folder in the per-user folder. The Launcher never ships any of it. A source the disc lacks gives no picture; a damaged one is logged and gives none.
+_Avoid_: assets, skin, theme (the theme only reads the Disc art)
+
 **Direct shortcut**:
 A shortcut the Launcher creates that starts the game straight away, without showing the Launcher, using the saved Settings file.
 _Avoid_: unattended shortcut, quick launch

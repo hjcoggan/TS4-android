@@ -25,16 +25,23 @@ public sealed class SetupFlow
     private readonly Preparation _preparation;
     private readonly TimeProvider _time;
     private readonly Action<string>? _log;
+    private readonly Action<string>? _readDiscArt;
     private readonly RowCheck _discCheck = new();
     private readonly RowCheck _titleUpdateCheck = new();
     private OverallProgress? _overall;
     private string? _stepLabel;
 
-    public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null)
+    /// <param name="readDiscArt">
+    /// Called with the disc image's path the moment the disc row accepts it, before the row reports
+    /// the change, so that the art is there when the window redraws (<see cref="DiscArt.FromIso"/>). It
+    /// can fail or throw without consequence: the failure is logged and the row stays accepted.
+    /// </param>
+    public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null)
     {
         _preparation = preparation;
         _time = time ?? TimeProvider.System;
         _log = log;
+        _readDiscArt = readDiscArt;
         Prepared = preparation.Existing();
         Phase = Prepared is null ? SetupPhase.NeedsInputs : SetupPhase.Ready;
         Disc = Fresh(preparation.NeedsDisc);
@@ -94,7 +101,24 @@ public sealed class SetupFlow
 
     /// <summary>Checks the disc image the player chose and shows the result on row 1; null empties the row.</summary>
     public Task ChooseDisc(string? path) =>
-        Choose(path, _discCheck, row => Disc = row, Disc.Needed, _preparation.CheckDisc, "Disc image");
+        Choose(path, _discCheck, row => Disc = row, Disc.Needed, CheckDiscAndReadArt, "Disc image");
+
+    // The disc is checked, and once it is accepted its art is read from the image. The art is a nicety:
+    // whatever goes wrong there is logged and never turns an accepted disc away.
+    private InputCheck CheckDiscAndReadArt(string? path, CancellationToken cancel)
+    {
+        var result = _preparation.CheckDisc(path, cancel);
+        if (!result.Accepted || _readDiscArt is null || path is null || cancel.IsCancellationRequested) return result;
+        try
+        {
+            _readDiscArt(path);
+        }
+        catch (Exception problem)
+        {
+            _log?.Invoke($"Disc art: could not read the art from {path}: {problem.Message}");
+        }
+        return result;
+    }
 
     /// <summary>Checks the Title Update 1 file the player chose and shows the result on row 2; null empties the row.</summary>
     public Task ChooseTitleUpdate(string? path) =>

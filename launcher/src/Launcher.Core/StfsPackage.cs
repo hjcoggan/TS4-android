@@ -44,7 +44,9 @@ public sealed class StfsPackage : IDisposable
     // The header fields read here all lie below the title thumbnail at +0x571A.
     private const int MinimumHeader = 0x571A;
 
-    private readonly SafeFileHandle _file;
+    // The package is read from a file or, for one that sits inside a disc image, from memory.
+    private readonly SafeFileHandle? _file;
+    private readonly byte[]? _memory;
     private readonly long _length;
     private readonly long _dataStart;
     private readonly int _tablesPerLevel;
@@ -54,11 +56,12 @@ public sealed class StfsPackage : IDisposable
     private readonly int[] _hashBlockStep;
     private readonly Dictionary<long, byte[]> _tables = [];
 
-    private StfsPackage(string path, SafeFileHandle file, StfsHeader header, byte[] raw)
+    private StfsPackage(string path, SafeFileHandle? file, byte[]? memory, StfsHeader header, byte[] raw)
     {
         PackagePath = path;
         _file = file;
-        _length = RandomAccess.GetLength(file);
+        _memory = memory;
+        _length = file is not null ? RandomAccess.GetLength(file) : memory!.Length;
         Header = header;
         _dataStart = (header.HeaderSize + BlockSize - 1L) & ~(BlockSize - 1L);
         var descriptor = raw.AsSpan(0x379, 0x24);
@@ -99,13 +102,22 @@ public sealed class StfsPackage : IDisposable
         {
             var raw = ReadRawHeader(file);
             var header = StfsHeader.Parse(raw) ?? throw new InvalidDataException("Not an Xbox 360 content package.");
-            return new StfsPackage(path, file, header, raw);
+            return new StfsPackage(path, file, null, header, raw);
         }
         catch
         {
             file.Dispose();
             throw;
         }
+    }
+
+    /// <summary>Opens a package held in memory (e.g. read out of a disc image); <paramref name="name"/> stands for its path in messages.</summary>
+    public static StfsPackage Open(byte[] bytes, string name)
+    {
+        if (bytes.Length < MinimumHeader) throw new InvalidDataException("Not an Xbox 360 content package.");
+        var raw = bytes[..MinimumHeader];
+        var header = StfsHeader.Parse(raw) ?? throw new InvalidDataException("Not an Xbox 360 content package.");
+        return new StfsPackage(name, null, bytes, header, raw);
     }
 
     /// <summary>The header of the package at <paramref name="path"/>, or null when it is not a package.</summary>
@@ -191,7 +203,7 @@ public sealed class StfsPackage : IDisposable
         }
     }
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _file?.Dispose();
 
     private static byte[] ReadRawHeader(SafeFileHandle file)
     {
@@ -271,8 +283,9 @@ public sealed class StfsPackage : IDisposable
     {
         if (offset < 0 || offset + count > _length)
             throw new InvalidDataException("The package is truncated.");
+        if (_memory is not null) return _memory.AsSpan((int)offset, count).ToArray();
         var buffer = new byte[count];
-        if (RandomAccess.Read(_file, buffer, offset) != count) throw new InvalidDataException("The package is truncated.");
+        if (RandomAccess.Read(_file!, buffer, offset) != count) throw new InvalidDataException("The package is truncated.");
         return buffer;
     }
 
