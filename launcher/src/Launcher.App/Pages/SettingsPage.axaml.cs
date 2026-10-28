@@ -2,6 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using TopSpin4.Launcher.Core;
 
 namespace TopSpin4.Launcher.Pages;
@@ -56,7 +58,19 @@ public partial class SettingsPage : UserControl
     private void Apply(SettingChange change)
     {
         _error = change == SettingChange.Saved ? null : SettingsStore.Describe(change);
+        // Every change draws the tab again, which drops the control that was just pressed: put focus back on its twin.
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as RadioButton;
+        var key = focused?.Tag as string;
+        var keyboard = focused?.Classes.Contains(":focus-visible") == true;
         Draw();
+        if (key is not null) Dispatcher.UIThread.Post(() => RestoreFocus(key, keyboard), DispatcherPriority.Background);
+    }
+
+    // The radio button with this identity in the tab as drawn now; the outline shows only for a keyboard or pad player.
+    private void RestoreFocus(string key, bool keyboard)
+    {
+        var twin = Tabs.GetVisualDescendants().OfType<RadioButton>().FirstOrDefault(radio => radio.Tag as string == key);
+        twin?.Focus(keyboard ? NavigationMethod.Directional : NavigationMethod.Pointer);
     }
 
     private void Draw()
@@ -91,7 +105,11 @@ public partial class SettingsPage : UserControl
             var options = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
             foreach (var option in row.Options)
             {
-                var radio = new RadioButton { Content = option.Label, GroupName = row.Key, IsChecked = option.Value == row.Value };
+                var radio = new RadioButton
+                {
+                    Content = option.Label, GroupName = row.Key, IsChecked = option.Value == row.Value,
+                    Tag = row.Key + "=" + option.Value,
+                };
                 radio.Click += (_, _) => Apply(model.Choose(row, option.Value));
                 options.Children.Add(radio);
             }

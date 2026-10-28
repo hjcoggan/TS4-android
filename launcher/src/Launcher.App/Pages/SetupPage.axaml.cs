@@ -143,6 +143,9 @@ public partial class SetupPage : UserControl
         first.Focus(NavigationMethod.Tab);
     }, DispatcherPriority.Background);
 
+    /// <summary>"Set up the game" answers Enter only while this page is the one on show.</summary>
+    public void SetDefault(bool isDefault) => PrepareButton.IsDefault = isDefault;
+
     /// <summary>The control the pad's first press lands on when nothing has focus.</summary>
     public Control EntryControl => PrepareButton.IsEnabled ? PrepareButton : ChooseDiscButton;
 }

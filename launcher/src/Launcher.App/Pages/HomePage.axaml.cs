@@ -54,5 +54,8 @@ public partial class HomePage : UserControl
         if (_buttons.TryGetValue(HomeAction.SafeStart, out var safe)) safe.IsEnabled = _home.CanPlay;
     }
 
+    /// <summary>PLAY answers Enter only while this page is the one on show.</summary>
+    public void SetDefault(bool isDefault) => PlayButton.IsDefault = isDefault;
+
     public void FocusFirst() => EntryControl.Focus(NavigationMethod.Tab);
 }

@@ -9,8 +9,10 @@
                  VerticalAlignment="Center" Margin="18,0,0,0" />
       <Button x:Name="ResetButton" Grid.Column="2" Classes="secondary" Content="Reset to defaults" IsVisible="False" />
     </Grid>
-    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" IsVisible="False" />
-    <TextBlock x:Name="ErrorText" Classes="error" TextAlignment="Left" IsVisible="False" />
+    <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" IsVisible="False"
+               AutomationProperties.LiveSetting="Polite" />
+    <TextBlock x:Name="ErrorText" Classes="error" TextAlignment="Left" IsVisible="False"
+               AutomationProperties.LiveSetting="Assertive" />
     <TabControl x:Name="Tabs" IsVisible="False" />
     <TextBlock x:Name="InGameNoteText" Classes="small" TextAlignment="Left" />
   </StackPanel>
