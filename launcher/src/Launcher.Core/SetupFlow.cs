@@ -35,6 +35,7 @@ public sealed class SetupFlow(Preparation preparation)
     /// <summary>Preparation can start: the flow is idle and every needed input is chosen.</summary>
     public bool CanPrepare =>
         Phase is SetupPhase.NeedsInputs or SetupPhase.Failed
+        && preparation.HasRoomForSetup
         && (!NeedsDisc || !string.IsNullOrWhiteSpace(DiscPath))
         && (!NeedsTitleUpdate || !string.IsNullOrWhiteSpace(TitleUpdatePath));
 

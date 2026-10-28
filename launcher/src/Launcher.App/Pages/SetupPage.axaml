@@ -28,6 +28,9 @@
       </StackPanel>
     </Border>
 
+    <!-- "Game files go to … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
+    <StackPanel x:Name="LocationHost" />
+
     <TextBlock x:Name="SetupMessage" Classes="error" TextAlignment="Center" IsVisible="False" />
 
     <StackPanel x:Name="ProgressPanel" Spacing="8" IsVisible="False">
