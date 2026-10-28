@@ -40,3 +40,38 @@ presents at guest vblank + 5 ms (`present_pacing_offset_us`), usually before tha
 then follow GPU completion and vary by several milliseconds: 7.8-14 % of display changes were
 off the 60 Hz step in visible PresentMon runs before and after this fix. Next step: present each
 frame once its GPU work is done, at a fixed time after the guest vblank.
+
+## Later the same day: presentation on a VRR display
+
+Measured with visible PresentMon runs of the exhibition match at 4x + 8x MSAA on a 360 Hz VRR
+panel (independent flip only), judged on 60 Hz gameplay stretches (30 fps cutaways excluded).
+
+| State | Gameplay display changes off the 60 Hz step |
+|---|---|
+| Start of the day | 11 % |
+| Present hold (patches 0042, 0043) | 4.2-4.8 % |
+| + depth staging reuse, fast clears (77f7636, 9adb021) | 3.8-4.5 % |
+| Same build, 4x + 4x MSAA / 3x + 8x MSAA | 2.1 % / 0.3 % |
+
+83 of the remaining 95 off-step changes follow a frame needing more than ~11.5 ms of GPU time.
+
+What the game and the queue impose:
+
+- Top Spin 4 issues each frame's draws in one burst at its swap (median span 0.6 ms), so a
+  frame's GPU work cannot start earlier.
+- Native's work, the GPU plugin's copy into the presenter's guest output and the presenter's
+  paint share one queue. A paint submitted after the next frame's burst waits for that frame.
+
+Tried and reverted, with the measurement that ruled each out:
+
+- Submitting Native's work in chunks during the frame: no change (nothing to submit early).
+- Presenting on the next vblank (offset 0): worse, the paint queued behind the next burst.
+- A hold past the next vblank: the pacing thread holds, presents and paints in turn, so it
+  delayed every later frame (44 % off step).
+- A high-water hold capped before the vblank: no better than the percentile in gameplay.
+- Held repeats of 30 fps frames: worse in cutaways (10.7-14.7 %); repeats stay off.
+- Showing the previous frame (one frame of latency): no change while the next frame's work was
+  submitted first. With that work also held until the presenter's paint (a submit thread and an
+  external_frame paint signal): completion moved to ~5.4 ms after the vblank for 80 % of frames,
+  but the tail and the hold rules interacted badly (5.3-21 % off step). Doing this properly needs
+  the presenter's copy and paint on their own queue, or a pacing thread that does not hold.
