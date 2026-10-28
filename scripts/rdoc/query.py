@@ -24,6 +24,8 @@ Commands:
   constants EID vs|ps FIRST [COUNT]
                               float4 registers FIRST.. of a draw's guest constants, read
                               through Native's constant pointers (Native captures only)
+  durations [FROM TO]         GPU time per action on replay (EventGPUDuration): the frame's
+                              sum, and the actions FROM..TO (default: the 10 longest)
 """
 import json
 import math
@@ -352,10 +354,45 @@ def cmd_present(ctrl, textures, args):
             say(f"  -> {path}")
 
 
+def cmd_durations(ctrl, textures, args):
+    """durations [FROM TO]: GPU time of each action (RenderDoc's EventGPUDuration, measured on
+    replay), the sum over the frame, and the actions FROM..TO (by default the 10 longest) with
+    their names, so one pass (the presenter's CAS) can be timed against the frame."""
+    counter = rd.GPUCounter.EventGPUDuration
+    if counter not in ctrl.EnumerateCounters():
+        say("durations: this replay has no EventGPUDuration counter")
+        return
+    desc = ctrl.DescribeCounter(counter)
+    scale = {rd.CounterUnit.Seconds: 1000.0}.get(desc.unit)
+    if scale is None:
+        say(f"durations: EventGPUDuration is in {desc.unit}, not seconds")
+        return
+
+    def value(r):
+        if desc.resultType == rd.CompType.Float:
+            return r.value.d if desc.resultByteWidth == 8 else r.value.f
+        return r.value.u64 if desc.resultByteWidth == 8 else r.value.u32
+
+    ms = {r.eventId: value(r) * scale for r in ctrl.FetchCounters([counter])}
+    sdfile = ctrl.GetStructuredFile()
+    actions = all_actions(ctrl.GetRootActions(), [])
+    say(f"frame: {len(ms)} timed events, {sum(ms.values()):.4f} ms GPU in all")
+    if args:
+        first, last = int(args[0]), int(args[1])
+        chosen = [a for a in actions if first <= a.eventId <= last]
+        say(f"events {first}..{last}: {sum(ms.get(a.eventId, 0.0) for a in chosen):.4f} ms")
+    else:
+        chosen = sorted((a for a in actions if a.eventId in ms),
+                        key=lambda a: -ms[a.eventId])[:10]
+    for a in chosen:
+        t = ms.get(a.eventId)
+        say(f"  eid {a.eventId} {'%.4f ms' % t if t is not None else '-'} {a.GetName(sdfile)}")
+
+
 COMMANDS = {"draws": cmd_draws, "draw": cmd_draw, "texture": cmd_texture, "rt": cmd_rt,
             "history": cmd_history, "mesh": cmd_mesh, "present": cmd_present,
             "pixel": cmd_pixel, "actions": cmd_actions, "buffer": cmd_buffer,
-            "constants": cmd_constants}
+            "constants": cmd_constants, "durations": cmd_durations}
 
 def succeeded(result):
     return getattr(result, "code", result) == rd.ResultCode.Succeeded

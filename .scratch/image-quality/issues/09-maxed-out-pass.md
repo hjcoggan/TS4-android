@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Anisotropic filtering), 03 (CAS sharpening), 05 (Texture offsets at scale), 06 (Auto Resolution scale), 08 (MSAA 8x)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] All six scenes run at the maximum settings without device loss, and the frames show only edge differences against the 1x frames of the same run
 - [x] With every setting at its default, the dual-mode scenes still pass against the Oracle
@@ -32,3 +32,4 @@
   - Blocked on the machine: the PC lost every audio endpoint after the Edge runs, and the port then hangs at boot (pc-port ticket 32). No game runs are possible until audio is back.
 - 2026-10-28 (owner, via Claude): measure the CAS cost once in a RenderDoc capture and add it to the cost table (no new timer). The two Edge results (AF16 not separated at 1028x578; the 2 px offset at `draw_resolution_scale` 2) stand as recorded notes.
 - 2026-10-28 (Claude): box 2's gap closed on the current build (0039-0041, ticket 13): `analysis/scenes/iq09/practice-ground-default-0041/` dual verdict PASS; against Edge's `iq02/edge-practice-original/shot-040s.png` (`crop_verdict.py`/`.txt` there) Native passes floor, baseline and the full frame (before 0039 its full frame failed), Classic floor and baseline.
+- 2026-10-28 (Claude), CAS cost, one RenderDoc capture as decided above: `analysis/scenes/iq09/cas-cost/` (`scripts/rdoc.ps1 capture -Frame 3600 -InputScript scripts/input/boot-to-exhibition.txt -ExtraArguments '--ts4_renderer=native','--ts4_sharpening=high'`; `runtime.log` says `CAS sharpening 0.8`, render size 1280x720). New `durations [FROM TO]` command in `scripts/rdoc/query.py` (RenderDoc's `EventGPUDuration` per action on replay); answers in `query-1/query.txt` (`present`, `durations`) and `query-2/query.txt` (`durations 8430 8480` three times, `actions`). On the RX 7900 XT at the 1280x720 output the presenter's CAS dispatch (eid 8458) takes about 0.021 ms (0.0210, 0.0216; 0.056 and 0.060 in replays where every event ran slower), the swapchain draw after it 0.015 ms. The command also run on `iq03/native-high` (practice ground): CAS 0.0205 ms. Recorded in `docs/research/image-quality.md`, cost section. CAS runs at the output size, so at a 3840x2160 output it would be about 0.2 ms (estimate, not measured).

@@ -643,7 +643,8 @@ timer (`--ts4_native_gpu_timer_csv`, timestamp queries around each frame's work)
 rows of one Native-only run of `tests/scenes/exhibition-match.toml` to frame 4800 per setting
 (`analysis/scenes/iq09/native_runs.py`, `cost.py`, `cost.txt`). Maximum = Resolution scale 4
 (render 5120x2880, not clamped), MSAA 8x, 16x anisotropic filtering, High CAS. CAS is not in
-these numbers: it runs in the presenter, after the timer's `present` span (Native's own copy).
+these numbers: it runs in the presenter, after the timer's `present` span (Native's own copy);
+its cost is measured on its own below.
 
 | Part (frames) | Defaults: GPU ms median / p95 / p99 / max | Maximum: GPU ms median / p95 / p99 / max |
 |---|---|---|
@@ -659,6 +660,19 @@ these numbers: it runs in the presenter, after the timer's `present` span (Nativ
   the maximum).
 - Not split by Enhancement: one run per setting set, maximum against defaults only. The per-pass
   rows in the same CSVs (`analysis/scenes/iq09/cost-*/gpu.csv`) are there for a split.
+- CAS, measured separately 2026-10-28 (ticket 09) in one RenderDoc capture, since the timer does
+  not see it: Native, `--ts4_sharpening=high`, everything else at default, exhibition match frame
+  3600 (`scripts/rdoc.ps1 capture -Frame 3600 -InputScript scripts/input/boot-to-exhibition.txt`),
+  same RX 7900 XT, 1280x720 output. RenderDoc's `EventGPUDuration` on replay (`scripts/rdoc/query.py
+  durations`, `analysis/scenes/iq09/cas-cost/query-*/query.txt`): the presenter's CAS compute
+  dispatch (1280x720 RGBA8 in, RGB10A2 out) takes **about 0.021 ms** (0.0210 and 0.0216 ms in two
+  replays; 0.056 and 0.060 ms in two others where every event ran slower, likely GPU clocks).
+  The presenter's draw to the swapchain after it takes 0.015 ms, Native's own `present` blit
+  0.013 to 0.015 ms. The iq03 practice-ground High capture gives the same (CAS 0.0205 ms). CAS
+  runs at the output size, so the Resolution scale does not change it; at a 3840x2160 output it
+  would be about 9 times as much (some 0.2 ms, an estimate, not measured). Replay times each event
+  on its own, so the frame's sum on replay (6.2 to 7.9 ms) is not comparable to the timer's numbers
+  above.
 
 ## Unverified and open
 
