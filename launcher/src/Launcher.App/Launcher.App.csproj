@@ -5,7 +5,9 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>TopSpin4.Launcher</RootNamespace>
     <AssemblyName>topspin4-launcher</AssemblyName>
-    <AssemblyTitle>Top Spin 4 Recomp launcher</AssemblyTitle>
+    <AssemblyTitle>Top Spin 4 Launcher v$(Version)</AssemblyTitle>
+    <!-- What Windows shows: the title and the version, no company or copyright line. -->
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>

@@ -16,13 +16,11 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName", "Top Spin 4 Recomp"
-      VALUE "FileDescription", "Top Spin 4 Recomp (a fan recompilation; needs your own disc)"
+      VALUE "FileDescription", TOPSPIN4_DESCRIPTION
       VALUE "FileVersion", TOPSPIN4_VERSION_TEXT
       VALUE "InternalName", "topspin4"
-      VALUE "LegalCopyright", "Top Spin 4 Recomp contributors. Not affiliated with 2K Sports or 2K Czech."
       VALUE "OriginalFilename", "topspin4.exe"
-      VALUE "ProductName", "Top Spin 4 Recomp"
+      VALUE "ProductName", "Top Spin 4"
       VALUE "ProductVersion", TOPSPIN4_VERSION_TEXT
     END
   END
