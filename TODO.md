@@ -6,15 +6,17 @@ before starting.
 
 ## Next
 
-- **Shader pack: XenosRecomp can't convert 64 Module vertex shaders.** Setup leaves them out of
-  the pack (1035 of 1099), so a Native draw using one skips with `no_shader` (none was met in an
-  exhibition match). Causes seen: registers past r31 (`printedRegisters[32]`, the `i < 32`
-  register declaration in `shader_recompiler.cpp`) and `tfetchPosition(..., iPosition0, ...)`
-  fetching an input the vertex declaration leaves undeclared. Raising the register count to 128
-  alone cut failures to 55. Fix as patches in `patches/xenosrecomp/` (changes the converter id,
-  so every pack rebuilds). Done when `topspin4-setup` on a fresh install reports none left out.
 - No `pipeline-keys.txt` is shipped, so setup's prepare plans no pipelines (it still builds every
   shader module and library).
+- **Defender flags XenosRecomp.** Windows Defender's ML heuristic quarantines a freshly built
+  `XenosRecomp.exe` (`Trojan:Win32/Bearfoos.B!ml`, 2026-10-31); then setup's shader step and live
+  top-ups fail ("did not start", error 225). Dev machines exclude `out/build/xenosrecomp`. Before
+  release, submit the shipped binary as a false positive (microsoft.com/wdsi/filesubmission) and
+  consider code-signing the release.
+- **Memexport on Native.** The 64 Module vertex shaders XenosRecomp patches 0010-0012 let into
+  the pack are memexport shaders (GPU compute writing to memory, explicit fetches from fetch
+  constant 95 with no vertex elements). Native converts them but drops the exports and reads 0
+  for those fetches, so a draw with one does nothing useful. None was met in an exhibition match.
 - The Launcher has no Repair button; `SetupFlow.Repair()` exists in the model only.
 - No packaging script puts XenosRecomp in the release's `xenosrecomp/` folder yet.
 

@@ -1,0 +1,57 @@
+diff --git a/XenosRecomp/main.cpp b/XenosRecomp/main.cpp
+index fdf1f25..4f764fd 100644
+--- a/XenosRecomp/main.cpp
++++ b/XenosRecomp/main.cpp
+@@ -163,6 +163,9 @@ int main(int argc, char** argv)
+                 if (recompiler.unboundVertexFetches != 0)
+                     fmt::println("Note: hash=0x{:016X} has {} vertex fetches with no vertex element; they read 0",
+                         hash, recompiler.unboundVertexFetches);
++                if (recompiler.discardedExports != 0)
++                    fmt::println("Note: hash=0x{:016X} has {} exports with no interpolator (memexport); they are dropped",
++                        hash, recompiler.discardedExports);
+ 
+                 if (!hlslDumpDir.empty())
+                 {
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index ca1bc35..689dd28 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -856,7 +856,15 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
+             default:
+             {
+                 auto findResult = interpolators.find(instr.vectorDest);
+-                assert(findResult != interpolators.end());
++                if (findResult == interpolators.end())
++                {
++                    // An export with no interpolator: memexport (eA is 32, eM0-4 33-37) in Top Spin 4's
++                    // Module shaders, which no host pipeline carries out. The write goes to a local
++                    // no output reads; the end iterator's string was read before, and crashed.
++                    ++discardedExports;
++                    exportRegister = "oDiscarded";
++                    break;
++                }
+                 exportRegister = findResult->second;
+                 break;
+             }
+@@ -1997,6 +2005,8 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+ 
+         for (auto& [usage, usageIndex] : INTERPOLATORS)
+             println("\to{}{} = 0.0;", USAGE_VARIABLES[uint32_t(usage)], usageIndex);
++        // Exports with no interpolator write here (memexport, see recompile(AluInstruction)).
++        out += "\tfloat4 oDiscarded = 0.0;\n";
+ 
+         out += "\n";
+     }
+diff --git a/XenosRecomp/shader_recompiler.h b/XenosRecomp/shader_recompiler.h
+index 3a1a353..72b411b 100644
+--- a/XenosRecomp/shader_recompiler.h
++++ b/XenosRecomp/shader_recompiler.h
+@@ -31,6 +31,8 @@ struct ShaderRecompiler : StringBuffer
+     std::unordered_map<uint32_t, VertexElement> vertexElements;
+     // Vertex fetches with no element in the container (they read 0, see recompile(VertexFetchInstruction)).
+     uint32_t unboundVertexFetches = 0;
++    // Vertex shader exports with no interpolator (memexport), written to a discarded local.
++    uint32_t discardedExports = 0;
+     std::unordered_map<uint32_t, std::string> interpolators;
+     std::unordered_map<uint32_t, const ConstantInfo*> float4Constants;
+     std::unordered_map<uint32_t, const char*> boolConstants;
