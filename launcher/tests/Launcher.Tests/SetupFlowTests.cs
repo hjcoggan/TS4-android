@@ -546,6 +546,23 @@ public sealed class SetupFlowTests : IDisposable
     }
 
     [Fact]
+    public void Play_points_the_game_at_the_cache_beside_the_prepared_data()
+    {
+        var root = Directory.CreateTempSubdirectory("ts4-play-").FullName;
+        try
+        {
+            var prepared = new PreparedData("g", "u", Reused: true, CacheRoot: Path.Combine(root, "cache"));
+
+            Assert.Equal(["--game_data_root=g", "--update_data_root=u", "--cache_root=" + Path.Combine(root, "cache")], LaunchArguments.Play(prepared));
+            Assert.Equal(new Preparation(root).ShaderCacheDirectory, Path.Combine(root, "cache"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Play_appends_extra_arguments_for_later_start_options()
     {
         var prepared = new PreparedData("g", "u", Reused: true);

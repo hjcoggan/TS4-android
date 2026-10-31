@@ -30,7 +30,9 @@ public static class LaunchArguments
         Play(prepared, (extra ?? []).Append(SafeFlag));
 
     /// <summary>
-    /// The arguments for Play: the prepared data folders and nothing else. A player setting never
+    /// The arguments for Play: the prepared data folders, the cache folder beside them (the game would otherwise look for
+    /// the shader pack and pipelines where its own location file or the default says, which is not where a Launcher started
+    /// with <c>--cache</c> prepared them), and nothing else. A player setting never
     /// goes on the command line, because a Launch option pins the setting in game; settings go
     /// through the Settings file. <paramref name="extra"/> is for flags that are not settings.
     /// </summary>
@@ -41,6 +43,7 @@ public static class LaunchArguments
             "--game_data_root=" + prepared.GameDataRoot,
             "--update_data_root=" + prepared.UpdateDataRoot,
         ];
+        if (prepared.CacheRoot is { } cache) arguments.Add("--cache_root=" + cache);
         if (extra is not null) arguments.AddRange(extra);
         return arguments;
     }

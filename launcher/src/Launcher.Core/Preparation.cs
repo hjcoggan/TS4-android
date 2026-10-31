@@ -5,7 +5,8 @@ namespace TopSpin4.Launcher.Core;
 /// <c>game:</c>, <c>--game_data_root</c>) and TU1's files (mounted as <c>update:</c>,
 /// <c>--update_data_root</c>). <see cref="Reused"/> says the cache already held them.
 /// </summary>
-public sealed record PreparedData(string GameDataRoot, string UpdateDataRoot, bool Reused);
+/// <param name="CacheRoot">The game's cache folder (shader pack, pipelines, top-ups) beside the prepared data; null leaves the game to find its own.</param>
+public sealed record PreparedData(string GameDataRoot, string UpdateDataRoot, bool Reused, string? CacheRoot = null);
 
 /// <summary>
 /// Disc and TU1 preparation: checks that the player's disc image and TU1 package are the
@@ -104,7 +105,7 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     /// <summary>The prepared data when the cache holds all of it, else null. Reads no input.</summary>
     public PreparedData? Existing() =>
         _gameData.Status() == SetupStatus.Done && _updateData.Status() == SetupStatus.Done
-            ? new PreparedData(GameDataRoot, UpdateDataRoot, Reused: true)
+            ? new PreparedData(GameDataRoot, UpdateDataRoot, Reused: true, ShaderCacheDirectory)
             : null;
 
     /// <summary>
@@ -322,6 +323,6 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
                 $"Setup is not allowed to write to {_cacheRoot}. Check that the folder can be written to, then set up again.", error);
         }
         reporter.Start(SetupStep.Done, 1, 1);
-        return new PreparedData(GameDataRoot, UpdateDataRoot, Reused: false);
+        return new PreparedData(GameDataRoot, UpdateDataRoot, Reused: false, ShaderCacheDirectory);
     }
 }
