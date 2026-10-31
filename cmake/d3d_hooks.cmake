@@ -95,6 +95,8 @@ endforeach()
 # The movie player's clock, locked to the guest's swaps (src/movie_clock.h).
 if(TARGET topspin4_Loader_DLL)
     target_sources(topspin4_Loader_DLL PRIVATE src/movie_clock_hook.cpp)
+    # PersistDisplay's black copy of the title frame (src/persist_display_hook.cpp).
+    target_sources(topspin4_Loader_DLL PRIVATE src/persist_display_hook.cpp)
     target_include_directories(topspin4_Loader_DLL PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 endif()
 
