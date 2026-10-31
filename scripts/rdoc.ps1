@@ -59,7 +59,11 @@ switch ($Verb) {
             "--user_data_root=$projectRoot/userdata", "--cache_root=$projectRoot/cache",
             "--log_file=$Out/runtime.log", '--log_level=info', '--log_flush_interval=1',
             "--ts4_input_script=$Out/input.txt", "--ts4_renderdoc_frame=$Frame",
-            "--ts4_dump_frames=$Frame", "--ts4_dump_dir=$Out", "--ts4_exit_after_frame=$($Frame + 2)") + $extra
+            "--ts4_dump_frames=$Frame", "--ts4_dump_dir=$Out", "--ts4_exit_after_frame=$($Frame + 2)")
+        # A flag in -ExtraArguments replaces the default of the same name (the first one given
+        # wins), so a capture can use another install's folders, e.g. --cache_root=<release>/cache.
+        $given = @($extra | ForEach-Object { ($_ -split '=', 2)[0] })
+        $arguments = @($arguments | Where-Object { $given -notcontains ($_ -split '=', 2)[0] }) + $extra
         # Runs never overlap (scripts/smoke.ps1, scripts/scene_runner.py hold the same lock).
         try {
             $runLock = [System.IO.File]::Open("$projectRoot/analysis/game-run.lock", 'OpenOrCreate', 'ReadWrite', 'None')
