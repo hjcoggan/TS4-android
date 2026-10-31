@@ -18,7 +18,6 @@ before starting.
   constant 95 with no vertex elements). Native converts them but drops the exports and reads 0
   for those fetches, so a draw with one does nothing useful. None was met in an exhibition match.
 - The Launcher has no Repair button; `SetupFlow.Repair()` exists in the model only.
-- No packaging script puts XenosRecomp in the release's `xenosrecomp/` folder yet.
 
 ## 1.0 (from pc-port-1-0)
 
