@@ -1,0 +1,34 @@
+// Version information linked into XenosRecomp.exe by scripts/build-xenosrecomp.ps1 (the linker
+// embeds the manifest). An unsigned tool without it was taken by Windows Defender's machine-learning model for a
+// trojan (Trojan:Win32/Bearfoos.B!ml) and deleted. Not part of the patch series, so the
+// converter id (the series' hash) does not change.
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "Top Spin 4 Recomp"
+      VALUE "FileDescription", "XenosRecomp shader converter (Xbox 360 shaders to HLSL and SPIR-V)"
+      VALUE "FileVersion", "1.0.0.0"
+      VALUE "InternalName", "XenosRecomp"
+      VALUE "LegalCopyright", "Copyright (c) 2025 hedge-dev and contributors. MIT License."
+      VALUE "OriginalFilename", "XenosRecomp.exe"
+      VALUE "ProductName", "Top Spin 4 Recomp"
+      VALUE "ProductVersion", "1.0.0.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

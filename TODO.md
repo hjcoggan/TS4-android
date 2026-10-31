@@ -6,13 +6,9 @@ before starting.
 
 ## Next
 
-- No `pipeline-keys.txt` is shipped, so setup's prepare plans no pipelines (it still builds every
-  shader module and library).
-- **Defender flags XenosRecomp.** Windows Defender's ML heuristic quarantines a freshly built
-  `XenosRecomp.exe` (`Trojan:Win32/Bearfoos.B!ml`, 2026-10-31); then setup's shader step and live
-  top-ups fail ("did not start", error 225). Dev machines exclude `out/build/xenosrecomp`. Before
-  release, submit the shipped binary as a false positive (microsoft.com/wdsi/filesubmission) and
-  consider code-signing the release.
+- **Code-sign the release.** Defender's ML verdict that deleted XenosRecomp came from the game exe
+  having no version information (docs/research/defender-false-positive.md, fixed); a later build
+  can still be flagged. Signing `topspin4.exe`, the Launcher and `XenosRecomp.exe` is the lasting fix.
 - **Memexport on Native.** The 64 Module vertex shaders XenosRecomp patches 0010-0012 let into
   the pack are memexport shaders (GPU compute writing to memory, explicit fetches from fetch
   constant 95 with no vertex elements). Native converts them but drops the exports and reads 0

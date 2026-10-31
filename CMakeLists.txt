@@ -44,6 +44,12 @@ set(TOPSPIN4_SOURCES
 )
 
 if(WIN32)
+    # Version information (src/topspin4.rc): an exe without it was rated suspicious by Windows
+    # Defender, which then deleted the shader converter the game starts.
+    enable_language(RC)
+    list(APPEND TOPSPIN4_SOURCES src/topspin4.rc)
+    set_source_files_properties(src/topspin4.rc PROPERTIES COMPILE_DEFINITIONS
+        "TOPSPIN4_VERSION_MAJOR=${PROJECT_VERSION_MAJOR};TOPSPIN4_VERSION_MINOR=${PROJECT_VERSION_MINOR};TOPSPIN4_VERSION_PATCH=${PROJECT_VERSION_PATCH};TOPSPIN4_VERSION_TEXT=\"${PROJECT_VERSION}\"")
     add_executable(topspin4 WIN32 ${TOPSPIN4_SOURCES})
 else()
     add_executable(topspin4 ${TOPSPIN4_SOURCES})

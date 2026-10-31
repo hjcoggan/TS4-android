@@ -34,7 +34,15 @@ $env:PATH = "$llvm;$cmakeRoot/Ninja;$($msvc.FullName)/bin/Hostx64/x64;$WindowsSd
 $env:INCLUDE = "$($msvc.FullName)/include;$sdkInclude/ucrt;$sdkInclude/shared;$sdkInclude/um;$sdkInclude/winrt"
 $env:LIB = "$($msvc.FullName)/lib/x64;$sdkLib/ucrt/x64;$sdkLib/um/x64"
 $build = if ([IO.Path]::IsPathRooted($BuildDirectory)) { $BuildDirectory } else { "$projectRoot/$BuildDirectory" }
+# Version information (scripts/xenosrecomp/XenosRecomp.rc): without it Windows
+# Defender's machine-learning model took the unsigned exe for a trojan and deleted it. Linked in
+# here, not patched in, so the converter id stays the patch series' hash.
+New-Item -ItemType Directory -Force $build | Out-Null
+$resource = "$build/XenosRecomp-version.res"
+& rc.exe /nologo /fo $resource "$PSScriptRoot/xenosrecomp/XenosRecomp.rc"
+if ($LASTEXITCODE -ne 0) { throw "rc.exe failed on scripts/xenosrecomp/XenosRecomp.rc (exit $LASTEXITCODE)" }
 Invoke-Hidden $cmake @('-S', $source, '-B', $build, '-G', 'Ninja', "-DCMAKE_BUILD_TYPE=$Configuration",
-    '-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_CXX_FLAGS=-DSVR2011_RECOMP', '-DXENOS_RECOMP_DXIL=OFF') -LogPath "$projectRoot/analysis/configure-xenosrecomp.log"
+    '-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_CXX_FLAGS=-DSVR2011_RECOMP', '-DXENOS_RECOMP_DXIL=OFF',
+    "-DCMAKE_EXE_LINKER_FLAGS=$($resource -replace '\\', '/')") -LogPath "$projectRoot/analysis/configure-xenosrecomp.log"
 Invoke-Hidden $cmake @('--build', $build, '--parallel', "$Jobs") -LogPath "$projectRoot/analysis/build-xenosrecomp.log"
 Write-Output "XenosRecomp built: $build/XenosRecomp/XenosRecomp.exe"
