@@ -80,6 +80,17 @@ target_compile_definitions(topspin4 PRIVATE
     # scripts/build-xenosrecomp.ps1 builds.
     TOPSPIN4_DEV_XENOSRECOMP="${CMAKE_CURRENT_SOURCE_DIR}/out/build/xenosrecomp/XenosRecomp/XenosRecomp.exe"
     TOPSPIN4_DEV_XENOSRECOMP_INCLUDE="${CMAKE_CURRENT_SOURCE_DIR}/.tools/xenosrecomp/XenosRecomp/shader_common.h")
+# The shipped pipeline key list (ADR-0010) goes beside the exe; Native prebuilds its keys
+# before play. scripts/pipeline_keys.py merges new keys in.
+set(TOPSPIN4_PIPELINE_KEYS "${CMAKE_CURRENT_SOURCE_DIR}/data/pipeline-keys.txt")
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/pipeline-keys.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${TOPSPIN4_PIPELINE_KEYS}"
+        "${CMAKE_CURRENT_BINARY_DIR}/pipeline-keys.txt"
+    DEPENDS "${TOPSPIN4_PIPELINE_KEYS}"
+    COMMENT "Copying the shipped pipeline key list"
+    VERBATIM)
+add_custom_target(topspin4_pipeline_keys ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/pipeline-keys.txt")
+add_dependencies(topspin4 topspin4_pipeline_keys)
 # zstd (decompression only) and smol-v unpack the shader pack; both come with XenosRecomp in
 # .tools/xenosrecomp (BSD-3 and MIT).
 set(TOPSPIN4_XENOSRECOMP_THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/.tools/xenosrecomp/thirdparty")
@@ -207,7 +218,8 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
     target_link_libraries(topspin4_host_tests PRIVATE rex::runtime topspin4_native_deps)
     target_compile_definitions(topspin4_host_tests PRIVATE
-        TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull)
+        TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull
+        TOPSPIN4_PIPELINE_KEYS="${TOPSPIN4_PIPELINE_KEYS}")
     add_test(NAME topspin4_host_tests COMMAND topspin4_host_tests)
 endif()
 

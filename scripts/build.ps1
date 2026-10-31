@@ -143,6 +143,14 @@ if ($Action -eq 'Codegen') {
     if ($LASTEXITCODE -ne 0) { throw "Host unit tests failed (exit $LASTEXITCODE)" }
 } else {
     Invoke-Hidden $cmake @('--build', $buildDirectory, '--parallel', "$Jobs") -LogPath "$projectRoot/analysis/build.log"
+    # Keys on the shipped list whose shaders are in neither the dev shader pack nor the top-ups
+    # the game merges into it (a pack is game data, so only a local one is checked).
+    $pack = "$projectRoot/cache/topspin4.shaderpack"
+    if (Test-Path -LiteralPath $pack) {
+        & python "$PSScriptRoot/pipeline_keys.py" check "$projectRoot/data/pipeline-keys.txt" $pack --top-ups "$projectRoot/cache/shader-topup"
+    } else {
+        Write-Output "Pipeline key list not checked: no shader pack at $pack"
+    }
     # The published Launcher goes beside topspin4.exe in the build output.
     & $PSCommandPath -Action Launcher -Jobs $Jobs -Configuration $Configuration
 }

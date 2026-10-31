@@ -1,6 +1,8 @@
 #include <catch_amalgamated.hpp>
 
+#include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "native/prebuild_plan.h"
@@ -272,4 +274,20 @@ TEST_CASE("only Original builds the PWL output libraries of the pack's shaders")
         std::vector<uint32_t>{0x0, 0x2});
   CHECK(values_of_0x22(MakePlan(kColourPack, kConverter, sources, gpl, ColourMode::kOriginal)) ==
         std::vector<uint32_t>{0x0, 0x2, 0x8, 0xA});
+}
+
+TEST_CASE("the shipped key list matches this build's PipelineKey and shader converter") {
+  // scripts/pipeline_keys.py takes the key size from the stores it merges, so a PipelineKey
+  // change or a XenosRecomp patch leaves data/pipeline-keys.txt stale, and the game would
+  // drop it whole. Merge new stores (or retag, ADR-0010) when this fails.
+  std::FILE* file = std::fopen(TOPSPIN4_PIPELINE_KEYS, "rb");
+  REQUIRE(file != nullptr);
+  std::string text;
+  char buffer[65536];
+  for (size_t n; (n = std::fread(buffer, 1, sizeof(buffer), file)) > 0;) text.append(buffer, n);
+  std::fclose(file);
+  const KeyListLoad load = ReadKeyList(text);
+  REQUIRE(load.ok);
+  CHECK(load.converter_id == TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID);
+  CHECK(!load.keys.empty());
 }
