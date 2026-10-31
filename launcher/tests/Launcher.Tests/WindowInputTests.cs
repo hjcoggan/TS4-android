@@ -27,9 +27,10 @@ public sealed class WindowInputTests
     }
 
     [Fact]
-    public void B_and_Esc_go_back_from_Settings()
+    public void B_and_Esc_go_back_from_Settings_and_Achievements()
     {
         Assert.Equal(InputCommand.GoBack, LauncherInput.Route(PadAction.Back, LauncherPage.Settings, setupRunning: false));
+        Assert.Equal(InputCommand.GoBack, LauncherInput.Route(PadAction.Back, LauncherPage.Achievements, setupRunning: false));
     }
 
     [Fact]
@@ -67,6 +68,7 @@ public sealed class WindowInputTests
     {
         Assert.DoesNotContain("B:", InputHints.Text(LauncherPage.Home, setupRunning: false));
         Assert.Contains("B: back", InputHints.Text(LauncherPage.Settings, setupRunning: false));
+        Assert.Contains("B: back", InputHints.Text(LauncherPage.Achievements, setupRunning: false));
         Assert.DoesNotContain("B:", InputHints.Text(LauncherPage.Setup, setupRunning: false));
         Assert.Contains("B: stop setup", InputHints.Text(LauncherPage.Setup, setupRunning: true));
         Assert.All(Enum.GetValues<LauncherPage>(), page => Assert.Contains("A: select", InputHints.Text(page, setupRunning: false)));

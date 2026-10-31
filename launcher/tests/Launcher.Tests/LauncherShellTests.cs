@@ -89,8 +89,26 @@ public sealed class LauncherShellTests : IDisposable
         var shell = new LauncherShell(new SetupFlow(Preparation()));
 
         shell.OpenSettings();
+        shell.OpenAchievements();
         shell.Back();
 
         Assert.Equal(LauncherPage.Setup, shell.Page);
+    }
+
+    [Fact]
+    public void The_rail_moves_between_the_pages_after_setup_and_back_returns_home()
+    {
+        PrepareCache();
+        var shell = new LauncherShell(new SetupFlow(Preparation()));
+        var pages = new List<LauncherPage>();
+        shell.Changed += () => pages.Add(shell.Page);
+
+        shell.OpenAchievements();
+        shell.OpenAchievements();
+        shell.OpenSettings();
+        shell.Back();
+        shell.OpenHome();
+
+        Assert.Equal([LauncherPage.Achievements, LauncherPage.Settings, LauncherPage.Home], pages);
     }
 }

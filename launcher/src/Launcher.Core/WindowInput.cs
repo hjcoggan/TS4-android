@@ -10,7 +10,7 @@ public enum InputCommand
     FocusRight,
     /// <summary>Presses the focused control (the pad's A).</summary>
     Press,
-    /// <summary>Leaves Settings for Home.</summary>
+    /// <summary>Leaves Settings or Achievements for Home.</summary>
     GoBack,
     /// <summary>Stops a running setup; it resumes later.</summary>
     StopSetup,
@@ -19,7 +19,7 @@ public enum InputCommand
 /// <summary>
 /// The window's input rules, apart from any UI type: a pad direction moves focus the same way on
 /// every page (the App hands it to Avalonia's directional focus, so focus follows the layout),
-/// A presses, and B or Esc goes back where there is a back: Settings, and a running setup.
+/// A presses, and B or Esc goes back where there is a back: Settings, Achievements, and a running setup.
 /// The home screen and the setup rows have nowhere to go back to, so B does nothing there.
 /// </summary>
 public static class LauncherInput
@@ -31,7 +31,7 @@ public static class LauncherInput
         PadAction.Left => InputCommand.FocusLeft,
         PadAction.Right => InputCommand.FocusRight,
         PadAction.Accept => InputCommand.Press,
-        PadAction.Back when page == LauncherPage.Settings => InputCommand.GoBack,
+        PadAction.Back when page is LauncherPage.Settings or LauncherPage.Achievements => InputCommand.GoBack,
         PadAction.Back when page == LauncherPage.Setup && setupRunning => InputCommand.StopSetup,
         _ => InputCommand.None,
     };
@@ -70,7 +70,7 @@ public sealed class InputHints
         const string Move = "D-pad or stick: move      A: select";
         return page switch
         {
-            LauncherPage.Settings => Move + "      B: back",
+            LauncherPage.Settings or LauncherPage.Achievements => Move + "      B: back",
             LauncherPage.Setup when setupRunning => Move + "      B: stop setup",
             _ => Move,
         };
