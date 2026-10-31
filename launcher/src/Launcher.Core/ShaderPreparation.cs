@@ -170,6 +170,14 @@ public sealed partial class ShaderPreparation(IShaderConverter converter, ulong 
             File.Move(temp, pack, overwrite: true);
             // Not waiting for the pack, since XenosRecomp cannot convert them: the game meets them again only if it draws with them.
             foreach (var name in skipped) TryDelete(Path.Combine(cacheDirectory, TopUpFolderName, name + ".bin"));
+            // The top-ups (the Modules' shaders, and those the game met in play) are folded into the pack now: the folder is
+            // emptied of them, with any one-shader pack the game converted live beside them.
+            var packed = ShaderPackFile.ConvertedShaders(pack);
+            foreach (var file in TopUpContainers(cacheDirectory).Where(file => packed.Contains(ContainerHash(file))))
+            {
+                TryDelete(ConvertedPath(file));
+                TryDelete(file);
+            }
             progress?.Report(new ShaderProgress(ShaderStep.Done, 1));
             return new ShaderResult(Directory.GetFiles(input).Length, skipped);
         }

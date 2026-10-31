@@ -62,7 +62,8 @@ public sealed class ShaderPreparationTests : IDisposable
 
         var name = ShaderContainer.Of(module).Name + ".bin";
         Assert.Equal(Cache, _modules.AskedFolder);
-        Assert.True(File.Exists(Path.Combine(TopUp, name)));
+        // Folded into the pack: the top-up folder no longer holds it.
+        Assert.False(File.Exists(Path.Combine(TopUp, name)));
         Assert.Equal(new[] { name, Pixel + ".bin", Vertex + ".bin" }.Order(), _converter.Inputs.Order());
         Assert.False(Preparation().StatusOf(Cache).NeedsPreparing);
     }
@@ -252,6 +253,48 @@ public sealed class ShaderPreparationTests : IDisposable
         Assert.Equal(1, status.WaitingShaders);
         Assert.True(status.AddsAfterSession);
     }
+
+    [Fact]
+    public void Folding_after_a_session_adds_the_top_ups_to_the_pack_and_empties_the_folder()
+    {
+        Run();
+        Directory.CreateDirectory(TopUp);
+        var late = TestArc.Container(vertex: false, 2, seed: 7);
+        var lateName = ShaderContainer.Of(late).Name;
+        var live = TestArc.Container(vertex: true, 3, seed: 9);
+        var liveName = ShaderContainer.Of(live).Name;
+        File.WriteAllBytes(Path.Combine(TopUp, lateName + ".bin"), late);
+        File.WriteAllBytes(Path.Combine(TopUp, liveName + ".bin"), live);
+        File.WriteAllBytes(Path.Combine(TopUp, liveName + ShaderPreparation.ConvertedExtension), OneShaderPack(ConverterId));
+
+        Run();
+
+        var packed = ShaderPackFile.ConvertedShaders(PackPath);
+        Assert.Contains(ContainerFnv(lateName), packed);
+        Assert.Contains(ContainerFnv(liveName), packed);
+        Assert.Empty(Directory.EnumerateFiles(TopUp));
+        Assert.False(Preparation().StatusOf(Cache).NeedsPreparing);
+    }
+
+    [Fact]
+    public void A_failed_fold_keeps_the_top_ups_and_the_old_pack()
+    {
+        Run();
+        var before = File.ReadAllBytes(PackPath);
+        Directory.CreateDirectory(TopUp);
+        var late = TestArc.Container(vertex: false, 2, seed: 7);
+        File.WriteAllBytes(Path.Combine(TopUp, ShaderContainer.Of(late).Name + ".bin"), late);
+        _converter.Failure = "XenosRecomp is missing.";
+
+        Assert.Throws<ShaderPreparationException>(() => Run());
+
+        Assert.True(File.Exists(Path.Combine(TopUp, ShaderContainer.Of(late).Name + ".bin")));
+        Assert.Equal(before, File.ReadAllBytes(PackPath));
+        Assert.True(Preparation().StatusOf(Cache).AddsAfterSession);
+    }
+
+    private static ulong ContainerFnv(string name) =>
+        ulong.Parse(name[3..], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A one-shader pack as the game writes beside a top-up it converted live.</summary>
     private static byte[] OneShaderPack(ulong converterId)

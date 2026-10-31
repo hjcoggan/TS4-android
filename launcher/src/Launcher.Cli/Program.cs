@@ -111,6 +111,35 @@ else
         return 1;
     }
 }
+// The pipeline step: the game's prepare-pipelines mode, as in the Launcher window. A failure leaves Play working (the
+// pipelines then build during play), so it has its own exit code too.
+const int PipelineStepFailed = 41;
+var pipelines = new PipelinePreparation(exe, preparation, new StreamingPrepareRunner(TimeSpan.FromMinutes(10), "Preparing pipelines"));
+var rebuild = pipelines.Check(shaders.StatusOf(preparation.ShaderCacheDirectory).Pack.Ready);
+if (rebuild == PipelineRebuild.NoShaderPack)
+{
+    Console.WriteLine("Skipped the pipelines: there is no shader pack");
+}
+else if (!rebuild.Rebuilds())
+{
+    Console.WriteLine("Reused the pipeline store");
+}
+else
+{
+    try
+    {
+        var result = await pipelines.RunAsync(
+            new SyncProgress<PipelineProgress>(report => Say($"Preparing pipelines: {report.Stage.ToString().ToLowerInvariant()} {(int)(report.Fraction * 100),3}%")),
+            cancel.Token);
+        Console.WriteLine(result.Message);
+        if (!result.Usable && exitCode == 0) exitCode = PipelineStepFailed;
+    }
+    catch (OperationCanceledException)
+    {
+        Console.Error.WriteLine("Stopped. The next run resumes where this one left off.");
+        return 1;
+    }
+}
 Console.WriteLine($"Runtime flags: --game_data_root=\"{prepared.GameDataRoot}\" --update_data_root=\"{prepared.UpdateDataRoot}\"");
 return exitCode;
 

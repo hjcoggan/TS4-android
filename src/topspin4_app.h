@@ -202,6 +202,12 @@ class TopSpin4App : public rex::ReXApp {
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    // The Launcher's pipeline step (--ts4_prepare_pipelines) needs Native and a hidden window.
+    if (topspin4::native::PrepareRequested()) {
+      topspin4::native::Request(true);
+      rex::cvar::SetFlagByName("fullscreen", "false");
+      rex::cvar::SetFlagByName("window_hidden", "true");
+    }
     topspin4::native::ApplyImageSettings();
     rex::kernel::xam::SetMessageBoxRewriter(&topspin4::online::RewriteLivePrompt);
     // The player's controller bindings (ticket 24); a scripted run then replaces the whole
@@ -246,6 +252,11 @@ class TopSpin4App : public rex::ReXApp {
     // A device loss the SDK sees is a GPU failure under Native.
     rex::system::host_gpu_loss::SetHandler(&topspin4::native::OnHostGpuLoss);
     topspin4::native::Configure(runtime());
+    // The Launcher's pipeline step: build the pack's modules and the planned pipelines, report
+    // and exit before any Module launches.
+    if (topspin4::native::PrepareRequested()) {
+      topspin4::native::PreparePipelinesAndExit();
+    }
     topspin4::d3d::InstallHost(runtime()->cache_root());
     topspin4::load_flash::InstallHost();
     topspin4::frame_dumps::SetSessionEnd([]() -> std::string {

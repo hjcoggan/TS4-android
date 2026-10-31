@@ -70,7 +70,7 @@ bool ProgressReporter::ShouldReport(const Progress& progress) {
   return true;
 }
 
-std::string HeaderLine() { return "wwe-prepare-pipelines 1\n"; }
+std::string HeaderLine() { return "topspin4-prepare-pipelines 1\n"; }
 
 std::string ProgressLine(const Progress& progress) {
   return fmt::format("progress stage={} done={} total={}\n", StageName(progress.stage),

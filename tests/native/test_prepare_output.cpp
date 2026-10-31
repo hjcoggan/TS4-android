@@ -8,7 +8,7 @@
 namespace prepare = topspin4::native::prepare;
 
 TEST_CASE("prepare output starts with a versioned header line") {
-  CHECK(prepare::HeaderLine() == "wwe-prepare-pipelines 1\n");
+  CHECK(prepare::HeaderLine() == "topspin4-prepare-pipelines 1\n");
 }
 
 TEST_CASE("a progress line names the stage and its done and total counts") {

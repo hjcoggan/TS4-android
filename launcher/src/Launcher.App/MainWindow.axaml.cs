@@ -71,8 +71,12 @@ public partial class MainWindow : Window
         // the release ships. A pack another XenosRecomp built is rebuilt when the window opens (below), before Play.
         var shaders = new ShaderPreparation(XenosRecompConverter.ShippedWith(_launcherDirectory), ShaderConverter.Id,
             new GameModuleShaders(_gameExe, preparation, new StreamingPrepareRunner(TimeSpan.FromMinutes(10), "Reading the game's Module shaders")));
+        // Then the pipeline step: the game's prepare-pipelines mode builds the pipeline store and the driver cache.
+        var pipelines = new PipelinePreparation(_gameExe, preparation,
+            new StreamingPrepareRunner(TimeSpan.FromMinutes(10), "Preparing pipelines"));
         _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, _artFolder, Log),
-            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log), refusal: refusal, shaders: shaders);
+            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log), refusal: refusal, shaders: shaders,
+            pipelines: pipelines);
         _shell = new LauncherShell(_flow);
 
         _setupPage = new SetupPage(_flow);
@@ -103,8 +107,8 @@ public partial class MainWindow : Window
             await Task.Run(_flow.RefreshArt);
             ReloadTheme();
             Refresh();
-            // A shader pack from another XenosRecomp patch series is built again at once, with the progress bar, so no click is needed.
-            if (_flow.WantsShaderRebuild) await _setupPage.PrepareAsync();
+            // A missing or stale shader pack or pipeline store is built again at once, with the progress bar, so no click is needed.
+            if (_flow.WantsRebuild) await _setupPage.PrepareAsync();
         };
 
         // The game started without setup done: the setup page says why (or the home page, if this Launcher finds the files).
@@ -297,6 +301,8 @@ public partial class MainWindow : Window
         Show();
         Activate();
         Refresh();
+        // Shaders the game met that the pack lacks join it now, so they are never converted live again.
+        await _setupPage.AddTopUpsAsync();
     }
 
     // Reads the art folder and, if it changed since the last look (LauncherTheme.ArtStamp: another disc's art under the same
@@ -355,8 +361,8 @@ public partial class MainWindow : Window
             ReloadTheme();
         }
         ShowPageLook(page);
-        // A shader step that failed does not stop Play, so its message goes where the player is: the home screen's note.
-        if (_flow.ShaderFailure is { } shaderFailure && shaderFailure != _shownShaderFailure)
+        // A shader or pipeline step that failed does not stop Play, so its message goes where the player is: the home screen's note.
+        if ((_flow.ShaderFailure ?? _flow.PipelineFailure) is { } shaderFailure && shaderFailure != _shownShaderFailure)
         {
             _shownShaderFailure = shaderFailure;
             _home.Say(shaderFailure);

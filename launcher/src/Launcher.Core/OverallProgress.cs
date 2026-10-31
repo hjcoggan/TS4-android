@@ -2,46 +2,53 @@ namespace TopSpin4.Launcher.Core;
 
 /// <summary>
 /// One progress value for the whole of setup. Setup runs as bands: checking the disc, checking
-/// Title Update 1, extracting the disc, unpacking Title Update 1, preparing the shaders (a band is left out when its
-/// input is already set up, and the shaders band when the pack is usable). The copy bands weigh what they move; each
-/// check weighs a small share of the copying, since its length is not known; the shaders band weighs a share of the
+/// Title Update 1, extracting the disc, unpacking Title Update 1, preparing the shaders, preparing the pipelines (a band is
+/// left out when its input is already set up, the shaders band when the pack is usable, the pipelines band when the store is). The copy bands weigh what they move; each
+/// check weighs a small share of the copying, since its length is not known; the shaders and pipelines bands weigh a share of the
 /// copying too (or all of setup when nothing is copied). The value never goes back, and is flagged indeterminate while a
-/// step can't say how far along it is. The time left comes from the copy rate so far, and in the shaders band from the
-/// band's own pace.
+/// step can't say how far along it is. The time left comes from the copy rate so far, and in the shaders and pipelines bands from
+/// each band's own pace.
 /// </summary>
 internal sealed class OverallProgress
 {
     private const double CheckShare = 0.02;
     private const double ShaderShare = 0.08;
+    private const double PipelineShare = 0.03;
 
     private readonly bool _needDisc;
     private readonly bool _needTitleUpdate;
     private readonly bool _needShaders;
+    private readonly bool _needPipelines;
     private readonly double _discBytes;
     private readonly double _titleUpdateBytes;
     private readonly double _check;
     private readonly double _shaders;
+    private readonly double _pipelines;
     private readonly double _total;
     private readonly TimeProvider _time;
     private long _copyStart;
     private double _copyBaseline = -1;
     private double _copyDone;
-    private long _shaderStart;
-    private bool _shadersStarted;
+    private long _bandStart;
+    private SetupStep? _band;
     private bool _shadersDone;
+    private bool _pipelinesDone;
 
-    public OverallProgress(Preparation preparation, bool needDisc, bool needTitleUpdate, TimeProvider time, bool needShaders = false)
+    public OverallProgress(Preparation preparation, bool needDisc, bool needTitleUpdate, TimeProvider time, bool needShaders = false,
+        bool needPipelines = false)
     {
         _needDisc = needDisc;
         _needTitleUpdate = needTitleUpdate;
         _needShaders = needShaders;
+        _needPipelines = needPipelines;
         _discBytes = needDisc ? preparation.DiscBytes : 0;
         _titleUpdateBytes = needTitleUpdate ? preparation.TitleUpdateBytes : 0;
         _time = time;
         var copy = _discBytes + _titleUpdateBytes;
         _check = Math.Max(copy * CheckShare, 1);
         _shaders = needShaders ? Math.Max(copy * ShaderShare, 1) : 0;
-        _total = copy + Checks + _shaders;
+        _pipelines = needPipelines ? Math.Max(copy * PipelineShare, 1) : 0;
+        _total = copy + Checks + _shaders + _pipelines;
     }
 
     private double Checks => _check * ((_needDisc ? 1 : 0) + (_needTitleUpdate ? 1 : 0));
@@ -81,11 +88,17 @@ internal sealed class OverallProgress
                 break;
             case SetupStep.PreparingShaders:
                 position = Checks + _discBytes + _titleUpdateBytes + progress.Fraction * _shaders;
-                Shaders(progress.Fraction);
+                _shadersDone |= progress.Fraction >= 1;
+                Band(progress.Step, progress.Fraction);
+                break;
+            case SetupStep.PreparingPipelines:
+                position = Checks + _discBytes + _titleUpdateBytes + _shaders + progress.Fraction * _pipelines;
+                _pipelinesDone |= progress.Fraction >= 1;
+                Band(progress.Step, progress.Fraction);
                 break;
             default:
-                // The disc and Title Update 1 are done; with a shaders band still ahead, that is not the end of setup.
-                position = _needShaders && !_shadersDone ? _total - _shaders : _total;
+                // The disc and Title Update 1 are done; with a band still ahead, that is not the end of setup.
+                position = _total - (_needShaders && !_shadersDone ? _shaders : 0) - (_needPipelines && !_pipelinesDone ? _pipelines : 0);
                 IsIndeterminate = false;
                 TimeLeft = null;
                 break;
@@ -95,22 +108,20 @@ internal sealed class OverallProgress
 
     // The band reports its own fraction from the first moment, so it is determinate straight away; the time left
     // is its pace so far, shown once it has moved a little.
-    private void Shaders(double fraction)
+    private void Band(SetupStep step, double fraction)
     {
-        if (!_needShaders) return;
         IsIndeterminate = false;
-        _shadersDone |= fraction >= 1;
-        if (!_shadersStarted)
+        if (_band != step)
         {
-            _shadersStarted = true;
-            _shaderStart = _time.GetTimestamp();
+            _band = step;
+            _bandStart = _time.GetTimestamp();
         }
         if (fraction < 0.02)
         {
             TimeLeft = null;
             return;
         }
-        var elapsed = _time.GetElapsedTime(_shaderStart);
+        var elapsed = _time.GetElapsedTime(_bandStart);
         TimeLeft = TimeSpan.FromTicks((long)(elapsed.Ticks * ((1 - fraction) / fraction)));
     }
 

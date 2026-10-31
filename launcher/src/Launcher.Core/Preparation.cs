@@ -25,8 +25,8 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     /// </summary>
     public const long ShaderPackBytes = 256L << 20;
 
-    /// <summary>Head room kept free beyond the prepared files (logs, caches, saves) and the shader pack.</summary>
-    public const long SpareBytes = (512L << 20) + ShaderPackBytes;
+    /// <summary>Head room kept free beyond the prepared files (logs, caches, saves), the shader pack and the pipeline cache.</summary>
+    public const long SpareBytes = (512L << 20) + ShaderPackBytes + PipelinePreparation.StoreBytes;
 
     private const double Gigabyte = 1 << 30;
 

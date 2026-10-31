@@ -19,9 +19,10 @@ public enum SetupPhase
 /// <summary>
 /// The Launcher's first-run setup as a model with no UI: two rows ("1 Disc", "2 Title Update 1"), each
 /// holding the one file the player chose and the result of checking it, and how preparation went. Preparation ends
-/// with the shaders band (<see cref="ShaderPreparation"/>) when the flow has one: "set up" then means the disc,
-/// Title Update 1 and a usable shader pack. A shader step that fails does not stop Play: the game runs on Classic
-/// without a pack.
+/// with the shaders band (<see cref="ShaderPreparation"/>) and the pipelines band (<see cref="PipelinePreparation"/>)
+/// when the flow has them: "set up" then means the disc, Title Update 1, a usable shader pack and a pipeline store that
+/// is not stale. Neither step stops Play when it fails: without a pack the game runs on Classic, and without a store
+/// the pipelines build during play.
 /// A file is checked the moment it is chosen, and nothing is chosen for the player. The window only
 /// draws it. It asks only for the input the prepared files lack, so a setup that stopped part way resumes.
 /// </summary>
@@ -36,12 +37,15 @@ public sealed class SetupFlow
     private readonly Action<string>? _readDiscArt;
     private readonly Action<string>? _readPreparedArt;
     private readonly ShaderPreparation? _shaders;
+    private readonly PipelinePreparation? _pipelines;
     private readonly RowCheck _discCheck = new();
     private readonly RowCheck _titleUpdateCheck = new();
     private OverallProgress? _overall;
     private string? _stepLabel;
     private ShaderPackProblem _packProblem = ShaderPackProblem.None;
     private bool _stoppedAtShaders;
+    private PipelineRebuild _pipelineRebuild = PipelineRebuild.None;
+    private bool _repairPipelines;
 
     /// <param name="readDiscArt">
     /// Called with the disc image's path the moment the disc row accepts it, before the row reports
@@ -61,10 +65,11 @@ public sealed class SetupFlow
     /// <param name="shaders">
     /// The shader step that ends setup, or null for a flow without one (the disc and Title Update 1 alone are then
     /// "set up"). With it, prepared files that lack a usable shader pack are not done yet: the flow shows the setup page
-    /// until the pack is built (<see cref="WantsShaderRebuild"/> says when that needs no click).
+    /// until the pack is built (<see cref="WantsRebuild"/> says when that needs no click).
     /// </param>
     public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null,
-        Action<string>? readPreparedArt = null, string? refusal = null, ShaderPreparation? shaders = null)
+        Action<string>? readPreparedArt = null, string? refusal = null, ShaderPreparation? shaders = null,
+        PipelinePreparation? pipelines = null)
     {
         _preparation = preparation;
         _time = time ?? TimeProvider.System;
@@ -72,10 +77,12 @@ public sealed class SetupFlow
         _readDiscArt = readDiscArt;
         _readPreparedArt = readPreparedArt;
         _shaders = shaders;
+        _pipelines = pipelines;
         Prepared = refusal is null ? preparation.Existing() : null;
         _packProblem = PackProblem();
+        _pipelineRebuild = PipelineCheck();
         Phase = refusal is not null ? SetupPhase.Refused
-            : Prepared is null || _packProblem != ShaderPackProblem.None ? SetupPhase.NeedsInputs
+            : Prepared is null || _packProblem != ShaderPackProblem.None || _pipelineRebuild.Rebuilds() ? SetupPhase.NeedsInputs
             : SetupPhase.Ready;
         Message = refusal;
         Disc = Fresh(preparation.NeedsDisc);
@@ -100,18 +107,24 @@ public sealed class SetupFlow
     /// </summary>
     public string? ShaderFailure { get; private set; }
 
+    /// <summary>
+    /// Why the pipeline step failed on the last preparation, in the player's terms; null when it ran well or did not run.
+    /// A failure here does not stop Play: the pipelines build during play.
+    /// </summary>
+    public string? PipelineFailure { get; private set; }
+
     /// <summary>The shaders XenosRecomp cannot convert, left out of the pack on the last preparation (the game skips draws that need one).</summary>
     public IReadOnlyList<string> ShadersSkipped { get; private set; } = [];
 
     /// <summary>
     /// The prepared files are all there but the shader pack is missing, damaged or was built by another XenosRecomp patch
-    /// series: the window starts <see cref="PrepareAsync"/> by itself when it opens, so no click is needed. A missing pack
-    /// (a setup stopped at the shaders, or a step that failed last time) is tried once per start; if the step fails again,
-    /// the flow ends Ready with the failure shown, so Play is never lost to the shader step.
+    /// series, or the pipelines need a rebuild (<see cref="PipelinePreparation.Check"/>): the window starts
+    /// <see cref="PrepareAsync"/> by itself when it opens, so no click is needed. A step stopped or failed last time is
+    /// tried once per start; if it fails again, the flow ends Ready with the failure shown, so Play is never lost to it.
     /// </summary>
-    public bool WantsShaderRebuild =>
-        _shaders is not null && Phase == SetupPhase.NeedsInputs && Prepared is not null && CanPrepare
-        && _packProblem is ShaderPackProblem.Missing or ShaderPackProblem.Stale or ShaderPackProblem.Damaged;
+    public bool WantsRebuild =>
+        Phase == SetupPhase.NeedsInputs && Prepared is not null && CanPrepare
+        && (_shaders is not null && _packProblem != ShaderPackProblem.None || _pipelineRebuild.Rebuilds());
     public SetupProgress? Progress { get; private set; }
 
     /// <summary>One value for all of setup, 0 to 1, that never goes back.</summary>
@@ -143,7 +156,7 @@ public sealed class SetupFlow
     /// <summary>A stopped or failed setup left files that setup resumes from.</summary>
     public bool CanStartOver => Phase is not (SetupPhase.Preparing or SetupPhase.Ready or SetupPhase.Refused) && _preparation.HasPartial;
 
-    /// <summary>"Resume setup" while earlier files are waiting or a setup stopped at the shaders, else "Set up the game".</summary>
+    /// <summary>"Resume setup" while earlier files are waiting or a setup stopped at the shaders or pipelines, else "Set up the game".</summary>
     public string PrimaryLabel => CanStartOver || _stoppedAtShaders ? ResumeLabel : SetUpLabel;
 
     /// <summary>
@@ -229,12 +242,15 @@ public sealed class SetupFlow
         MessageDetails = null;
         Error = null;
         ShaderFailure = null;
+        PipelineFailure = null;
         ShadersSkipped = [];
         _stoppedAtShaders = false;
         Progress = null;
         _stepLabel = null;
         var shadersWanted = _shaders is not null && PackProblem() != ShaderPackProblem.None;
-        _overall = new OverallProgress(_preparation, Disc.Needed, TitleUpdate.Needed, _time, shadersWanted);
+        // A pack built now changes what the pipelines are built from, so the pipelines band follows it.
+        var pipelinesWanted = _pipelines is not null && (shadersWanted || PipelineCheck().Rebuilds());
+        _overall = new OverallProgress(_preparation, Disc.Needed, TitleUpdate.Needed, _time, shadersWanted, pipelinesWanted);
         Changed?.Invoke();
         var progress = new SyncProgress(report =>
         {
@@ -253,7 +269,16 @@ public sealed class SetupFlow
                 _stoppedAtShaders = true;
                 await Task.Run(() => RunShaders(prepared, progress, cancel), CancellationToken.None);
                 _stoppedAtShaders = false;
-                Message = ShaderFailure ?? (ShadersSkipped.Count > 0
+            }
+            if (pipelinesWanted && PipelineCheck().Rebuilds())
+            {
+                _stoppedAtShaders = true;
+                await RunPipelines(progress, cancel);
+                _stoppedAtShaders = false;
+            }
+            if (shadersWanted || pipelinesWanted)
+            {
+                Message = ShaderFailure ?? PipelineFailure ?? (ShadersSkipped.Count > 0
                     ? $"Set up. {ShadersSkipped.Count} shaders could not be converted and are left out of the shader pack; " +
                       "on the Native renderer, what they draw may be missing."
                     : null);
@@ -285,8 +310,79 @@ public sealed class SetupFlow
         _overall = null;
         Progress = null;
         _packProblem = PackProblem();
+        _pipelineRebuild = PipelineCheck();
         RefreshNeeded();
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// After a play session: when the game left shaders the pack lacks in the top-up folder (and did not convert them live),
+    /// the pack is built again with them, then the pipelines, with the progress bar. A shader is then converted live at most
+    /// once per install. A failure is shown like setup's and Play stays available; nothing happens otherwise.
+    /// </summary>
+    public async Task AddTopUpsAsync(CancellationToken cancel)
+    {
+        if (_shaders is null || Prepared is not { } prepared || Phase != SetupPhase.Ready ||
+            !_shaders.StatusOf(_preparation.ShaderCacheDirectory).AddsAfterSession)
+            return;
+        Phase = SetupPhase.Preparing;
+        Message = null;
+        MessageDetails = null;
+        ShaderFailure = null;
+        PipelineFailure = null;
+        ShadersSkipped = [];
+        _stepLabel = null;
+        _overall = new OverallProgress(_preparation, false, false, _time, needShaders: true, needPipelines: _pipelines is not null);
+        Changed?.Invoke();
+        var progress = new SyncProgress(report =>
+        {
+            Progress = report;
+            _stepLabel = StepLabel(report.Step);
+            _overall.Update(report);
+            Changed?.Invoke();
+        });
+        try
+        {
+            await Task.Run(() => RunShaders(prepared, progress, cancel), CancellationToken.None);
+            if (_pipelines is not null && PipelineCheck().Rebuilds()) await RunPipelines(progress, cancel);
+        }
+        catch (OperationCanceledException)
+        {
+            // The top-ups stay in their folder; the next session's end tries again.
+        }
+        Message = ShaderFailure ?? PipelineFailure;
+        Phase = SetupPhase.Ready;
+        _overall = null;
+        Progress = null;
+        _packProblem = PackProblem();
+        _pipelineRebuild = PipelineCheck();
+        Changed?.Invoke();
+    }
+
+    private PipelineRebuild PipelineCheck() =>
+        _pipelines?.Check(PackProblem() == ShaderPackProblem.None, _repairPipelines) ?? PipelineRebuild.None;
+
+    // The pipeline step, as one band of the overall progress. A failure is shown (PipelineFailure) and never throws; a cancel
+    // is the setup's own cancel.
+    private async Task RunPipelines(IProgress<SetupProgress> progress, CancellationToken cancel)
+    {
+        const long Scale = 1000;
+        void Report(double fraction) =>
+            progress.Report(new SetupProgress(SetupStep.PreparingPipelines, (long)(Math.Clamp(fraction, 0, 1) * Scale), Scale, null, null));
+        Report(0);
+        var result = await Task.Run(() => _pipelines!.RunAsync(new ProgressRelay<PipelineProgress>(report => Report(report.Fraction)), cancel),
+            CancellationToken.None);
+        if (result.Usable)
+        {
+            _repairPipelines = false;
+            if (result.Outcome == PipelineOutcome.Partial) _log?.Invoke("Pipelines: " + result.Message);
+        }
+        else
+        {
+            PipelineFailure = result.Message + " Play still starts the game; the pipelines build while it runs.";
+            _log?.Invoke("Pipeline step failed: " + result.Message);
+        }
+        Report(1);
     }
 
     private ShaderPackProblem PackProblem() =>
@@ -322,8 +418,8 @@ public sealed class SetupFlow
     }
 
     /// <summary>
-    /// Throws away the shader pack so the next preparation builds it again (the Launcher's Repair). The flow goes back to
-    /// the setup page with <see cref="WantsShaderRebuild"/> set, so the window rebuilds without a click.
+    /// Throws away the shader pack and the pipeline record so the next preparation builds both again (the Launcher's
+    /// Repair). The flow goes back to the setup page with <see cref="WantsRebuild"/> set, so the window rebuilds without a click.
     /// Does nothing without a shader step, without prepared files or while setup runs.
     /// </summary>
     public void Repair()
@@ -337,11 +433,15 @@ public sealed class SetupFlow
         {
             _log?.Invoke("Repair: could not remove the shader pack: " + problem.Message);
         }
+        _pipelines?.Forget();
+        _repairPipelines = _pipelines is not null;
         _packProblem = ShaderPackProblem.Damaged;
+        _pipelineRebuild = PipelineCheck();
         Phase = SetupPhase.NeedsInputs;
         Message = null;
         MessageDetails = null;
         ShaderFailure = null;
+        PipelineFailure = null;
         Changed?.Invoke();
     }
 
@@ -431,6 +531,7 @@ public sealed class SetupFlow
         SetupStep.Extracting => "Extracting the disc",
         SetupStep.UnpackingTitleUpdate => "Unpacking Title Update 1",
         SetupStep.PreparingShaders => "Preparing shaders",
+        SetupStep.PreparingPipelines => "Preparing pipelines",
         _ => "Done",
     };
 

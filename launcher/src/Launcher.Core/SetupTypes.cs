@@ -76,6 +76,8 @@ public enum SetupStep
     UnpackingTitleUpdate,
     /// <summary>Reading, converting and packing the game's shaders (<see cref="ShaderPreparation"/>); the fraction is the step's own.</summary>
     PreparingShaders,
+    /// <summary>The game's prepare-pipelines mode (<see cref="PipelinePreparation"/>); the fraction is the step's own.</summary>
+    PreparingPipelines,
     /// <summary>Copying the prepared folders to a new place (<see cref="Preparation.Move"/>).</summary>
     MovingFiles,
     Done,

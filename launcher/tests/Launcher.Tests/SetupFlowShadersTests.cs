@@ -149,19 +149,19 @@ public sealed class SetupFlowShadersTests : IDisposable
     public async Task A_pack_from_another_converter_or_a_missing_one_is_rebuilt_without_a_click()
     {
         await (await Chosen()).PrepareAsync(Token);
-        Assert.False(Flow().WantsShaderRebuild);
+        Assert.False(Flow().WantsRebuild);
 
         var stale = Flow(ConverterId + 1);
 
         Assert.Equal(SetupPhase.NeedsInputs, stale.Phase);
-        Assert.True(stale.WantsShaderRebuild);
+        Assert.True(stale.WantsRebuild);
         await stale.PrepareAsync(Token);
         Assert.Equal(SetupPhase.Ready, stale.Phase);
         Assert.True(ShaderPackFile.Check(PackPath, ConverterId + 1).Ready);
-        Assert.False(stale.WantsShaderRebuild);
+        Assert.False(stale.WantsRebuild);
 
         File.Delete(PackPath);
-        Assert.True(Flow().WantsShaderRebuild);
+        Assert.True(Flow().WantsRebuild);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public sealed class SetupFlowShadersTests : IDisposable
         await (await Chosen()).PrepareAsync(Token);
 
         var restarted = Flow();
-        Assert.True(restarted.WantsShaderRebuild);
+        Assert.True(restarted.WantsRebuild);
         await restarted.PrepareAsync(Token);
 
         Assert.Equal(SetupPhase.Ready, restarted.Phase);
@@ -189,7 +189,7 @@ public sealed class SetupFlowShadersTests : IDisposable
 
         Assert.False(File.Exists(PackPath));
         Assert.Equal(SetupPhase.NeedsInputs, flow.Phase);
-        Assert.True(flow.WantsShaderRebuild);
+        Assert.True(flow.WantsRebuild);
         await flow.PrepareAsync(Token);
         Assert.Equal(SetupPhase.Ready, flow.Phase);
         Assert.True(ShaderPackFile.Check(PackPath, ConverterId).Ready);
@@ -208,6 +208,106 @@ public sealed class SetupFlowShadersTests : IDisposable
         Assert.Contains("disk space", flow.ShaderFailure);
         Assert.Equal(SetupPhase.Ready, flow.Phase);
         Assert.False(File.Exists(PackPath));
+    }
+
+    private SetupFlow FlowWithPipelines(FakePipelineRunner runner) =>
+        new(Preparation(), _time, shaders: new ShaderPreparation(_converter, ConverterId),
+            pipelines: new PipelinePreparation(Path.Combine(_root, "topspin4.exe"), Preparation(), runner));
+
+    [Fact]
+    public async Task The_pipelines_band_follows_the_shaders_band_and_ends_setup()
+    {
+        var runner = new FakePipelineRunner();
+        var flow = await Chosen(FlowWithPipelines(runner));
+        var steps = new List<SetupStep>();
+        var texts = new List<string>();
+        var fractions = new List<double>();
+        flow.Changed += () =>
+        {
+            if (flow.Phase != SetupPhase.Preparing) return;
+            if (flow.Progress is { } progress && (steps.Count == 0 || steps[^1] != progress.Step)) steps.Add(progress.Step);
+            texts.Add(flow.ProgressText);
+            fractions.Add(flow.ProgressFraction);
+        };
+
+        await flow.PrepareAsync(Token);
+
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        Assert.Equal(1, runner.Runs);
+        Assert.True(steps.IndexOf(SetupStep.PreparingShaders) < steps.IndexOf(SetupStep.PreparingPipelines));
+        Assert.Contains(texts, text => text.StartsWith("Preparing pipelines"));
+        Assert.Equal(fractions.Order(), fractions);
+        Assert.False(FlowWithPipelines(runner).WantsRebuild);
+    }
+
+    [Fact]
+    public async Task A_setup_stopped_at_the_pipelines_resumes_there_without_converting_again()
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var runner = new FakePipelineRunner { CancelOnStart = stop };
+        var flow = await Chosen(FlowWithPipelines(runner));
+
+        await flow.PrepareAsync(stop.Token);
+
+        Assert.Equal(SetupPhase.NeedsInputs, flow.Phase);
+        Assert.Equal(SetupFlow.ResumeLabel, flow.PrimaryLabel);
+        Assert.True(ShaderPackFile.Check(PackPath, ConverterId).Ready);
+        var packWritten = File.GetLastWriteTimeUtc(PackPath);
+
+        runner.CancelOnStart = null;
+        var restarted = FlowWithPipelines(runner);
+        Assert.True(restarted.WantsRebuild);
+        await restarted.PrepareAsync(Token);
+
+        Assert.Equal(SetupPhase.Ready, restarted.Phase);
+        Assert.Equal(2, runner.Runs);
+        Assert.Equal(packWritten, File.GetLastWriteTimeUtc(PackPath));
+    }
+
+    [Fact]
+    public async Task After_a_session_the_shaders_the_game_met_join_the_pack_and_the_pipelines_follow()
+    {
+        var runner = new FakePipelineRunner();
+        var flow = await Chosen(FlowWithPipelines(runner));
+        await flow.PrepareAsync(Token);
+        await flow.AddTopUpsAsync(Token);
+        Assert.Equal(1, runner.Runs);
+
+        var topUps = Path.Combine(Cache, "cache", ShaderPreparation.TopUpFolderName);
+        Directory.CreateDirectory(topUps);
+        var met = TestArc.Container(vertex: false, 2, seed: 7);
+        File.WriteAllBytes(Path.Combine(topUps, ShaderContainer.Of(met).Name + ".bin"), met);
+        var steps = new List<SetupStep>();
+        flow.Changed += () =>
+        {
+            if (flow.Progress is { } progress && (steps.Count == 0 || steps[^1] != progress.Step)) steps.Add(progress.Step);
+        };
+
+        await flow.AddTopUpsAsync(Token);
+
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        Assert.Equal([SetupStep.PreparingShaders, SetupStep.PreparingPipelines], steps);
+        Assert.Empty(Directory.EnumerateFiles(topUps));
+        Assert.Equal(2, runner.Runs);
+        Assert.False(FlowWithPipelines(runner).WantsRebuild);
+    }
+
+    [Fact]
+    public async Task A_failed_pipeline_step_is_shown_and_Play_stays_available()
+    {
+        var runner = new FakePipelineRunner
+        {
+            Lines = ["topspin4-prepare-pipelines 1", "result status=failed reason=vulkan_setup ms=40"],
+            ExitCode = 2,
+        };
+        var flow = await Chosen(FlowWithPipelines(runner));
+
+        await flow.PrepareAsync(Token);
+
+        Assert.Equal(SetupPhase.Ready, flow.Phase);
+        Assert.Contains("Vulkan", flow.PipelineFailure);
+        Assert.Equal(flow.PipelineFailure, flow.Message);
+        Assert.Equal(LauncherPage.Home, new LauncherShell(flow).Page);
     }
 
     [Fact]

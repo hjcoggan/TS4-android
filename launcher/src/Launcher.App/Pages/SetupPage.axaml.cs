@@ -57,12 +57,17 @@ public partial class SetupPage : UserControl
     }
 
     /// <summary>Runs setup from the flow's state (the button does; the window does too for a shader pack that went stale).</summary>
-    public async Task PrepareAsync()
+    public Task PrepareAsync() => RunAsync(_flow.PrepareAsync);
+
+    /// <summary>After a play session: adds the shaders the game met to the pack, with the same Stop button.</summary>
+    public Task AddTopUpsAsync() => RunAsync(_flow.AddTopUpsAsync);
+
+    private async Task RunAsync(Func<CancellationToken, Task> step)
     {
         _stop = new CancellationTokenSource();
         try
         {
-            await _flow.PrepareAsync(_stop.Token);
+            await step(_stop.Token);
         }
         finally
         {
