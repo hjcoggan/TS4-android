@@ -78,7 +78,8 @@ endforeach()
 
 # The sink both sides link (src/d3d/sink.h); it sits next to the exe, as the Module DLLs do.
 # It also carries the OPTIONS row's sink (src/settings/options_row_sink.h).
-add_library(topspin4_d3d_sink SHARED src/d3d/sink.cpp src/settings/options_row_sink.cpp)
+add_library(topspin4_d3d_sink SHARED src/d3d/sink.cpp src/settings/options_row_sink.cpp
+    src/load_flash_sink.cpp)
 target_compile_definitions(topspin4_d3d_sink PRIVATE TOPSPIN4_D3D_SINK_BUILD)
 target_include_directories(topspin4_d3d_sink PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src" "${TOPSPIN4_D3D_GENERATED}")
@@ -100,4 +101,6 @@ endif()
 # The OPTIONS row's hooks (ticket 11) override three Swing functions.
 if(TARGET topspin4_Swing_DLL)
     target_sources(topspin4_Swing_DLL PRIVATE src/settings/options_row_hooks.cpp)
+    # The load flash fix's hooks (src/load_flash.h).
+    target_sources(topspin4_Swing_DLL PRIVATE src/load_flash_hooks.cpp)
 endif()

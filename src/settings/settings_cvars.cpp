@@ -33,6 +33,13 @@ REXCVAR_DEFINE_STRING(ts4_sharpening, "off", "TopSpin4",
                       "Sharpening (CAS): off, low, medium or high")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
+// Fixes of the original game's own glitches (load_flash.h), off by default: the original bugs
+// are kept unless the player asks.
+REXCVAR_DEFINE_BOOL(ts4_fix_glitches, false, "TopSpin4",
+                    "Fix original glitches: hold the loading screen over the white flash before "
+                    "a new scene draws")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+
 // Controller remapping (ticket 24, pad_bindings.h): the physical input that drives each input
 // the game sees. Read when the input system is built (remapped_input.cpp).
 #define TS4_PAD_BINDING(input)                                                                 \

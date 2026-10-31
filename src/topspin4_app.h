@@ -20,6 +20,7 @@
 #include "developer_build.h"
 #include "fault_log.h"
 #include "frame_dumps.h"
+#include "load_flash.h"
 #include "native/native_renderer.h"
 #include "online_unavailable.h"
 #include "remapped_input.h"
@@ -237,6 +238,7 @@ class TopSpin4App : public rex::ReXApp {
     rex::system::host_gpu_loss::SetHandler(&topspin4::native::OnHostGpuLoss);
     topspin4::native::Configure(runtime());
     topspin4::d3d::InstallHost(runtime()->cache_root());
+    topspin4::load_flash::InstallHost();
     topspin4::frame_dumps::SetSessionEnd([]() -> std::string {
       topspin4::d3d::OnSessionEnd();
       return "\"renderer\": " + topspin4::native::ReportJson() + ",\n " +

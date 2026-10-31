@@ -38,7 +38,7 @@ PS3, Wii, macOS, D3D12, the base (pre-TU1) build, loading new guest code from DL
 
 - **Roles:** Claude does research, RE, manifest and seed work, hooks, and runtime and renderer code. The owner makes the final calls on gameplay feel, tests on hardware and Steam Deck, and accepts milestones.
 - **Done means verified:** every change passes the scripted smoke run (launch, reach a target screen, capture screenshots and logs, exit), and its visuals are compared with Oracle captures from the same point. The owner play-tests at each milestone.
-- **Oracle:** Xenia Edge on the Reference build, with Canary as a second opinion. Original bugs are kept.
+- **Oracle:** Xenia Edge on the Reference build, with Canary as a second opinion. Original bugs are kept; the owner may pick some to fix behind the Fix original glitches setting, off by default (the white flash after a loading screen, `src/load_flash.h`).
 - **Repository:** contains no game data or generated code (ADR-0006). Upstream tools are fetched by `scripts/bootstrap.ps1` at pinned versions, and our changes to them live as numbered files in `patches/`.
 - **Commits:** Claude commits small, verified steps to `main` without asking. Pushing, and anything else outward-facing, needs the owner's OK. The repo stays private on GitHub until M2, then goes public.
 - **Issues:** local markdown under `.scratch/` ([issue-tracker.md](agents/issue-tracker.md)).

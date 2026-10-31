@@ -186,6 +186,10 @@ inline const std::vector<Setting>& PlayerSettings() {
        "Sharpening: off, or CAS (contrast-adaptive sharpening) of the final image at low, "
        "medium or high strength",
        Section::kGraphics, "Sharpening", 50},
+      {"ts4_fix_glitches", Setting::Kind::kBool, "false", {},
+       "Fix original glitches: glitches the original game has too, fixed (the white flash "
+       "after a loading screen, before the new scene draws). Off keeps the original",
+       Section::kGraphics, "Fix original glitches", 60},
       {"mnk_mode", Setting::Kind::kBool, "false", {},
        "Play with keyboard and mouse, as a controller of their own",
        Section::kControls, "Keyboard and mouse", 10},
