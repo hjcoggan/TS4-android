@@ -1,0 +1,57 @@
+diff --git a/XenosRecomp/main.cpp b/XenosRecomp/main.cpp
+index 754198c..fdf1f25 100644
+--- a/XenosRecomp/main.cpp
++++ b/XenosRecomp/main.cpp
+@@ -160,6 +160,9 @@ int main(int argc, char** argv)
+                 recompiler.recompile(shader.data, include);
+ 
+                 shader.specConstantsMask = recompiler.specConstantsMask;
++                if (recompiler.unboundVertexFetches != 0)
++                    fmt::println("Note: hash=0x{:016X} has {} vertex fetches with no vertex element; they read 0",
++                        hash, recompiler.unboundVertexFetches);
+ 
+                 if (!hlslDumpDir.empty())
+                 {
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index 9800cd4..ca1bc35 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -231,7 +231,24 @@ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t a
+     out += " = ";
+ 
+     auto findResult = vertexElements.find(address);
+-    assert(findResult != vertexElements.end());
++    if (findResult == vertexElements.end())
++    {
++        // A fetch the container lists no vertex element for: Top Spin 4's Module shaders fetch
++        // explicitly from a stream (fetch constant 95) with no declaration at all. No input names
++        // it, and the Native renderer binds inputs only from the elements, so it reads 0 (with the
++        // instruction's own 0/1 components). The end iterator's element was read before: garbage
++        // usage, an undeclared input, and at times a crash.
++        ++unboundVertexFetches;
++        out += "0.0; // vfetch with no vertex element\n";
++        printDstSwizzle01(instr.dstRegister, instr.dstSwizzle);
++        if (instr.isPredicated)
++        {
++            --indentation;
++            indent();
++            out += "}\n";
++        }
++        return;
++    }
+ 
+ #ifdef REBLUE_RECOMP
+     // Wrap each 16-bit-packed semantic in swapFloats() (per-usage mask); TEXCOORD also runs sintTexcoord() for raw-int bindings.
+diff --git a/XenosRecomp/shader_recompiler.h b/XenosRecomp/shader_recompiler.h
+index 072cf17..3a1a353 100644
+--- a/XenosRecomp/shader_recompiler.h
++++ b/XenosRecomp/shader_recompiler.h
+@@ -29,6 +29,8 @@ struct ShaderRecompiler : StringBuffer
+     bool hasCoverageOutput = false;
+     const uint8_t* constantTableData = nullptr;
+     std::unordered_map<uint32_t, VertexElement> vertexElements;
++    // Vertex fetches with no element in the container (they read 0, see recompile(VertexFetchInstruction)).
++    uint32_t unboundVertexFetches = 0;
+     std::unordered_map<uint32_t, std::string> interpolators;
+     std::unordered_map<uint32_t, const ConstantInfo*> float4Constants;
+     std::unordered_map<uint32_t, const char*> boolConstants;
