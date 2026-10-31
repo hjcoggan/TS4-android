@@ -93,26 +93,51 @@ std::string RunConverter(const live_topup::Converter& converter, const fs::path&
   SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
   const HANDLE log = CreateFileW((output / "run.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                  &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-  STARTUPINFOW startup = {sizeof(startup)};
-  startup.dwFlags = STARTF_USESTDHANDLES;
-  startup.hStdOutput = log;
-  startup.hStdError = log;
-  startup.hStdInput = nullptr;
+  STARTUPINFOEXW startup = {};
+  startup.StartupInfo.cb = sizeof(startup);
+  startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  startup.StartupInfo.hStdOutput = log;
+  startup.StartupInfo.hStdError = log;
+  startup.StartupInfo.hStdInput = nullptr;
+  // The process starts inside the job (it ends with the game), and only the log handle is
+  // inherited. It used to start suspended, join the job, then resume: the pattern of process
+  // injection, which Windows Defender's behaviour model took for a trojan
+  // (Trojan:Win32/Bearfoos.B!ml) and so deleted XenosRecomp.
+  HANDLE job = S().job;
+  HANDLE inherited[] = {log};
+  SIZE_T attributes_size = 0;
+  InitializeProcThreadAttributeList(nullptr, 2, 0, &attributes_size);
+  std::vector<uint8_t> attributes(attributes_size);
+  auto* list = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+  bool have_list = InitializeProcThreadAttributeList(list, 2, 0, &attributes_size);
+  if (have_list && job) {
+    have_list = UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST, &job,
+                                          sizeof(job), nullptr, nullptr);
+  }
+  if (have_list && log != INVALID_HANDLE_VALUE) {
+    have_list = UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited,
+                                          sizeof(inherited), nullptr, nullptr);
+  }
+  startup.lpAttributeList = have_list ? list : nullptr;
   PROCESS_INFORMATION process = {};
   const fs::path directory = converter.executable.parent_path();
-  const BOOL started = CreateProcessW(converter.executable.c_str(), command.data(), nullptr,
-                                      nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
-                                      nullptr, directory.c_str(), &startup, &process);
+  const BOOL started = CreateProcessW(
+      converter.executable.c_str(), command.data(), nullptr, nullptr, TRUE,
+      CREATE_NO_WINDOW | (have_list ? EXTENDED_STARTUPINFO_PRESENT : 0), nullptr,
+      directory.c_str(), &startup.StartupInfo, &process);
+  const DWORD start_error = GetLastError();
+  if (have_list) {
+    DeleteProcThreadAttributeList(list);
+  }
   if (log != INVALID_HANDLE_VALUE) {
     CloseHandle(log);
   }
   if (!started) {
-    return "XenosRecomp did not start (error " + std::to_string(GetLastError()) + ")";
+    return "XenosRecomp did not start (error " + std::to_string(start_error) + ")";
   }
-  if (S().job) {
-    AssignProcessToJobObject(S().job, process.hProcess);
+  if (job && !have_list) {
+    AssignProcessToJobObject(job, process.hProcess);
   }
-  ResumeThread(process.hThread);
   CloseHandle(process.hThread);
   std::string why;
   if (WaitForSingleObject(process.hProcess, kTimeoutMs) != WAIT_OBJECT_0) {
