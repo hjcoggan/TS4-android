@@ -22,6 +22,14 @@ public sealed class DiscArtDamageTests : IDisposable
             return disc.Files.TryGetValue(path, out var bytes) ? bytes : null;
         }
 
+        public Stream? Open(string path)
+        {
+            if (failures.TryGetValue(path, out var failure)) throw failure;
+            return disc.Files.TryGetValue(path, out var bytes) ? new MemoryStream(bytes, writable: false) : null;
+        }
+
+        public IReadOnlyList<string> TopLevelFiles() => [.. disc.Files.Keys.Where(path => !path.Contains('/'))];
+
         public void Dispose()
         {
         }

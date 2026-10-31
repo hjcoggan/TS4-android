@@ -125,6 +125,7 @@ public static class DiscArt
         ReadNxeArt(disc, images, Problem);
         ReadPressStart(disc, images, Problem);
         var module = ReadModule(disc, images, collections, Problem);
+        ReadArchives(disc, collections, Problem);
         // An index is written for a read that logged nothing; a read with a problem is tried again next time (DiscArtFolder.IsComplete).
         var clean = problems.Count == 0;
         try
@@ -216,6 +217,23 @@ public static class DiscArt
         catch (Exception error)
         {
             problem($"{Module}: the achievements could not be read: {error.Message}");
+        }
+    }
+
+    // Global.arc: the players' and venues' pictures, decoded from the game's own textures.
+    private static void ReadArchives(IDiscFileSource disc, Dictionary<DiscArtCollection, IReadOnlyList<DiscArtItem>> collections, Action<string> problem)
+    {
+        try
+        {
+            using var archive = disc.Open(ArchiveArt.Archive);
+            if (archive is null) return;
+            var (players, venues) = ArchiveArt.Read(archive, ArchiveArt.Roster(disc.TopLevelFiles()), problem);
+            if (players.Count > 0) collections[DiscArtCollection.Players] = players;
+            if (venues.Count > 0) collections[DiscArtCollection.Venues] = venues;
+        }
+        catch (Exception error)
+        {
+            problem($"{ArchiveArt.Archive} is damaged: {error.Message}");
         }
     }
 

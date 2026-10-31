@@ -32,7 +32,7 @@ public sealed class DiscArtFolder
     private const string ReadComplete = "complete";
     private const string FormatKey = "format";
     // Raised when the Launcher reads more from the disc than before, so an older folder counts as incomplete and is read again.
-    private const string Format = "2";
+    private const string Format = "3";
     private static readonly string[] Extensions = [".png", ".jpg"];
 
     /// <summary>

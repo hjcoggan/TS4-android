@@ -94,6 +94,53 @@ public sealed class XdvdfsImage : IDisposable
         }
     }
 
+    /// <summary>
+    /// A read-only stream over one file, for reading parts of a large file. It reads at its own positions, so it does not
+    /// disturb other reads of the image; it lives no longer than the image.
+    /// </summary>
+    public Stream OpenRead(DiscFile file) => new WindowStream(_stream.SafeFileHandle, file.Offset, file.Size);
+
+    private sealed class WindowStream(Microsoft.Win32.SafeHandles.SafeFileHandle handle, long start, long length) : Stream
+    {
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => _position;
+            set => _position = value is >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            var count = (int)Math.Min(buffer.Length, Math.Max(0, length - _position));
+            if (count == 0) return 0;
+            var read = RandomAccess.Read(handle, buffer[..count], start + _position);
+            _position += read;
+            return read;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => Position = origin switch
+        {
+            SeekOrigin.Begin => offset,
+            SeekOrigin.Current => _position + offset,
+            _ => length + offset,
+        };
+
+        public override void Flush()
+        {
+        }
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     /// <summary>The first <paramref name="count"/> bytes of a file, or all of a smaller one.</summary>
     public byte[] ReadStart(DiscFile file, int count) => Read(file.Offset, (int)Math.Min(count, file.Size));
 
