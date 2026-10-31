@@ -18,7 +18,10 @@ public enum SetupPhase
 
 /// <summary>
 /// The Launcher's first-run setup as a model with no UI: two rows ("1 Disc", "2 Title Update 1"), each
-/// holding the one file the player chose and the result of checking it, and how preparation went.
+/// holding the one file the player chose and the result of checking it, and how preparation went. Preparation ends
+/// with the shaders band (<see cref="ShaderPreparation"/>) when the flow has one: "set up" then means the disc,
+/// Title Update 1 and a usable shader pack. A shader step that fails does not stop Play: the game runs on Classic
+/// without a pack.
 /// A file is checked the moment it is chosen, and nothing is chosen for the player. The window only
 /// draws it. It asks only for the input the prepared files lack, so a setup that stopped part way resumes.
 /// </summary>
@@ -32,10 +35,13 @@ public sealed class SetupFlow
     private readonly Action<string>? _log;
     private readonly Action<string>? _readDiscArt;
     private readonly Action<string>? _readPreparedArt;
+    private readonly ShaderPreparation? _shaders;
     private readonly RowCheck _discCheck = new();
     private readonly RowCheck _titleUpdateCheck = new();
     private OverallProgress? _overall;
     private string? _stepLabel;
+    private ShaderPackProblem _packProblem = ShaderPackProblem.None;
+    private bool _stoppedAtShaders;
 
     /// <param name="readDiscArt">
     /// Called with the disc image's path the moment the disc row accepts it, before the row reports
@@ -52,16 +58,25 @@ public sealed class SetupFlow
     /// stays <see cref="SetupPhase.Refused"/> with this as its message: setup is disabled and the setup page
     /// shows, even when the prepared files are there.
     /// </param>
+    /// <param name="shaders">
+    /// The shader step that ends setup, or null for a flow without one (the disc and Title Update 1 alone are then
+    /// "set up"). With it, prepared files that lack a usable shader pack are not done yet: the flow shows the setup page
+    /// until the pack is built (<see cref="WantsShaderRebuild"/> says when that needs no click).
+    /// </param>
     public SetupFlow(Preparation preparation, TimeProvider? time = null, Action<string>? log = null, Action<string>? readDiscArt = null,
-        Action<string>? readPreparedArt = null, string? refusal = null)
+        Action<string>? readPreparedArt = null, string? refusal = null, ShaderPreparation? shaders = null)
     {
         _preparation = preparation;
         _time = time ?? TimeProvider.System;
         _log = log;
         _readDiscArt = readDiscArt;
         _readPreparedArt = readPreparedArt;
+        _shaders = shaders;
         Prepared = refusal is null ? preparation.Existing() : null;
-        Phase = refusal is not null ? SetupPhase.Refused : Prepared is null ? SetupPhase.NeedsInputs : SetupPhase.Ready;
+        _packProblem = PackProblem();
+        Phase = refusal is not null ? SetupPhase.Refused
+            : Prepared is null || _packProblem != ShaderPackProblem.None ? SetupPhase.NeedsInputs
+            : SetupPhase.Ready;
         Message = refusal;
         Disc = Fresh(preparation.NeedsDisc);
         TitleUpdate = Fresh(preparation.NeedsTitleUpdate);
@@ -78,6 +93,25 @@ public sealed class SetupFlow
     /// <summary>The technical text behind <see cref="Message"/>, shown only behind "Details".</summary>
     public string? MessageDetails { get; private set; }
     public SetupError? Error { get; private set; }
+
+    /// <summary>
+    /// Why the shader step failed on the last preparation, in the player's terms (it also says Play still starts the game on Classic);
+    /// null when it ran well or did not run. A failure here does not stop Play.
+    /// </summary>
+    public string? ShaderFailure { get; private set; }
+
+    /// <summary>The shaders XenosRecomp cannot convert, left out of the pack on the last preparation (the game skips draws that need one).</summary>
+    public IReadOnlyList<string> ShadersSkipped { get; private set; } = [];
+
+    /// <summary>
+    /// The prepared files are all there but the shader pack is missing, damaged or was built by another XenosRecomp patch
+    /// series: the window starts <see cref="PrepareAsync"/> by itself when it opens, so no click is needed. A missing pack
+    /// (a setup stopped at the shaders, or a step that failed last time) is tried once per start; if the step fails again,
+    /// the flow ends Ready with the failure shown, so Play is never lost to the shader step.
+    /// </summary>
+    public bool WantsShaderRebuild =>
+        _shaders is not null && Phase == SetupPhase.NeedsInputs && Prepared is not null && CanPrepare
+        && _packProblem is ShaderPackProblem.Missing or ShaderPackProblem.Stale or ShaderPackProblem.Damaged;
     public SetupProgress? Progress { get; private set; }
 
     /// <summary>One value for all of setup, 0 to 1, that never goes back.</summary>
@@ -109,8 +143,8 @@ public sealed class SetupFlow
     /// <summary>A stopped or failed setup left files that setup resumes from.</summary>
     public bool CanStartOver => Phase is not (SetupPhase.Preparing or SetupPhase.Ready or SetupPhase.Refused) && _preparation.HasPartial;
 
-    /// <summary>"Resume setup" while earlier files are waiting, else "Set up the game".</summary>
-    public string PrimaryLabel => CanStartOver ? ResumeLabel : SetUpLabel;
+    /// <summary>"Resume setup" while earlier files are waiting or a setup stopped at the shaders, else "Set up the game".</summary>
+    public string PrimaryLabel => CanStartOver || _stoppedAtShaders ? ResumeLabel : SetUpLabel;
 
     /// <summary>
     /// Setup is running, so the rows can't be changed. A file that is only being checked does not
@@ -194,9 +228,13 @@ public sealed class SetupFlow
         Message = null;
         MessageDetails = null;
         Error = null;
+        ShaderFailure = null;
+        ShadersSkipped = [];
+        _stoppedAtShaders = false;
         Progress = null;
         _stepLabel = null;
-        _overall = new OverallProgress(_preparation, Disc.Needed, TitleUpdate.Needed, _time);
+        var shadersWanted = _shaders is not null && PackProblem() != ShaderPackProblem.None;
+        _overall = new OverallProgress(_preparation, Disc.Needed, TitleUpdate.Needed, _time, shadersWanted);
         Changed?.Invoke();
         var progress = new SyncProgress(report =>
         {
@@ -207,7 +245,19 @@ public sealed class SetupFlow
         });
         try
         {
-            Prepared = await Task.Run(() => _preparation.Prepare(Disc.Path, TitleUpdate.Path, progress, cancel), CancellationToken.None);
+            var prepared = await Task.Run(() => _preparation.Prepare(Disc.Path, TitleUpdate.Path, progress, cancel), CancellationToken.None);
+            Prepared = prepared;
+            if (shadersWanted)
+            {
+                // Stopping here keeps the disc and Title Update 1; resuming starts at the shaders.
+                _stoppedAtShaders = true;
+                await Task.Run(() => RunShaders(prepared, progress, cancel), CancellationToken.None);
+                _stoppedAtShaders = false;
+                Message = ShaderFailure ?? (ShadersSkipped.Count > 0
+                    ? $"Set up. {ShadersSkipped.Count} shaders could not be converted and are left out of the shader pack; " +
+                      "on the Native renderer, what they draw may be missing."
+                    : null);
+            }
             Phase = SetupPhase.Ready;
             await Task.Run(RefreshArt, CancellationToken.None);
         }
@@ -234,7 +284,64 @@ public sealed class SetupFlow
         }
         _overall = null;
         Progress = null;
+        _packProblem = PackProblem();
         RefreshNeeded();
+        Changed?.Invoke();
+    }
+
+    private ShaderPackProblem PackProblem() =>
+        _shaders is null ? ShaderPackProblem.None : _shaders.StatusOf(_preparation.ShaderCacheDirectory).Pack.Problem;
+
+    // The shader step, as one band of the overall progress. A failure is shown (ShaderFailure) and never throws: the files are
+    // set up, and without a pack the game runs on Classic. A cancel is the setup's own cancel.
+    private void RunShaders(PreparedData prepared, IProgress<SetupProgress> progress, CancellationToken cancel)
+    {
+        const long Scale = 1000;
+        void Report(double fraction) =>
+            progress.Report(new SetupProgress(SetupStep.PreparingShaders, (long)(Math.Clamp(fraction, 0, 1) * Scale), Scale, null, null));
+        Report(0);
+        try
+        {
+            if (_preparation.FreeBytes < Preparation.ShaderPackBytes)
+                throw new ShaderPreparationException(ShaderPreparation.Failed(
+                    $"there is not enough disk space for the shader pack: it needs about {Preparation.ShaderPackBytes >> 20} MB free on " +
+                    $"{Path.GetPathRoot(_preparation.ShaderCacheDirectory)}. Free some space, then set up again"));
+            var result = _shaders!.Run(prepared.GameDataRoot, _preparation.ShaderCacheDirectory,
+                new ProgressRelay<ShaderProgress>(report => Report(report.Fraction)), cancel);
+            ShadersSkipped = result.Skipped;
+            if (result.Skipped.Count > 0)
+                _log?.Invoke($"Shaders: the pack holds {result.Converted}; XenosRecomp cannot convert {result.Skipped.Count}: {string.Join(", ", result.Skipped)}");
+        }
+        catch (ShaderPreparationException problem)
+        {
+            ShaderFailure = problem.Message;
+            MessageDetails = problem.InnerException?.Message;
+            _log?.Invoke("Shader step failed: " + problem.Message + (problem.InnerException is { } inner ? " " + inner.Message : ""));
+        }
+        Report(1);
+    }
+
+    /// <summary>
+    /// Throws away the shader pack so the next preparation builds it again (the Launcher's Repair). The flow goes back to
+    /// the setup page with <see cref="WantsShaderRebuild"/> set, so the window rebuilds without a click.
+    /// Does nothing without a shader step, without prepared files or while setup runs.
+    /// </summary>
+    public void Repair()
+    {
+        if (_shaders is null || Prepared is null || Phase is SetupPhase.Preparing or SetupPhase.Refused) return;
+        try
+        {
+            File.Delete(Path.Combine(_preparation.ShaderCacheDirectory, ShaderPackFile.FileName));
+        }
+        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
+        {
+            _log?.Invoke("Repair: could not remove the shader pack: " + problem.Message);
+        }
+        _packProblem = ShaderPackProblem.Damaged;
+        Phase = SetupPhase.NeedsInputs;
+        Message = null;
+        MessageDetails = null;
+        ShaderFailure = null;
         Changed?.Invoke();
     }
 
@@ -323,6 +430,7 @@ public sealed class SetupFlow
         SetupStep.CheckingExistingFiles => "Checking the files of an earlier setup",
         SetupStep.Extracting => "Extracting the disc",
         SetupStep.UnpackingTitleUpdate => "Unpacking Title Update 1",
+        SetupStep.PreparingShaders => "Preparing shaders",
         _ => "Done",
     };
 

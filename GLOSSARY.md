@@ -66,6 +66,13 @@ The renderer that draws the game through ReXGlue's emulation-style GPU path. It 
 The renderer that turns the game's Direct3D 9 calls into native Vulkan work and owns render targets.
 _Avoid_: new renderer, HD renderer
 
+**Shader pack**:
+The game's shaders converted by XenosRecomp, in one file (`topspin4.shaderpack`) in the cache folder, which the Native renderer loads at start. The Launcher builds it during setup from the shaders in the player's own game files (the archives and the Loader and Swing Modules), so it is never shipped (ADR-0006). Without a usable pack the game runs on the Classic renderer.
+_Avoid_: shader cache (that is the whole cache folder)
+
+**Top-up**:
+A shader the game met that the shader pack lacked. The game writes it to the cache's `shader-topup` folder; the Launcher's Module shader step fills the same folder with the Modules' shaders before the pack is built.
+
 **Enhancement**:
 A setting that changes the game away from original behaviour. Every Enhancement defaults to original behaviour.
 _Avoid_: fix, improvement (when it is an opt-in setting)
@@ -81,7 +88,7 @@ The in-game screen, usable with a controller, where players change settings whil
 _Avoid_: overlay, F6 menu, options menu (that is the game's own)
 
 **Launcher**:
-The separate program players open to start the game. On first run it prepares the disc and Title Update 1; after that it is the home screen for playing and changing settings. The game can also start without it, from a Direct shortcut.
+The separate program players open to start the game. On first run it prepares the disc and Title Update 1, then the shader pack; after that it is the home screen for playing and changing settings. The game can also start without it, from a Direct shortcut.
 _Avoid_: setup tool (when the GUI is meant)
 
 **Disc art**:

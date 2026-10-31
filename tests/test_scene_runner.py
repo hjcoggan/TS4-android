@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scene_runner import (DEFAULTS, GameRunLock, RunLockBusy, SceneError, apply_ramp, envelope_error, fit_ramp,  # noqa: E402
-                          edges_may_differ, enhancement_failures, judge_enhanced, load_scene,
+                          edges_may_differ, enhancement_failures, folder_flags, judge_enhanced, load_scene,
                           log_failures,
                           native_failures, parse_enhancements, plan_runs, repeatability,
                           run_failures, shrink_to)
@@ -214,6 +214,14 @@ def report_with(renderer):
 NATIVE_CLEAN = {"native_requested": True, "native_active": True, "fallback": "none", "frames": 10,
                 "debug_cvars": [], "enhancements": [{"name": "ts4_sharpening", "on": False}],
                 "draw_skips": {}, "gpu_failure": ""}
+
+
+def test_a_run_takes_the_disc_and_update_from_the_install_and_keeps_its_own_saves_and_cache():
+    install, run = Path("fresh") / "install", Path("out") / "native-1"
+
+    assert folder_flags(install, run) == [
+        f"--game_data_root={install / 'gamedata'}", f"--update_data_root={install / 'updatedata'}",
+        f"--user_data_root={run / 'userdata'}", f"--cache_root={run / 'cache'}"]
 
 
 def test_a_clean_native_run_passes():

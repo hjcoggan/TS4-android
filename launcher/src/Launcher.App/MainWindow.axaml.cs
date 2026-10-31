@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private bool _themeLoaded;
     private Dictionary<string, Bitmap> _pictures = [];
     private (RowState Disc, SetupPhase Phase)? _themeKey;
+    private string? _shownShaderFailure;
 
     public MainWindow()
     {
@@ -66,8 +67,12 @@ public partial class MainWindow : Window
         // The disc row reads the disc's art the moment it accepts the disc; the art folder is userdata\art.
         _artFolder = UserDirectories.ArtFolder(userRoot);
         // Once the disc is extracted (and at each start) the art is read again from there if the art folder is missing or incomplete.
+        // Setup ends with the shader step: the shaders of the game's archives and Modules, converted with the XenosRecomp
+        // the release ships. A pack another XenosRecomp built is rebuilt when the window opens (below), before Play.
+        var shaders = new ShaderPreparation(XenosRecompConverter.ShippedWith(_launcherDirectory), ShaderConverter.Id,
+            new GameModuleShaders(_gameExe, preparation, new StreamingPrepareRunner(TimeSpan.FromMinutes(10), "Reading the game's Module shaders")));
         _flow = new SetupFlow(preparation, log: Log, readDiscArt: iso => DiscArt.FromIso(iso, _artFolder, Log),
-            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log), refusal: refusal);
+            readPreparedArt: root => DiscArt.RestoreFromFolder(root, _artFolder, Log), refusal: refusal, shaders: shaders);
         _shell = new LauncherShell(_flow);
 
         _setupPage = new SetupPage(_flow);
@@ -98,6 +103,8 @@ public partial class MainWindow : Window
             await Task.Run(_flow.RefreshArt);
             ReloadTheme();
             Refresh();
+            // A shader pack from another XenosRecomp patch series is built again at once, with the progress bar, so no click is needed.
+            if (_flow.WantsShaderRebuild) await _setupPage.PrepareAsync();
         };
 
         // The game started without setup done: the setup page says why (or the home page, if this Launcher finds the files).
@@ -348,6 +355,12 @@ public partial class MainWindow : Window
             ReloadTheme();
         }
         ShowPageLook(page);
+        // A shader step that failed does not stop Play, so its message goes where the player is: the home screen's note.
+        if (_flow.ShaderFailure is { } shaderFailure && shaderFailure != _shownShaderFailure)
+        {
+            _shownShaderFailure = shaderFailure;
+            _home.Say(shaderFailure);
+        }
         _setupPage.IsVisible = page == LauncherPage.Setup;
         _homePage.IsVisible = page == LauncherPage.Home;
         _settingsPage.IsVisible = page == LauncherPage.Settings;

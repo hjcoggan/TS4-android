@@ -19,8 +19,14 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
     public const string GameDataFolderName = "gamedata";
     public const string UpdateDataFolderName = "updatedata";
 
-    /// <summary>Head room kept free beyond the prepared files (logs, caches, saves).</summary>
-    public const long SpareBytes = 512L << 20;
+    /// <summary>
+    /// What the shader step needs beyond the prepared files: the shader pack and the folder XenosRecomp works in. Setup's space
+    /// check counts it, so a drive that holds the game files but not the pack is refused at the start.
+    /// </summary>
+    public const long ShaderPackBytes = 256L << 20;
+
+    /// <summary>Head room kept free beyond the prepared files (logs, caches, saves) and the shader pack.</summary>
+    public const long SpareBytes = (512L << 20) + ShaderPackBytes;
 
     private const double Gigabyte = 1 << 30;
 
@@ -44,6 +50,9 @@ public sealed class Preparation(string cacheRoot, FileManifest disc, FileManifes
 
     /// <summary>The folder that holds the prepared folders: where the game files go.</summary>
     public string CacheRoot => _cacheRoot;
+
+    /// <summary>The game's shader cache folder (its <c>cache_root</c>): the shader pack and the shader top-up folder live in it.</summary>
+    public string ShaderCacheDirectory => Path.Combine(_cacheRoot, ShaderCacheFolderName);
 
     /// <summary>A preparation is running; the place must not change meanwhile.</summary>
     public bool Busy { get; private set; }

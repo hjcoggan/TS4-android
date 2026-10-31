@@ -44,7 +44,7 @@ different state at the same frame number. A lock (analysis/game-run.lock, shared
 scripts/smoke.ps1) refuses a second run while one is going.
 
     python scripts/scene_runner.py tests/scenes/boot-main-menu.toml [--out DIR] [--runs N]
-                                   [--native N [--dual N]] [--shader-pack FILE]
+                                   [--native N [--dual N]] [--shader-pack FILE] [--install DIR]
     python scripts/scene_runner.py tests/scenes/king-of-the-court.toml --runs 0 --native 1 --dual 1
 
 Results and captures go to analysis/scenes/<name>/ (not committed).
@@ -423,7 +423,16 @@ def plan_runs(frames, classic_runs, native_runs, dual_runs):
             [(f"dual-{i + 1}", frames) for i in range(dual_runs)])
 
 
-def run_game(label, scene, out, exe, extra_flags=(), frames=None):
+def folder_flags(install, run_dir):
+    """The folder flags of a run: the install's prepared disc and Title Update 1, and the run's
+    own copies of its save data and cache. An install is a folder with gamedata, updatedata and
+    (once the game or the Launcher has made them) cache and userdata, as the Launcher's setup
+    leaves it; the default is this checkout's."""
+    return [f"--game_data_root={install / 'gamedata'}", f"--update_data_root={install / 'updatedata'}",
+            f"--user_data_root={run_dir / 'userdata'}", f"--cache_root={run_dir / 'cache'}"]
+
+
+def run_game(label, scene, out, exe, extra_flags=(), frames=None, install=ROOT):
     """One run that dumps each of frames (default: every capture frame) and exits after the
     last one; returns ({frame: png path}, session report or None)."""
     frames = frames or scene.frames
@@ -436,11 +445,9 @@ def run_game(label, scene, out, exe, extra_flags=(), frames=None):
     report_path = run_dir / "report.json"
     # Each run starts from a copy of the save data and cache, so no run sees another's saves.
     for name in ("userdata", "cache"):
-        if (ROOT / name).exists():
-            shutil.copytree(ROOT / name, run_dir / name)
-    flags = ["--gpu_plugin=xenos", "--vulkan_device=-1",
-             f"--game_data_root={ROOT / 'gamedata'}", f"--update_data_root={ROOT / 'updatedata'}",
-             f"--user_data_root={run_dir / 'userdata'}", f"--cache_root={run_dir / 'cache'}",
+        if (install / name).exists():
+            shutil.copytree(install / name, run_dir / name)
+    flags = ["--gpu_plugin=xenos", "--vulkan_device=-1", *folder_flags(install, run_dir),
              f"--log_file={run_dir / 'runtime.log'}", "--log_level=info",
              "--log_flush_interval=1", "--headless", "--window_hidden=true", "--audio_mute=true",
              f"--ts4_input_script={script}",
@@ -482,7 +489,7 @@ def load_rgb8(path):
     return np.asarray(Image.open(path).convert("RGB"), np.uint8)
 
 
-def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enhance=None):
+def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enhance=None, install=ROOT):
     plan = dict(plan_runs(scene.frames, int(scene.check["runs"]), native_runs, dual_runs))
     classic = [label for label in plan if label.startswith("run-")]
     native = [label for label in plan if label.startswith("native-")]
@@ -507,7 +514,7 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enh
                          [f"--{key}={value}" for key, value in (enhance or {}).items()])
             else:
                 flags = ["--ts4_renderer=classic"]
-            shots[label], report = run_game(label, scene, out, exe, flags, run_frames)
+            shots[label], report = run_game(label, scene, out, exe, flags, run_frames, install)
             failures = (run_failures(report, run_frames) +
                         log_failures(read_log(out / label / "runtime.log"), scene.log))
             if label in dual:
@@ -571,6 +578,10 @@ def main(argv):
                              "(needs --native)")
     parser.add_argument("--shader-pack", type=Path,
                         help="the shader pack Native runs load (default: the one in cache/)")
+    parser.add_argument("--install", type=Path, default=ROOT,
+                        help="the folder with gamedata and updatedata (and a cache and userdata "
+                             "to copy for each run), as the Launcher's setup leaves it "
+                             "(default: this checkout)")
     parser.add_argument("--enhance", action="append", metavar="KEY=VALUE",
                         help="dual runs set this image setting (e.g. ts4_resolution_scale=2); "
                              "their Native frames, at Classic's size, may then differ "
@@ -602,7 +613,7 @@ def main(argv):
         if enhance and not args.dual:
             raise SceneError("--enhance needs --dual, whose Classic frames are the 1x reference")
         result = run_scene(scene, out, args.exe.resolve(), args.native, shader_pack, args.dual,
-                           enhance)
+                           enhance, args.install.resolve())
     except (RunLockBusy, SceneError) as error:
         print(f"scene error: {error}", file=sys.stderr)
         return 2

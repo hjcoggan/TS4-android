@@ -21,6 +21,7 @@
 #include "fault_log.h"
 #include "frame_dumps.h"
 #include "load_flash.h"
+#include "module_shaders.h"
 #include "native/native_renderer.h"
 #include "online_unavailable.h"
 #include "remapped_input.h"
@@ -231,6 +232,14 @@ class TopSpin4App : public rex::ReXApp {
             }
           });
         });
+  }
+
+  // The Launcher's Module shader step (--ts4_prepare_modules): the runtime is up and Boot is loaded, but
+  // nothing has launched, so the Modules can be read without any guest code running. Writes and exits.
+  void OnPreLaunchModule() override {
+    if (topspin4::module_shaders::Requested()) {
+      topspin4::module_shaders::WriteAndExit(*runtime());
+    }
   }
 
   void OnPostSetup() override {

@@ -33,7 +33,7 @@ public partial class SetupPage : UserControl
                 await _flow.ChooseTitleUpdate(path);
         };
         HelpButton.Click += (_, _) => HelpPressed?.Invoke();
-        PrepareButton.Click += async (_, _) => await Prepare();
+        PrepareButton.Click += async (_, _) => await PrepareAsync();
         StartOverButton.Click += (_, _) => _flow.StartOver();
         CancelButton.Click += (_, _) => Stop();
     }
@@ -56,7 +56,8 @@ public partial class SetupPage : UserControl
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    private async Task Prepare()
+    /// <summary>Runs setup from the flow's state (the button does; the window does too for a shader pack that went stale).</summary>
+    public async Task PrepareAsync()
     {
         _stop = new CancellationTokenSource();
         try

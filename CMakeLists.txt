@@ -17,6 +17,7 @@ set(TOPSPIN4_SOURCES
     src/fault_log.cpp
     src/frame_dumps.cpp
     src/load_flash_host.cpp
+    src/module_shaders.cpp
     src/native/geometry_cache.cpp
     src/native/live_topup.cpp
     src/native/native_renderer.cpp
@@ -146,6 +147,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_command_line.cpp
         tests/host/test_settings.cpp
         tests/host/test_load_flash.cpp
+        tests/host/test_module_shaders.cpp
         tests/host/test_page_model.cpp
         tests/host/test_presets_controls.cpp
         tests/host/test_options_row.cpp

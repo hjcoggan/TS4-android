@@ -74,6 +74,8 @@ public enum SetupStep
     CheckingExistingFiles,
     Extracting,
     UnpackingTitleUpdate,
+    /// <summary>Reading, converting and packing the game's shaders (<see cref="ShaderPreparation"/>); the fraction is the step's own.</summary>
+    PreparingShaders,
     /// <summary>Copying the prepared folders to a new place (<see cref="Preparation.Move"/>).</summary>
     MovingFiles,
     Done,
