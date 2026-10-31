@@ -817,10 +817,13 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
   // A screen image (the guest's 1280x720: loading screens, menu backgrounds) with no content yet
   // is read before the draw. Drawn without it, the draw samples the transparent-black default
   // and the whole screen shows the clear colour: the blue flash of the loading screen after the
-  // title screen. Other new textures stay on the workers; waiting for the players' textures
-  // held intro frames up to 84 ms longer.
-  wait = wait || (!texture.uploaded && t.width == kScreenImageWidth &&
-                  t.height == kScreenImageHeight);
+  // title screen. A movie's planes (Y, U, V and alpha, each a single-channel 8-bit texture: the
+  // replay wipe's Bink, the XUI movies) are read before the draw too: drawn with the default, the
+  // first frames of the replay wipe convert Y = U = V = 0 to a green frame. Other new textures
+  // stay on the workers; waiting for the players' textures held intro frames up to 84 ms longer.
+  wait = wait || (!texture.uploaded &&
+                  ((t.width == kScreenImageWidth && t.height == kScreenImageHeight) ||
+                   fetch.format == xenos::TextureFormat::k_8));
   const auto start = std::chrono::steady_clock::now();
   FinishJob(texture, upload_cb, wait);
   if (texture.checked_frame != frame && !texture.job) {
@@ -852,7 +855,12 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
       job->had_upload = texture.uploaded;
       job->previous_hash = texture.content_hash;
       texture.job = job;
-      if (wait || !REXCVAR_GET(ts4_native_async_textures) || g.workers.empty()) {
+      // Content that changed after the first upload is read before the draw, as Classic does: on
+      // the workers the draw sampled the old content for a frame or more. The replay wipe's movie
+      // rewrites its planes every other frame, so its pictures came late, held 1 to 4 frames, and
+      // mixed planes of different movie frames (docs/research/movie-cadence.md).
+      if (wait || texture.uploaded || !REXCVAR_GET(ts4_native_async_textures) ||
+          g.workers.empty()) {
         ReadTexture(*job);
         job->done = true;
         FinishJob(texture, upload_cb, true);

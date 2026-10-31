@@ -48,3 +48,22 @@ varying length) and in the re-sync moved frames to the swap before or after.
 
 After the fix four of five runs had every picture last exactly two swaps. One run showed two
 isolated pictures lasting one swap each (`AABCDD`), not yet explained.
+
+## The replay wipe on Native (2026-10-31)
+
+The owner saw the 2K replay wipe stutter on Native only (Classic and Edge smooth), with one
+green frame as it starts. The wipe is a Bink movie (`2KLogoFootage.bik`) that the game engine
+plays, not the XUI player above: two alternating buffers, each four single-channel 8-bit
+textures (Y and alpha 512x288, U and V 256x144) the CPU rewrites every other frame.
+
+Native read a texture whose content changed on its worker threads and drew the old content
+until the read was applied, a frame or more later; a new texture drew the transparent-black
+default. A probe in `textures::Bind` over a match showed, for the movie's planes, 732 draws
+with content still being read and 8 with the default: pictures came late and held 1-4 frames,
+the Y plane often a movie frame behind U, V and alpha, and the first frames converted
+Y = U = V = 0 to green.
+
+Fix (`src/native/textures.cpp`): a changed texture that was already uploaded is read before
+the draw, as Classic does, and so is a new single-channel 8-bit texture. Over two wipes the
+planes then drew current content every time (477 changes, none stale or default). Render-thread
+time on textures was unchanged (0.11 vs 0.12 ms a frame).
