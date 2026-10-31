@@ -102,6 +102,12 @@ longjmp_address = 0x88569D30
 0x885A9090 = {}  # from 0x885A7284, 0x885A7994
 # Starts right after a bctr; reached from 0x88269EE4.
 0x88661248 = {}
+# Forwarding thunks in the run 88466580-8846665c (load the object, call through its vtable),
+# each right after the previous one's bctr; 884665e8 was called in the menus (owner's run,
+# 2026-10-31: unregistered call target).
+0x884665C0 = {}
+0x884665E8 = {}
+0x88466600 = {}
 # Shared "li r3,0; blr" tails: the float getter/setter fragment after each, entered through
 # a table, branches back into it. As stubs of their own, the branches become tail calls.
 0x883D8AF4 = {}  # from 0x883D8B04
