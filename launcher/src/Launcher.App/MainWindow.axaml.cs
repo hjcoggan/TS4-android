@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Interactivity;
@@ -30,9 +32,15 @@ public partial class MainWindow : Window
     private readonly SetupPage _setupPage;
     private readonly HomePage _homePage;
     private readonly SettingsPage _settingsPage;
+    private readonly AchievementsPage _achievementsPage = new();
     private readonly GameFilesLocationModel _location;
     private readonly GameFilesLocationPanel _setupLocation;
-    private readonly GameFilesLocationPanel _homeLocation;
+    private readonly GameFilesLocationPanel _settingsLocation;
+    private readonly Dictionary<LauncherPage, Button> _nav = [];
+    private readonly string _version = FooterInfo.Version(typeof(MainWindow).Assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion);
+    private readonly string? _gpu = GpuName.Read();
     private readonly PadNavigator _pad = new();
     private readonly InputHints _hints = new();
     private Avalonia.Point _pointerAt;
@@ -83,21 +91,34 @@ public partial class MainWindow : Window
         _homePage = new HomePage(_home);
         _settingsPage = new SettingsPage(LoadSettingsPage);
         _setupLocation = new GameFilesLocationPanel(_location);
-        _homeLocation = new GameFilesLocationPanel(_location);
+        _settingsLocation = new GameFilesLocationPanel(_location);
         _setupPage.LocationHost.Children.Add(_setupLocation);
-        _homePage.LocationHost.Children.Add(_homeLocation);
-        _location.Changed += () => Dispatcher.UIThread.Post(Refresh);
-        PageHost.Children.Add(_setupPage);
+        _settingsPage.LocationHost.Children.Add(_settingsLocation);
+        _location.Changed += () => Dispatcher.UIThread.Post(() =>
+        {
+            ShowFooter();
+            Refresh();
+        });
+        // Home fills the page area; the other pages share the scrolling column on the scrim.
         PageHost.Children.Add(_homePage);
-        PageHost.Children.Add(_settingsPage);
+        FormHost.Children.Add(_setupPage);
+        FormHost.Children.Add(_settingsPage);
+        FormHost.Children.Add(_achievementsPage);
+        BuildRail();
 
         _shell.Changed += () => Dispatcher.UIThread.Post(Refresh);
         _setupPage.HelpPressed += OpenHelp;
         _homePage.PlayPressed += async () => await StartGame();
         _homePage.ActionPressed += async action => await OnHomeAction(action);
+        _homePage.AchievementsPressed += _shell.OpenAchievements;
         _settingsPage.BackPressed += _shell.Back;
+        _achievementsPage.BackPressed += _shell.Back;
         // The exe or the prepared folders may change while the window is open; look again when it is used.
-        Activated += (_, _) => Refresh();
+        Activated += (_, _) =>
+        {
+            ShowFooter();
+            Refresh();
+        };
 
         // The look starts from whatever the art folder holds. If the folder is missing or incomplete the art is read again
         // from the prepared disc folder in the background (never failing the start), and the look follows when it is done.
@@ -125,6 +146,7 @@ public partial class MainWindow : Window
         _padTimer.Tick += (_, _) => PollPad();
         Opened += (_, _) => _padTimer.Start();
         Closed += (_, _) => _padTimer.Stop();
+        ShowFooter();
         Refresh();
     }
 
@@ -136,8 +158,7 @@ public partial class MainWindow : Window
                 _flow.SetUpAgain();
                 break;
             case HomeAction.Settings:
-                _shell.OpenSettings();
-                await _settingsPage.OpenAsync();
+                await OpenSettings();
                 break;
             case HomeAction.CreateShortcut:
                 CreateShortcut();
@@ -155,6 +176,64 @@ public partial class MainWindow : Window
                 await StartGame(safe: true);
                 break;
         }
+    }
+
+    private async Task OpenSettings()
+    {
+        _shell.OpenSettings();
+        await _settingsPage.OpenAsync();
+    }
+
+    // The side rail: Home, Settings and Achievements (after setup), and Help. Gamepad and arrows reach it through XYFocus.
+    private void BuildRail()
+    {
+        Button Add(string label, string icon, Action pressed)
+        {
+            var button = new Button
+            {
+                Content = new StackPanel
+                {
+                    Spacing = 4,
+                    Children = { Icons.Make(icon, 28), new TextBlock { Text = label, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center } },
+                },
+            };
+            Avalonia.Automation.AutomationProperties.SetName(button, label);
+            button.Classes.Add("nav");
+            button.Click += (_, _) => pressed();
+            NavHost.Children.Add(button);
+            return button;
+        }
+        _nav[LauncherPage.Home] = Add("Home", Icons.Home, _shell.OpenHome);
+        _nav[LauncherPage.Settings] = Add("Settings", Icons.Settings, async () => await OpenSettings());
+        _nav[LauncherPage.Achievements] = Add("Achievements", Icons.Trophy, _shell.OpenAchievements);
+        var help = Add("Help", Icons.Help, OpenHelp);
+        // Down from the rail's last page stays in the rail instead of jumping to the nearest card.
+        XYFocus.SetDown(help, help);
+    }
+
+    // The rail marks the open page; before setup only Help is there.
+    private void ShowRail(LauncherPage page)
+    {
+        foreach (var (target, button) in _nav)
+        {
+            button.IsVisible = page != LauncherPage.Setup;
+            if (target == page) button.Classes.Add("current");
+            else button.Classes.Remove("current");
+        }
+    }
+
+    // Version and commit, the renderer the Settings file chooses, the GPU, and where the game files are.
+    private void ShowFooter()
+    {
+        string? settings = null;
+        try
+        {
+            if (File.Exists(_settingsPath)) settings = File.ReadAllText(_settingsPath);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+        }
+        FooterText.Text = FooterInfo.Line(_version, FooterInfo.Renderer(settings), _gpu, _location.Folder);
     }
 
     // The game's settings export, read once when Settings first opens; a reason instead of rows when it can't be read.
@@ -322,6 +401,19 @@ public partial class MainWindow : Window
             return true;
         }
         var theme = LauncherTheme.From(art, CanDraw);
+        // The card row's pictures, decoded small: a card never shows them larger.
+        var showcase = Showcase.From(art);
+        void LoadAll(IEnumerable<DiscArtEntry> entries, int width)
+        {
+            foreach (var entry in entries)
+                if (!pictures.ContainsKey(entry.ImagePath) && LauncherLook.LoadScaled(entry.ImagePath, width, Log) is { } bitmap)
+                    pictures[entry.ImagePath] = bitmap;
+        }
+        LoadAll(showcase.Players, 144);
+        LoadAll(showcase.Venues, 400);
+        LoadAll(showcase.Achievements, 64);
+        if (art.ImagePath(DiscArtSlot.TitleIcon) is { } iconPng && LauncherLook.Load(iconPng, Log) is { } iconBitmap) pictures[iconPng] = iconBitmap;
+
         var old = _pictures;
         _pictures = pictures;
         _theme = theme;
@@ -329,26 +421,74 @@ public partial class MainWindow : Window
         LauncherLook.Apply(theme.Palette);
         Icon = icon;
         CreditText.Text = theme.CreditLine;
-        _homePage.ShowBoxArt(Picture(theme.Source(DiscArtSlot.BoxArt)));
-        LogoImage.Source = Picture(theme.Source(DiscArtSlot.Logo));
+        var logo = Picture(theme.Source(DiscArtSlot.Logo));
+        _homePage.ShowLogo(logo);
+        _homePage.ShowCards(showcase, path => _pictures.GetValueOrDefault(path));
+        _achievementsPage.Show(showcase, path => _pictures.GetValueOrDefault(path));
+        LogoImage.Source = logo;
+        var railIcon = art.ImagePath(DiscArtSlot.TitleIcon) is { } path ? _pictures.GetValueOrDefault(path) : null;
+        RailIcon.Source = railIcon;
+        RailIcon.IsVisible = railIcon is not null;
+        RailWordmark.IsVisible = railIcon is null;
         ShowPageLook(_shell.Page);
         foreach (var bitmap in old.Values) bitmap.Dispose();
     }
 
     private Bitmap? Picture(ThemeSource source) => source.ArtPath is { } path && _pictures.TryGetValue(path, out var bitmap) ? bitmap : null;
 
-    // What the theme says the page draws: its picture, the dimming over it, and the header (logo or title text).
+    // What the theme says the page draws: its picture, then the scrim over it. Home fades from dark on the left (where its
+    // text is) to the clear picture, and darkens again under the card row; the other pages quieten the whole picture, and
+    // their text sits on the content scrim. Without a picture the original look's own gradient shows.
     private void ShowPageLook(LauncherPage page)
     {
         var look = _theme.LookFor(page);
+        var palette = _theme.Palette;
         var background = Picture(look.Background);
         BackgroundImage.Source = background;
         BackgroundImage.IsVisible = background is not null;
-        DimLayer.IsVisible = look.DimsBackground;
+        OriginalBackdrop.Background = background is null ? Gradient(palette.Base, palette.Panel, new(0, 0, RelativeUnit.Relative), new(1, 1, RelativeUnit.Relative)) : null;
+        var clear = WithAlpha(palette.Scrim, 0);
+        if (background is null)
+        {
+            SideScrim.Background = BottomScrim.Background = null;
+        }
+        else if (page == LauncherPage.Home)
+        {
+            var dark = Avalonia.Media.Color.Parse(palette.Scrim);
+            SideScrim.Background = new LinearGradientBrush
+            {
+                StartPoint = new(0, 0, RelativeUnit.Relative),
+                EndPoint = new(1, 0, RelativeUnit.Relative),
+                GradientStops = { new(dark, 0), new(dark, 0.38), new(clear, 0.78) },
+            };
+            BottomScrim.Background = new LinearGradientBrush
+            {
+                StartPoint = new(0, 0, RelativeUnit.Relative),
+                EndPoint = new(0, 1, RelativeUnit.Relative),
+                GradientStops = { new(clear, 0.55), new(WithAlpha(palette.Base, 0xE6), 1) },
+            };
+        }
+        else
+        {
+            SideScrim.Background = look.DimsBackground ? new SolidColorBrush(Avalonia.Media.Color.Parse(palette.Dim)) : null;
+            BottomScrim.Background = null;
+        }
         LogoBlock.IsVisible = look.ShowsLogo;
         TitleText.IsVisible = !look.ShowsLogo;
-        LogoImage.Height = look.LogoHeight;
     }
+
+    private static Avalonia.Media.Color WithAlpha(string colour, byte alpha)
+    {
+        var parsed = Avalonia.Media.Color.Parse(colour);
+        return Avalonia.Media.Color.FromArgb(alpha, parsed.R, parsed.G, parsed.B);
+    }
+
+    private static LinearGradientBrush Gradient(string from, string to, RelativePoint start, RelativePoint end) => new()
+    {
+        StartPoint = start,
+        EndPoint = end,
+        GradientStops = { new(Avalonia.Media.Color.Parse(from), 0), new(Avalonia.Media.Color.Parse(to), 1) },
+    };
 
     // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.
     private void Refresh()
@@ -370,11 +510,14 @@ public partial class MainWindow : Window
         _setupPage.IsVisible = page == LauncherPage.Setup;
         _homePage.IsVisible = page == LauncherPage.Home;
         _settingsPage.IsVisible = page == LauncherPage.Settings;
+        _achievementsPage.IsVisible = page == LauncherPage.Achievements;
+        FormScroller.IsVisible = page != LauncherPage.Home;
+        ShowRail(page);
         _setupPage.Refresh();
         _homePage.Refresh();
         _setupPage.PrepareButton.IsEnabled = _location.AllowsSetup(_flow);
         _setupLocation.Refresh();
-        _homeLocation.Refresh();
+        _settingsLocation.Refresh();
         if (_location.Moving) _homePage.PlayButton.IsEnabled = false;
         HintText.Text = InputHints.Text(page, _flow.Busy);
         HintText.IsVisible = _hints.Visible;
@@ -383,7 +526,18 @@ public partial class MainWindow : Window
         _setupPage.SetDefault(page == LauncherPage.Setup);
 
         if (page == _shownPage) return;
+        var first = _shownPage is null;
         _shownPage = page;
+        FormScroller.Offset = default;
+        // A light fade into the new page (the transition is in Theme.axaml); not on the first page, which the window opens with.
+        if (!first)
+        {
+            var transitions = PageHost.Transitions;
+            PageHost.Transitions = null;
+            PageHost.Opacity = 0;
+            PageHost.Transitions = transitions;
+            Dispatcher.UIThread.Post(() => PageHost.Opacity = 1, DispatcherPriority.Render);
+        }
         // After the layout has settled, so the control is visible and enabled.
         Dispatcher.UIThread.Post(() =>
         {
@@ -391,6 +545,7 @@ public partial class MainWindow : Window
             {
                 case LauncherPage.Setup: _setupPage.FocusFirst(); break;
                 case LauncherPage.Home: _homePage.FocusFirst(); break;
+                case LauncherPage.Achievements: _achievementsPage.FocusFirst(); break;
                 default: _settingsPage.FocusFirst(); break;
             }
         }, DispatcherPriority.Background);
@@ -492,6 +647,7 @@ public partial class MainWindow : Window
             {
                 LauncherPage.Home => _homePage.EntryControl,
                 LauncherPage.Settings => _settingsPage.EntryControl,
+                LauncherPage.Achievements => _achievementsPage.EntryControl,
                 _ => _setupPage.EntryControl,
             }).Focus(NavigationMethod.Directional);
             return;

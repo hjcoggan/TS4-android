@@ -1,48 +1,111 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TopSpin4.Launcher.Pages.HomePage">
-  <!-- After setup: PLAY with a status line, the labelled actions, and Safe start under "Trouble starting?". Drawn from HomeModel. -->
-  <StackPanel Spacing="18">
-    <StackPanel.Styles>
-      <Style Selector="Button.attention">
-        <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
-        <Setter Property="Foreground" Value="White" />
-        <Setter Property="FontSize" Value="24" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="Padding" Value="28,8" />
-      </Style>
-      <Style Selector="Button.attention:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="{StaticResource SilverBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource BaseBrush}" />
-      </Style>
-    </StackPanel.Styles>
-    <!-- The box art sits beside PLAY when the player's art folder has it; without it the column is empty and PLAY stays centred. -->
-    <Grid ColumnDefinitions="Auto,*">
-      <Border x:Name="BoxArtFrame" Grid.Column="0" IsVisible="False" Width="280" CornerRadius="4" ClipToBounds="True"
-              VerticalAlignment="Center" Margin="0,0,24,0">
-        <Image x:Name="BoxArtImage" Stretch="Uniform" />
-      </Border>
-      <StackPanel Grid.Column="1" Spacing="18" VerticalAlignment="Center">
-        <Button x:Name="PlayButton" Classes="play" Content="PLAY" />
-        <TextBlock x:Name="StatusText" Classes="body" TextAlignment="Left" AutomationProperties.LiveSetting="Polite" />
+  <!-- After setup: the hero (logo, PLAY, the status line and the tools) over the art, and the card row under it.
+       Drawn from HomeModel and Showcase. Text sits on the left, where the window's side scrim is dark. -->
+  <UserControl.Styles>
+    <Style Selector="Button.attention">
+      <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Padding" Value="24,8" />
+    </Style>
+    <Style Selector="Button.attention:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource SilverBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource BaseBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cardtitle">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="LetterSpacing" Value="3" />
+      <Setter Property="Foreground" Value="{StaticResource SilverBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="*,Auto">
+    <!-- The hero. -->
+    <Grid x:Name="Hero" Grid.Row="0" RowDefinitions="Auto,*,Auto" Margin="44,36,44,20">
+      <StackPanel Grid.Row="0" HorizontalAlignment="Left" Spacing="4">
+        <Image x:Name="LogoImage" Stretch="Uniform" Height="120" HorizontalAlignment="Left" IsVisible="False" />
+        <TextBlock x:Name="Wordmark" Classes="display" Text="TOP SPIN 4" FontSize="76" LetterSpacing="3"
+                   Foreground="{StaticResource AccentTextBrush}" />
+        <TextBlock Classes="kicker" Text="RECOMP" Margin="4,0,0,0" />
+      </StackPanel>
+
+      <StackPanel Grid.Row="2" Spacing="12" HorizontalAlignment="Left" MaxWidth="760">
+        <TextBlock x:Name="NoteText" Classes="error" IsVisible="False" MaxWidth="620" HorizontalAlignment="Left"
+                   AutomationProperties.LiveSetting="Assertive" />
+        <!-- Safe start moves here after a GPU failure or a crash. -->
+        <StackPanel x:Name="ProminentHost" HorizontalAlignment="Left" />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button x:Name="PlayButton" Classes="play" Content="PLAY" VerticalAlignment="Stretch" />
+          <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="8" />
+        </StackPanel>
+        <TextBlock x:Name="StatusText" Classes="body" MaxWidth="620" HorizontalAlignment="Left"
+                   AutomationProperties.LiveSetting="Polite" />
+        <!-- "Trouble starting?" and Safe start, unless Safe start has moved up under the note. -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock x:Name="TroubleHeading" Classes="small" VerticalAlignment="Center" />
+          <StackPanel x:Name="TroubleHost" Orientation="Horizontal" />
+        </StackPanel>
       </StackPanel>
     </Grid>
-    <TextBlock x:Name="NoteText" Classes="error" TextAlignment="Left" IsVisible="False" AutomationProperties.LiveSetting="Assertive" />
-    <!-- Safe start moves here after a GPU failure or a crash. -->
-    <StackPanel x:Name="ProminentHost" HorizontalAlignment="Center" />
 
-    <StackPanel x:Name="ActionsHost" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
+    <!-- The card row: players, venues, achievements from the player's disc, and the release notes. -->
+    <UniformGrid x:Name="CardsHost" Grid.Row="1" Rows="1" Margin="44,0,30,18">
+        <Border x:Name="PlayersCard" Classes="card" Height="196" Margin="0,0,14,0" IsVisible="False">
+          <Grid RowDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Row="0" Classes="cardtitle" Text="PLAYERS" />
+            <StackPanel x:Name="PlayerFaces" Grid.Row="1" Orientation="Horizontal" Spacing="-22" VerticalAlignment="Bottom" ClipToBounds="True" />
+            <TextBlock x:Name="PlayersText" Grid.Row="2" Classes="small" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+          </Grid>
+        </Border>
 
-    <!-- "Game files are in … [Change…]": added by the code behind of the window (GameFilesLocationPanel). -->
-    <StackPanel x:Name="LocationHost" />
+        <Border x:Name="VenuesCard" Classes="card" Height="196" Margin="0,0,14,0" Padding="0" IsVisible="False">
+          <Grid>
+            <Image x:Name="VenueImage" Stretch="UniformToFill">
+              <Image.Transitions>
+                <Transitions>
+                  <DoubleTransition Property="Opacity" Duration="0:0:0.4" />
+                </Transitions>
+              </Image.Transitions>
+            </Image>
+            <Border VerticalAlignment="Bottom" Background="{StaticResource ScrimBrush}" Padding="16,8">
+              <StackPanel>
+                <TextBlock Classes="cardtitle" Text="VENUES" />
+                <TextBlock x:Name="VenueText" Classes="body" FontWeight="Bold" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Border>
 
-    <Border Background="{StaticResource PanelBrush}" CornerRadius="4" Padding="18" Margin="0,16,0,0">
-      <StackPanel Spacing="8">
-        <TextBlock x:Name="TroubleHeading" FontSize="20" FontWeight="Bold" Foreground="White" />
-        <TextBlock Classes="small" TextAlignment="Left"
-                   Text="If the game won't start: runs once with the default settings and leaves your Settings file unchanged." />
-        <StackPanel x:Name="TroubleHost" Orientation="Horizontal" Spacing="12" />
-      </StackPanel>
-    </Border>
-  </StackPanel>
+        <Border x:Name="AchievementsCard" Classes="card" Height="196" Margin="0,0,14,0" IsVisible="False">
+          <Grid RowDefinitions="Auto,*,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+              <TextBlock Classes="cardtitle" Text="ACHIEVEMENTS" VerticalAlignment="Center" />
+              <Button x:Name="AllAchievementsButton" Grid.Column="1" Classes="secondary" Content="View all" Padding="12,2" />
+            </Grid>
+            <!-- Two rows of icons at most; the rest are on the Achievements page. -->
+            <WrapPanel x:Name="AchievementIcons" Grid.Row="1" Margin="0,8,0,4" ItemWidth="44" ItemHeight="44"
+                       MaxHeight="88" ClipToBounds="True" VerticalAlignment="Top" />
+            <TextBlock x:Name="AchievementsText" Grid.Row="2" Classes="small" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+          </Grid>
+        </Border>
+
+        <Border x:Name="WhatsNewCard" Classes="card" Height="196" Margin="0,0,14,0">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="cardtitle" Text="WHAT'S NEW" />
+            <ItemsControl x:Name="WhatsNewList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Text="{Binding}" Margin="0,0,0,4" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+    </UniformGrid>
+  </Grid>
 </UserControl>

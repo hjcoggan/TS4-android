@@ -35,12 +35,12 @@ public sealed record ThemePalette(
         Text: "#E6ECFF", Muted: "#9AA8D0", Error: "#FF8A7A", OnAccent: "#0A1220", AccentDisabled: "#4A4E2A", OnAccentDisabled: "#2A2A2A",
         SecondaryFill: "#33203055", SecondaryBorder: "#4A6BC4");
 
-    /// <summary>The look retuned to the disc's art: its red, white and silver.</summary>
+    /// <summary>The look retuned to the disc's art: a deep navy-black base, the red of the logo's "4", white and silver.</summary>
     public static ThemePalette Art { get; } = new(
-        Base: "#120A0C", Scrim: "#DB0E080A", Dim: "#59000000", Panel: "#261519",
-        Accent: "#C8202A", AccentHot: "#D92B35", AccentText: "#FF6B6F", Secondary: "#8F1A22", Silver: "#D6D9E0",
-        Text: "#F2EEF0", Muted: "#C7BCC1", Error: "#FF9C8F", OnAccent: "#FFFFFF", AccentDisabled: "#4A2A2E", OnAccentDisabled: "#D2C6CA",
-        SecondaryFill: "#33FFFFFF", SecondaryBorder: "#B9505A");
+        Base: "#080B14", Scrim: "#DB080B14", Dim: "#B3080B14", Panel: "#141A28",
+        Accent: "#C8202A", AccentHot: "#B01B24", AccentText: "#FF6B72", Secondary: "#8F1A22", Silver: "#D6D9E0",
+        Text: "#F2F4F8", Muted: "#B9C0CF", Error: "#FF9C8F", OnAccent: "#FFFFFF", AccentDisabled: "#2E2A36", OnAccentDisabled: "#C9C4CE",
+        SecondaryFill: "#1FFFFFFF", SecondaryBorder: "#6B7690");
 
     /// <summary>
     /// The brushes <c>Theme.axaml</c> declares, by resource key, with this palette's colour for each. The window sets each

@@ -44,4 +44,5 @@ before starting.
 
 - Game settings 01-09, 11-15: owner run of each
 - Launcher UX 01-03, 07, 08 and Launcher look 04: owner run of the new Launcher
+- Launcher redesign (rail, hero, card row, Achievements page; launcher-ux.md §6): owner review of the look, with keyboard and pad
 - 4x Resolution scale without stutter (image-quality 14, needed info)

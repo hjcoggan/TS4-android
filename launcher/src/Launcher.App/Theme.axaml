@@ -77,6 +77,10 @@
   </Style>
 
   <!-- Focus: a bright outline the player can follow with the D-pad or Tab. -->
+  <!-- A button draws its own focus outline below, so it needs no focus adorner as well. -->
+  <Style Selector="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
   <Style Selector="Button:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="White" />
     <Setter Property="BorderThickness" Value="3" />
@@ -98,10 +102,19 @@
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="Padding" Value="64,4,64,8" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="CornerRadius" Value="4" />
     <Setter Property="BorderBrush" Value="{StaticResource BaseBrush}" />
     <Setter Property="BorderThickness" Value="3" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.08" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.play:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.97)" />
   </Style>
   <Style Selector="Button.play:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource AccentHotBrush}" />
@@ -129,5 +142,71 @@
   </Style>
   <Style Selector="Button.secondary:disabled /template/ ContentPresenter">
     <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- The tools beside PLAY: an icon over a short label. -->
+  <!-- Opaque: a narrow window puts them over the clear part of the picture. -->
+  <Style Selector="Button.tool">
+    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource SecondaryBorderBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="MinWidth" Value="96" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.tool:disabled /template/ ContentPresenter">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- The side rail's pages: an icon over a label; the open page is white with an accent bar. -->
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="4,0,0,0" />
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Padding" Value="0,10" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SecondaryFillBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.nav.current">
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.nav.current:pointerover /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <!-- A card in the home screen's row, and a tile on the Achievements page. -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="16,14" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <!-- A page fades in when it opens (MainWindow.ShowPage). -->
+  <Style Selector="Panel#PageHost, Panel#FormHost">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
   </Style>
 </Styles>

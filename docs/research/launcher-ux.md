@@ -690,6 +690,26 @@ Effort: S under a day, M one to three days, L more **[inferred guesses]**.
 12. **How much of WWE's home screen to bring back** (status line, Open logs, crash report,
     Repair, About, Exit), given the spec's "cut down" launcher?
 
+## 6. Redesign as a PC game launcher (2026-10-31)
+
+The owner asked for the look of a store launcher's game page (Battle.net, Rockstar, EA app,
+Steam). Art comes only from the player's disc (`userdata\art`, see disc-art.md §6); before
+setup the Launcher draws its own gradient and wordmark. What changed:
+
+- **Chrome:** a side rail (the disc's title icon, then Home, Settings, Achievements, Help) and
+  a footer (version and commit, the renderer the Settings file chooses, the GPU, the game
+  files folder, the credit line). Before setup the rail holds only Help.
+- **Home:** the disc's background full-bleed under a left-to-right scrim, the logo top left,
+  PLAY with the tools beside it (icon over label), the status line, "Trouble starting?" with
+  Safe start, then a card row: Players, Venues (a photo that changes every 6 s),
+  Achievements (icons, total, View all) and What's new. A window under 1000 px wide drops
+  What's new; one under 620 px tall draws the logo and cards smaller.
+- **Setup, Settings, Achievements:** one scrolling column on the scrim over the quietened
+  setup picture. The game files location and its Change… moved from Home to Settings.
+- **Palette:** a navy-black base with the red of the logo's "4"; the contrast tests hold it.
+- **Input:** the rail is reached with Left from PLAY; B and Esc leave Settings and
+  Achievements for Home. Down from the rail's last item stays in the rail.
+
 ## Sources
 
 - **This repo (`c6f3991`):**

@@ -15,5 +15,12 @@
                AutomationProperties.LiveSetting="Assertive" />
     <TabControl x:Name="Tabs" IsVisible="False" />
     <TextBlock x:Name="InGameNoteText" Classes="small" TextAlignment="Left" />
+    <!-- Where the game files are, with Change…: added by the code behind of the window (GameFilesLocationPanel). -->
+    <Border Classes="card">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="rowtitle" Text="Game files" />
+        <StackPanel x:Name="LocationHost" />
+      </StackPanel>
+    </Border>
   </StackPanel>
 </UserControl>

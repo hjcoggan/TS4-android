@@ -40,6 +40,21 @@ internal static class LauncherLook
         }
     }
 
+    /// <summary>An art file decoded at <paramref name="width"/> pixels wide (a card shows it small); null and a log line when it cannot be read.</summary>
+    public static Bitmap? LoadScaled(string path, int width, Action<string> log)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            log($"Disc art: {path} could not be drawn: {error.Message}");
+            return null;
+        }
+    }
+
     /// <summary>
     /// The window icon from the art folder's <c>.ico</c>: the Disc art module writes it as one PNG image, which is what is
     /// drawn. Null when there is none or it cannot be read; the window then keeps the Launcher's own icon.
