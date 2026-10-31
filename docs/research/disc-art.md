@@ -70,7 +70,8 @@ turned up outside the `.arc` archives, which the spec puts out of scope.
 
 Also on the disc and not art for the Launcher: `AvatarAssetPack` and
 `$SystemUpdate/su20076000_00000000` (both STFS, avatar items and a dashboard update), the
-attract videos (`Media/XUI/*.wmv`, out of scope) and the `.arc` archives (out of scope).
+attract videos (`Media/XUI/*.wmv`, out of scope) and the `.arc` archives (out of scope). §6 covers
+the `.arc` textures.
 
 `PressStartScreen.xur` names its bitmaps `..\Bitmaps\PressStart.PNG` (element
 `ImageBackground`) and `..\Bitmaps\Logo.PNG` (element `XuiImageLogo`). That confirms their
@@ -309,6 +310,147 @@ entries, and the file data". The rest is the observation above.
   court-blue accents will need retuning toward red and white.
 - **Likenesses.** The background and box art show real players. They are shown unchanged
   from the player's disc, which is what the spec's credit line already covers.
+
+## 6. Textures in the `.arc` archives
+
+Research date: 2026-10-31. A census of the prepared folder decoded every entry of all 146
+`.arc` files (145 in `gamedata`, `TitleUpdate.arc` in `updatedata`) and listed every XPR2
+texture by name. Samples of each kind below were decoded to PNG and checked by eye. Entry
+numbers are for this disc and may differ on another build, so a decoder should search by
+texture name, not by entry number.
+
+### 6.1 What is there
+
+The UI art is in `Global.arc` (4,174 entries, 2,428 of them XPR2). Most other archives are a
+venue's or player's 3D data. The `Baked_<Player><n>.arc` and `PlayerCreator_*_Texture.arc`
+archives hold model textures (skin, cloth), and nothing in them is Launcher art.
+
+| Kind | Name pattern | Count | Size, format | Where |
+|---|---|---|---|---|
+| Player headshot, square | `<Name>_Portrait` | 325 (plus 12 16x16 stubs) | 128x128, 8888, opaque | `Global.arc`, one texture per entry (67,596 bytes), and all of them together in one 12-part entry |
+| Player head and shoulders, cut out | `<Name>_Picture`, `_Picture1`, `_Picture2` | 174 | 256x256, 8888, alpha cut-out | `Global.arc` |
+| Player action pose, cut out | `<Name>_ActionA`, `A1`, `A2`, `B`, `B1`, `B2` | 174 (`ActionA`) | 256x256, 8888, alpha | `Global.arc` |
+| "Play like a pro" card (pro on blue) | `TS4PlayLikePro_<Name>` | 14 | 512x256, DXT5, rounded card | `CareerMain.arc` entry 370 |
+| Venue photo (venue select) | `<Venue>_Preview` | 42 venues (plus `Placeholder_Preview`) | 1024x512, DXT5; the photo is at x 130–894, y 65–447 and the border is transparent | `Global.arc`, one per entry (526,348 bytes), plus 22-part bundles |
+| Venue logo | `<Venue>_Logo` | 44 (42 venues, `WorldCup`, `ContinentalCup`) | 128x128, DXT5 (7 in 8888) | `Global.arc`, `GlobalMem.arc` |
+| Loading-screen shot (players at a venue) | `TS4LoadingPicture{2,4,5,6,7,8,9,10}` | 8 | 512x256, 8888 | `Global.arc` |
+| Menu backgrounds (abstract) | `TS4Background_Start` (blue), `TS4MoveBackground` (dark blue), `TS4Background01_Glass` (grey) | 3 | 1024x512; 8888, DXT1, DXT1 | `PracticeGroundPart.arc` 448, `CareerMain.arc` 63 |
+| Main menu panels | `Main_Big`, `Main_Gray`, `Main_White` | 3 | 512x512; DXT5, DXT5, 8888 | `Core.arc` 355 |
+
+No full-screen 1280x720 background exists in the archives. The largest UI images are 1024x512.
+
+Names come from the XPR2 resource names. Portraits cover licensed pros (`Federer`, `Nadal`,
+`Williams` and others), fictional players (`Jorgera`, `Magrinez` and others), `Coach1`–`Coach111`, career NPCs
+(`Doctor`, `TVHost` and others), `UserMan1-4`, `UserWoman1-4` and `Dlc1-4`. The playable
+roster is the 30 names with `Baked_<Name>*.arc` archives (plus `PlayerAcademy1`). Venue names are the
+archive names (`Rome`, `RolandGarros`, `LondonO2`, …). No table maps a texture name to a
+display name. The game builds the display strings elsewhere **[inferred]**.
+
+A useful set for the Launcher: `<Pro>_Portrait` for a player strip, `<Venue>_Preview`
+cropped to the opaque rectangle for venue tiles, and `TS4LoadingPicture*` or
+`TS4Background_Start` for a backdrop.
+
+The Launcher reads `Global.arc` only (`ArchiveArt`): each roster pro's `_Picture` (the
+`_Portrait` stands in when it is missing) into `userdata\art\players`, and each
+`<Venue>_Preview` cropped to the photo into `userdata\art\venues`. The whole read takes about
+2 s on the prepared folder. It never needs a multi-part entry.
+
+### 6.2 Archive (`.arc`) layout
+
+All integers are big-endian.
+
+| Offset | Field |
+|---|---|
+| `0x00` | metadata size; the data base is this value + 4 |
+| `0x04` | `0x20` |
+| `0x08`, `0x0C` | entry count (twice) |
+| `0x10` | size of the entry table region |
+| `0x14`, `0x18` | name-directory row count (twice) |
+| `0x1C` | `PAM-LZX\0`, or `PAM-NIL\0` (only `CutScenes.arc`; entries stored as they are) |
+| `0x24` | entry table: `{u32 name hash, u32 offset from data base, u32 stored length}` × count |
+
+After the entry table come a hash directory and a basename string table (`Textures.xpr`,
+`PackedMaterials.bin`, …). The hash function was not identified. The decoder does not need
+it, because textures are found by the XPR2 names inside the entries.
+
+PAM-LZX entry:
+
+| Offset | Field |
+|---|---|
+| `0x00` | `PAM-LZX\0` |
+| `0x08` | part count `P` |
+| `0x0C` | part size, `0x100000`; also the LZX window (2^20) |
+| `0x10` | uncompressed size of the last part |
+| `0x14` | total uncompressed size |
+| `0x18`–`0x23` | three words, a hash or checksum **[inferred]** |
+| `0x24` | header size `= 0x28 + 4(P-1) + 4P` (`0x2C` when P = 1) |
+| `0x28` | `P-1` words: the start of parts 1..P-1, **from the start of the entry** |
+| then | `P` words, one per part (a checksum **[inferred]**, not needed) |
+
+Part 0 starts at the header size. Every part is a **separate LZX stream** with a new decoder
+(window 2^20) and decodes to `0x100000` bytes, except the last one. Within a part the frames
+are as `ArchiveShaders.Decode` reads them: `FF u16 uncompressed u16 compressed`, or
+`u16 compressed` for a full `0x8000` frame. A part's frames are followed by zero padding up to
+the next part offset. For a multi-part entry, port `ArchiveShaders.Decode` once per part and
+concatenate the results. Up to 22 parts were seen (22 MB).
+
+To scan cheaply, decode only the first frame of each entry and test for `XPR2`. The census
+did this for every archive in a few minutes in Python.
+
+### 6.3 XPR2 container
+
+| Offset | Field |
+|---|---|
+| `0x00` | `XPR2` |
+| `0x04` | header size `H` (`0x800`, `0x1000`, …) |
+| `0x08` | data size |
+| `0x0C` | resource count `N` |
+| `0x10` | `N` × `{char[4] type, u32 offset, u32 size, u32 name offset}`; type is `TX2D` or `TXCM` (cube) |
+
+The offset and name offset are relative to `0x0C`. Names are NUL-terminated ASCII. The data
+section starts at `0x0C + H`. A resource is a 0x34-byte `D3DBaseTexture`, with the 6-dword
+GPU fetch constant at resource `+0x1C` (big-endian dwords). Field layout as
+`xe_gpu_texture_fetch_t` in `.tools/rexglue-source/include/rex/graphics/xenos.h:1168`:
+
+| Dword | Bits | Field |
+|---|---|---|
+| 0 | 31 | tiled (1 for every UI texture seen) |
+| 0 | 22–30 | pitch in texels >> 5 |
+| 1 | 0–5 | format: 6 = `k_8_8_8_8`, 18 = `k_DXT1`, 19 = `k_DXT2_3`, 20 = `k_DXT4_5`, 60 = `k_CTX1` |
+| 1 | 6–7 | endian: 1 = 8in16, 2 = 8in32 |
+| 1 | 12–31 | base address >> 12: offset of level 0 **from the data section start** |
+| 2 | 0–12, 13–25 | width - 1, height - 1 |
+| 3 | 1–12 | swizzle, 3 bits per output channel |
+| 5 | 11, 12–31 | packed mips, mip address (not needed: level 0 only) |
+
+Example, `Federer_Portrait`: `81000002 00000086 000FE07F 00000C14 …` gives tiled, pitch 128,
+`k_8_8_8_8`, 8in32, base 0, 128x128.
+
+Formats in the census (TX2D): DXT1 33,042, DXT5 6,877, CTX1 5,173 (normal maps), 8888
+3,077. Every 8888 texture is 8in32 with swizzle `0x60A`. Every DXT texture is 8in16 with
+swizzle `0x688`.
+
+### 6.4 Decode recipe (level 0)
+
+1. Block size: 1 texel and 4 bytes for 8888; 4x4 texels and 8 bytes (DXT1) or 16 bytes
+   (DXT3/5). `bx = ceil(w / bs)`, `by = ceil(h / bs)`, `pitchBlocks = pitch / bs`.
+2. Untile: for each block `(x, y)` copy `bpb` bytes from
+   `data + base + GetTiledOffset2D(x, y, pitchBlocks, log2(bpb))`. That is the loop in
+   `CopyLevelFromGuest` (`src/native/texture_layout.cpp`), with `GetTiledOffset2D` from
+   `.tools/rexglue-source/src/graphics/pipeline/texture/util.cpp:424`. It is 12 lines of
+   integer math and ports directly. Linear (untiled) textures use rows of
+   `align(pitchBlocks * bpb, 256)` bytes. None were needed here.
+3. Endian swap the untiled bytes, as in `EndianSwap` (`texture_layout.cpp`): 8in16 swaps
+   each byte pair, 8in32 reverses each 4 bytes.
+4. Convert:
+   - 8888 after the swap is **B, G, R, A** per texel (swizzle `0x60A` = R from component Z).
+     That is WPF `Bgra32` as is. Equivalently, the raw guest bytes are A, R, G, B.
+   - DXT1/DXT3/DXT5 after the swap are standard little-endian BC1/BC2/BC3 blocks. Decode with
+     any BC decoder (a 60-line CPU decoder, or `Pfim`/`BCnEncoder.Net` as a dependency).
+5. Crop to `w x h`, because tiled storage pads to 32-block tiles.
+
+The census decoded all samples with this recipe, including a portrait at part 10 of the
+12-part bundle, which checks the multi-part reading.
 
 ## Evidence
 
