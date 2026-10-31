@@ -5,7 +5,7 @@ namespace TopSpin4.Launcher.Core;
 
 /// <summary>
 /// Reads the game's shader containers straight from the prepared game folder's <c>.arc</c> archives
-/// (the shader reader of .scratch/shader-setup/spec.md). An archive is a 0x24-byte header (data base
+/// (the Launcher's shader step). An archive is a 0x24-byte header (data base
 /// at word 0 + 4, entry count at word 2, <c>PAM-LZX</c> or <c>PAM-NIL</c> at 0x1C), then
 /// <c>{name hash, offset from the data base, length}</c> per entry. A PAM-LZX entry has its own 0x2C-byte
 /// header (<c>PAM-LZX</c>, part count, window, uncompressed size, ..., header size at 0x24) and then frames:

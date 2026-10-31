@@ -1,6 +1,6 @@
 // The pad combo that opens the Settings page (ticket 07): hold Back and Start together.
 //
-// The game reads every button (docs: .scratch/game-settings/issues/07-pad-combo.md, Comments),
+// The game reads every button,
 // so no single button is free. Back and Start rarely land in the same poll, so a lone one is
 // filtered at the pad-state level (the controller driver's GetDeviceState, remapped_input.cpp, and
 // the scripted pad's): only its bit is masked while it waits kComboWindowMs for the other, every

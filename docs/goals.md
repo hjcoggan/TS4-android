@@ -10,7 +10,7 @@ An enhanced port (ADR-0001) of the Reference build (ADR-0002), recompiled with R
 - **Online:** stubbed. Title-server login and the DLC check are short-circuited, so boot doesn't wait on a dead server. Player Match and World Tour fail with a clean "unavailable" message.
 - **Frame rate:** locked at the game's 60 fps tick. The simulation is tied to frame rate, so unlocking it changes game speed.
 - **Renderer:** the Native renderer by default, with the Classic renderer selectable (ADR-0005). 1.0 waits until the Native renderer matches Classic in every 1.0 mode.
-- **Enhancements in 1.0:** resolution scaling, MSAA, anisotropic filtering and CAS sharpening (`.scratch/image-quality/`), and button remapping.
+- **Enhancements in 1.0:** resolution scaling, MSAA, anisotropic filtering and CAS sharpening, and button remapping.
 - **Extras:** the Agassi preorder outfit is available through an unlock option. Stereoscopic 3D stays disabled.
 - **Saves and settings:** stored in `userdata` beside the game exe (portable install, ADR-0009), in the game's own save format, so Career saves can be copied between the Oracle and the port.
 
@@ -37,9 +37,9 @@ PS3, Wii, macOS, D3D12, the base (pre-TU1) build, loading new guest code from DL
 ## Way of work
 
 - **Roles:** Claude does research, RE, manifest and seed work, hooks, and runtime and renderer code. The owner makes the final calls on gameplay feel, tests on hardware and Steam Deck, and accepts milestones.
-- **Done means verified:** every change passes the scripted smoke run (launch, reach a target screen, capture screenshots and logs, exit), and its visuals are compared with Oracle captures from the same point. The owner play-tests at each milestone.
+- **Done means verified:** Check passes, and a change that can alter runtime behaviour gets one game run (smoke or scene). An Oracle comparison is made when the owner asks for one or a visual difference needs settling. The owner play-tests at each milestone.
 - **Oracle:** Xenia Edge on the Reference build, with Canary as a second opinion. Original bugs are kept; the owner may pick some to fix behind the Fix original glitches setting, off by default (the white flash after a loading screen, `src/load_flash.h`).
 - **Repository:** contains no game data or generated code (ADR-0006). Upstream tools are fetched by `scripts/bootstrap.ps1` at pinned versions, and our changes to them live as numbered files in `patches/`.
 - **Commits:** Claude commits small, verified steps to `main` without asking. Pushing, and anything else outward-facing, needs the owner's OK. The repo stays private on GitHub until M2, then goes public.
-- **Issues:** local markdown under `.scratch/` ([issue-tracker.md](agents/issue-tracker.md)).
+- **Open work:** [TODO.md](../TODO.md), one line per item.
 - **Shared code:** copied from WWE All Stars and allowed to diverge (ADR-0004).

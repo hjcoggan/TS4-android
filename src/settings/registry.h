@@ -166,7 +166,7 @@ inline const std::vector<Setting>& PlayerSettings() {
        "Renderer: classic (Xenos GPU emulation, the reference) or native (Vulkan; not built "
        "yet, so Classic draws until it is). Takes effect at the next start",
        Section::kGraphics, "Renderer", 10},
-      // Image Enhancements (.scratch/image-quality/spec.md). Native only:
+      // Image Enhancements. Native only:
       {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3"},
        "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
        "filtered down to the window when larger; auto picks the smallest that covers the "

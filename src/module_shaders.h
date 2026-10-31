@@ -1,6 +1,5 @@
-// The game's Module mode (--ts4_prepare_modules), the Launcher's shader step for the shaders no archive holds
-// (.scratch/shader-setup/spec.md, "Module shaders"): about 90 shader containers sit in the data of the Loader
-// and Swing Modules, passed to Create*Shader as they are. The mode loads both Modules as play does (Title
+// The game's Module mode (--ts4_prepare_modules), the Launcher's shader step for the shaders no archive holds:
+// about 90 shader containers sit in the data of the Loader and Swing Modules, passed to Create*Shader as they are. The mode loads both Modules as play does (Title
 // Update 1 applied) without running any guest code, writes each container it finds into the shader top-up
 // folder under its dump name (native/shader_topup.h), prints a header and one result line, and exits:
 //

@@ -1,4 +1,4 @@
-// The image-quality plan (.scratch/image-quality/spec.md): every image-quality choice Native
+// The image-quality plan: every image-quality choice Native
 // applies, made in one place from the image settings, the window and the device. The renderer
 // reads its outputs (the scale its targets draw at, the samples a target gets, the global
 // texture sharpness bias, the anisotropic filtering, CAS and the texture-offset scale) and
