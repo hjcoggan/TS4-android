@@ -358,6 +358,8 @@ struct RenderTarget {
   std::unique_ptr<RenderTarget> single;
   // g.write_serial when a pass last began with this target attached (it may have written it).
   uint64_t writes = 0;
+  // A depth target's EDRAM tiles (guest::DepthEdramRange); empty for colour.
+  guest::EdramRange edram;
 };
 
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -1384,6 +1386,11 @@ RenderTarget* GetRenderTarget(uint64_t key, VkFormat format, uint32_t guest_widt
   target->scale = scale;
   target->is_depth = is_depth;
   target->samples = samples;
+  if (is_depth) {
+    // DepthTargetKey: RB_DEPTH_INFO's base tile, the pitch at bit 32, the guest samples at 58.
+    target->edram = guest::DepthEdramRange(uint32_t(key & 0xFFF), uint32_t(key >> 32) & 0x3FFF,
+                                           guest_height, uint32_t(key >> 58) & 3);
+  }
   g_labels.Name(g_vk.vk_device, VK_OBJECT_TYPE_IMAGE, uint64_t(target->image),
                 fmt::format("{} target {}x{} {}", is_depth ? "depth" : "colour", width, height,
                             FormatName(format)));
@@ -1570,6 +1577,25 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth, const PassClears* clea
     if (clears && clears->stencil) {
       stencil_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
       stencil_attachment.clearValue.depthStencil = clears->depth_stencil;
+    }
+    // On Xenos a depth buffer lying inside another's EDRAM tiles is overwritten whenever that
+    // one is drawn. Swing's bright pass (640x360, depth at tile 0xB8) relies on it: its
+    // depth-tested full-screen quad passes over the scene's freshly cleared depth. Kept as its
+    // own image, the buffer held depth from earlier shots, the quad failed everywhere and the
+    // bloom stayed a picture of the arena over the tunnel walk-out. Such a buffer starts the
+    // pass cleared to far instead.
+    if (depth_attachment.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD &&
+        std::any_of(g.render_target_order.begin(), g.render_target_order.end(),
+                    [depth](const RenderTarget* other) {
+                      return other != depth && other->is_depth && other->writes > depth->writes &&
+                             other->edram.Covers(depth->edram);
+                    })) {
+      depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      depth_attachment.clearValue.depthStencil = {1.0f, 0};
+      stencil_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      stencil_attachment.clearValue.depthStencil = {1.0f, 0};
+      TRACE("depth {}x{} at tile {:X} overwritten by a covering depth buffer: cleared",
+            depth->width, depth->height, depth->edram.base);
     }
   }
   VkRenderingInfo rendering_info = {VK_STRUCTURE_TYPE_RENDERING_INFO};

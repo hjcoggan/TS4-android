@@ -256,6 +256,26 @@ TEST_CASE("a 2-component 16-bit position swaps x/y only, keeping w = 1") {
   CHECK(HalfSwapBit(0, 1, true, false) == 1u << 17);
 }
 
+TEST_CASE("a depth buffer's EDRAM tiles: 80x16 samples a tile, MSAA multiplies them") {
+  // The 1280x720 scene depth: 16 tiles a row, 45 rows.
+  CHECK(DepthEdramRange(0, 1280, 720, 0).tiles == 720u);
+  CHECK(DepthEdramRange(0, 1280, 720, 1).tiles == 1440u);
+  CHECK(DepthEdramRange(0, 1280, 720, 2).tiles == 2880u);
+  // Partial tiles round up.
+  CHECK(DepthEdramRange(0, 640, 360, 0).tiles == 8u * 23u);
+}
+
+TEST_CASE("the bloom pass's 640x360 depth lies inside the scene's depth tiles") {
+  // Swing's bright pass draws at 640x360 with depth at tile 0xB8, inside the 1280x720 scene
+  // depth at tile 0 (the tunnel walk-out's stale glow).
+  const EdramRange scene = DepthEdramRange(0, 1280, 720, 0);
+  const EdramRange bloom = DepthEdramRange(0xB8, 640, 360, 0);
+  CHECK(scene.Covers(bloom));
+  CHECK_FALSE(bloom.Covers(scene));
+  CHECK_FALSE(DepthEdramRange(0x2D0, 1280, 720, 0).Covers(bloom));
+  CHECK_FALSE(EdramRange{}.Covers(bloom));
+}
+
 TEST_CASE("720p into a 1440p window goes to the presenter to be scaled up") {
   const OutputPlan plan = PlanOutput(1, 2560, 1440);
   CHECK(plan.target_scale == 1);

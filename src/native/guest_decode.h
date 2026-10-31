@@ -641,4 +641,26 @@ constexpr CasSetting CasEffect(double strength) {
   return {true, strength < 1.0 ? strength : 1.0};
 }
 
+// The EDRAM tiles a 32bpp surface (a depth buffer) occupies: RB_DEPTH_INFO's base tile, then
+// rows of 80x16-sample tiles across RB_SURFACE_INFO's pitch. 2x MSAA doubles the samples down,
+// 4x across as well. Two depth buffers whose tiles overlap share memory on Xenos: drawing one
+// overwrites the other there, which Native's separate images do not do by themselves.
+struct EdramRange {
+  uint32_t base = 0;   // first tile
+  uint32_t tiles = 0;  // tile count; 0 = unknown
+  constexpr bool Covers(const EdramRange& other) const {
+    return tiles && other.tiles && base <= other.base &&
+           uint64_t(other.base) + other.tiles <= uint64_t(base) + tiles;
+  }
+};
+// msaa_samples: RB_SURFACE_INFO bits 16-17 (0 = 1x, 1 = 2x, 2 = 4x).
+constexpr EdramRange DepthEdramRange(uint32_t depth_base, uint32_t pitch, uint32_t height,
+                                     uint32_t msaa_samples) {
+  const uint32_t across = msaa_samples >= 2 ? 2 : 1;
+  const uint32_t down = msaa_samples >= 1 ? 2 : 1;
+  const uint32_t tiles_per_row = (pitch * across + 79) / 80;
+  const uint32_t rows = (height * down + 15) / 16;
+  return {depth_base, tiles_per_row * rows};
+}
+
 }  // namespace topspin4::native::guest
