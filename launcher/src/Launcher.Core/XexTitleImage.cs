@@ -19,21 +19,23 @@ internal static class XexTitleImage
 {
     private const uint ResourceInfoKey = 0x000002FF;
     private const uint FileFormatInfoKey = 0x000003FF;
-    private const ulong TitleImageId = 0x8000;
+    public const ulong TitleImageId = 0x8000;
     private const int Frame = 0x8000;
     private const int MaxImageBytes = 64 << 20;
 
     // The retail key every console and emulator uses to unlock an XEX2's image key: a published constant (Xenia, Free60), not game data.
     private static readonly byte[] RetailKey = [0x20, 0xB1, 0x85, 0xA5, 0x9D, 0x28, 0xFD, 0xC3, 0x40, 0x58, 0x3F, 0xBB, 0x08, 0x96, 0xBF, 0x91];
 
+    /// <summary>The PNG title image of the Module in <paramref name="xex"/>, or null when it carries none. As <see cref="ReadResource"/>.</summary>
+    public static byte[]? Read(byte[] xex, XexExecutionInfo? execution) => ReadResource(xex, execution)?.Image(TitleImageId);
+
     /// <summary>
-    /// The PNG title image of the Module in <paramref name="xex"/>, or null when it carries none
-    /// (no resource for its title, or no title image in it). <paramref name="execution"/> is the
-    /// Module's execution info, already read from its header (<see cref="XexHeader.Parse"/>); the
-    /// title resource is named after its title id. Throws <see cref="InvalidDataException"/>
-    /// when the Module is damaged, cut off or encoded in a way this does not read.
+    /// The title resource (an XDBF: title image, achievement icons and names) of the Module in <paramref name="xex"/>,
+    /// or null when it carries none. <paramref name="execution"/> is the Module's execution info, already read from its
+    /// header (<see cref="XexHeader.Parse"/>); the title resource is named after its title id. Throws
+    /// <see cref="InvalidDataException"/> when the Module is damaged, cut off or encoded in a way this does not read.
     /// </summary>
-    public static byte[]? Read(byte[] xex, XexExecutionInfo? execution)
+    public static Xdbf? ReadResource(byte[] xex, XexExecutionInfo? execution)
     {
         if (xex.Length < 0x18 || !xex.AsSpan(0, 4).SequenceEqual("XEX2"u8)) throw new InvalidDataException("It is not an Xbox 360 executable.");
         var peOffset = U32(xex, 8);
@@ -60,7 +62,7 @@ internal static class XexTitleImage
             try
             {
                 var image = DecodeImage(xex, format, peOffset, security, key, (int)imageSize, resourceOffset + (int)resourceSize);
-                return TitleImage(image.AsSpan(resourceOffset, (int)resourceSize));
+                return Xdbf.Parse(image.AsSpan(resourceOffset, (int)resourceSize));
             }
             catch (InvalidDataException error)
             {
@@ -148,27 +150,6 @@ internal static class XexTitleImage
         }
         if (image.Length < needed) throw new InvalidDataException("The executable's image is cut off.");
         return image.ToArray();
-    }
-
-    // The XDBF in the title resource: header, entry table (section, id, offset, size), free table, then the data the offsets count from.
-    private static byte[]? TitleImage(ReadOnlySpan<byte> resource)
-    {
-        if (!resource.StartsWith("XDBF"u8)) throw new InvalidDataException("The title resource is damaged.");
-        var tableLength = BinaryPrimitives.ReadUInt32BigEndian(resource[8..]);
-        var used = BinaryPrimitives.ReadUInt32BigEndian(resource[12..]);
-        var freeLength = BinaryPrimitives.ReadUInt32BigEndian(resource[16..]);
-        var dataStart = 0x18L + (long)tableLength * 18 + (long)freeLength * 8;
-        if (used > tableLength || dataStart > resource.Length) throw new InvalidDataException("The title resource is damaged.");
-        for (var i = 0; i < used; i++)
-        {
-            var entry = resource.Slice(0x18 + i * 18, 18);
-            if (BinaryPrimitives.ReadUInt16BigEndian(entry) != 2 || BinaryPrimitives.ReadUInt64BigEndian(entry[2..]) != TitleImageId) continue;
-            long offset = dataStart + BinaryPrimitives.ReadUInt32BigEndian(entry[10..]);
-            long size = BinaryPrimitives.ReadUInt32BigEndian(entry[14..]);
-            if (offset + size > resource.Length) throw new InvalidDataException("The title image lies outside the title resource.");
-            return resource.Slice((int)offset, (int)size).ToArray();
-        }
-        return null;
     }
 
     private static uint U32(ReadOnlySpan<byte> bytes, uint offset) => BinaryPrimitives.ReadUInt32BigEndian(bytes[(int)offset..]);

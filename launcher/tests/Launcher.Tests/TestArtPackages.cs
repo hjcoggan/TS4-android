@@ -35,13 +35,16 @@ internal static class TestXuiz
     }
 }
 
+/// <summary>One achievement of a generated title resource.</summary>
+internal sealed record TestAchievement(ushort Id, uint ImageId, ushort Gamerscore, string Name, string Description, string HowTo, byte[]? Icon);
+
 /// <summary>
 /// A generated XEX2 Module that carries a title resource (an XDBF with a title image) the way the
 /// Reference build's default.xex does: execution info, resource info, file format info, security
 /// info, then the image data, optionally LZX-compressed (stored blocks, a real LZX stream) in
 /// hash-chained blocks and AES-128-CBC encrypted. No game data.
 /// </summary>
-internal sealed class TestXexImage
+internal sealed record TestXexImage
 {
     public const uint LoadAddress = 0x82000000;
     private const int PeOffset = 0x1000;
@@ -126,20 +129,34 @@ internal sealed class TestXexImage
         return xex;
     }
 
-    // An XDBF: header, a metadata-section achievement image (id 1), then the title image (id 0x8000).
+    /// <summary>The achievement table (XACH) and its English strings (XSTR); each icon is image <c>ImageId</c> unless null.</summary>
+    public IReadOnlyList<TestAchievement> Achievements { get; init; } = [];
+    /// <summary>Leave out the English string table, so the achievements have no names.</summary>
+    public bool OmitStrings { get; init; }
+    /// <summary>Replaces the achievement table's bytes (a damaged table).</summary>
+    public byte[]? RawAchievementTable { get; init; }
+
+    // An XDBF: header, an image that is no achievement's icon (id 0x7F), the title image (id 0x8000), and the achievements.
     private byte[] Xdbf()
     {
         var other = TestArtImages.Png(4, 4, 99);
         var title = TitleImage ?? [];
-        var entries = new List<(ushort Section, ulong Id, byte[] Data)> { (2, 1, other) };
+        var entries = new List<(ushort Section, ulong Id, byte[] Data)> { (2, 0x7F, other) };
         if (TitleImage is not null) entries.Add((2, 0x8000, title));
-        const int tableLength = 4;
+        if (Achievements.Count > 0 || RawAchievementTable is not null)
+        {
+            entries.Add((1, 0x58414348, RawAchievementTable ?? AchievementTable()));
+            if (!OmitStrings) entries.Add((3, 1, StringTable()));
+            foreach (var achievement in Achievements)
+                if (achievement.Icon is not null) entries.Add((2, achievement.ImageId, achievement.Icon));
+        }
+        var tableLength = entries.Count + 2;
         const int freeLength = 2;
         var dataStart = 0x18 + tableLength * 18 + freeLength * 8;
         var xdbf = new byte[dataStart + entries.Sum(entry => entry.Data.Length)];
         "XDBF"u8.CopyTo(xdbf);
         BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(4), 0x10000);
-        BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(8), tableLength);
+        BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(8), (uint)tableLength);
         BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(12), (uint)entries.Count);
         BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(16), freeLength);
         BinaryPrimitives.WriteUInt32BigEndian(xdbf.AsSpan(20), 1);
@@ -155,6 +172,56 @@ internal sealed class TestXexImage
             offset += entries[i].Data.Length;
         }
         return xdbf;
+    }
+
+    // XACH: magic, version, size, count u16, then 0x24 bytes per achievement (id, name, description and how-to string
+    // ids, image id u32, gamerscore u16, then flags and reserved bytes). String ids: 100 + 3i, 101 + 3i, 102 + 3i.
+    private byte[] AchievementTable()
+    {
+        var table = new byte[14 + Achievements.Count * 0x24];
+        "XACH"u8.CopyTo(table);
+        BinaryPrimitives.WriteUInt32BigEndian(table.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt32BigEndian(table.AsSpan(8), (uint)table.Length - 8);
+        BinaryPrimitives.WriteUInt16BigEndian(table.AsSpan(12), (ushort)Achievements.Count);
+        for (var i = 0; i < Achievements.Count; i++)
+        {
+            var row = table.AsSpan(14 + i * 0x24, 0x24);
+            BinaryPrimitives.WriteUInt16BigEndian(row, Achievements[i].Id);
+            BinaryPrimitives.WriteUInt16BigEndian(row[2..], (ushort)(100 + 3 * i));
+            BinaryPrimitives.WriteUInt16BigEndian(row[4..], (ushort)(101 + 3 * i));
+            BinaryPrimitives.WriteUInt16BigEndian(row[6..], (ushort)(102 + 3 * i));
+            BinaryPrimitives.WriteUInt32BigEndian(row[8..], Achievements[i].ImageId);
+            BinaryPrimitives.WriteUInt16BigEndian(row[12..], Achievements[i].Gamerscore);
+            BinaryPrimitives.WriteUInt32BigEndian(row[16..], 9);
+        }
+        return table;
+    }
+
+    // XSTR: magic, version, size, count u16, then (id u16, length u16, UTF-8) per string.
+    private byte[] StringTable()
+    {
+        var strings = new List<(ushort Id, byte[] Text)> { (0x8000, Encoding.UTF8.GetBytes("Test Title")) };
+        for (var i = 0; i < Achievements.Count; i++)
+        {
+            strings.Add(((ushort)(100 + 3 * i), Encoding.UTF8.GetBytes(Achievements[i].Name)));
+            strings.Add(((ushort)(101 + 3 * i), Encoding.UTF8.GetBytes(Achievements[i].Description)));
+            strings.Add(((ushort)(102 + 3 * i), Encoding.UTF8.GetBytes(Achievements[i].HowTo)));
+        }
+        var table = new List<byte>(new byte[14]);
+        foreach (var (id, text) in strings)
+        {
+            var head = new byte[4];
+            BinaryPrimitives.WriteUInt16BigEndian(head, id);
+            BinaryPrimitives.WriteUInt16BigEndian(head.AsSpan(2), (ushort)text.Length);
+            table.AddRange(head);
+            table.AddRange(text);
+        }
+        var bytes = table.ToArray();
+        "XSTR"u8.CopyTo(bytes);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(8), (uint)bytes.Length - 8);
+        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(12), (ushort)strings.Count);
+        return bytes;
     }
 
     private static byte[] Pad(byte[] data)

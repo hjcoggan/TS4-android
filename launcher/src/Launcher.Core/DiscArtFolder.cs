@@ -24,9 +24,15 @@ public sealed class DiscArtFolder
     public const string IndexFileName = "index.txt";
     public const string IconFileName = "topspin4.ico";
 
+    /// <summary>The name of the list file inside each collection's folder.</summary>
+    public const string ListFileName = "list.txt";
+
     private const string IconKey = "ico";
     private const string ReadKey = "read";
     private const string ReadComplete = "complete";
+    private const string FormatKey = "format";
+    // Raised when the Launcher reads more from the disc than before, so an older folder counts as incomplete and is read again.
+    private const string Format = "2";
     private static readonly string[] Extensions = [".png", ".jpg"];
 
     /// <summary>
@@ -41,10 +47,12 @@ public sealed class DiscArtFolder
     private readonly bool _indexed;
     private readonly bool _readComplete;
     private readonly bool _listedFileMissing;
+    private readonly Dictionary<DiscArtCollection, IReadOnlyList<DiscArtEntry>> _collections;
 
     private DiscArtFolder(string folder, Dictionary<DiscArtSlot, string> files, string? icon, bool indexed, bool readComplete,
-        bool listedFileMissing, string stamp)
+        bool listedFileMissing, string stamp, Dictionary<DiscArtCollection, IReadOnlyList<DiscArtEntry>> collections)
     {
+        _collections = collections;
         _folder = folder;
         _files = files;
         _icon = icon;
@@ -72,12 +80,22 @@ public sealed class DiscArtFolder
         _ => throw new ArgumentOutOfRangeException(nameof(slot)),
     };
 
+    /// <summary>The folder name of a collection inside the art folder.</summary>
+    public static string Folder(DiscArtCollection collection) => collection switch
+    {
+        DiscArtCollection.Achievements => "achievements",
+        DiscArtCollection.Players => "players",
+        DiscArtCollection.Venues => "venues",
+        _ => throw new ArgumentOutOfRangeException(nameof(collection)),
+    };
+
     /// <summary>Opens the art folder as its index describes it. A missing folder or index, or an image the index names that is gone, leaves that slot empty.</summary>
     public static DiscArtFolder Open(string folder)
     {
         var files = new Dictionary<DiscArtSlot, string>();
         string? icon = null;
         var readComplete = false;
+        var format = "";
         var listedMissing = false;
         var stamp = new StringBuilder();
         try
@@ -92,6 +110,7 @@ public sealed class DiscArtFolder
                 var value = line[(cut + 1)..].Trim();
                 stamp.Append(key).Append('=').Append(value).Append('\n');
                 if (key == ReadKey) readComplete = value == ReadComplete;
+                else if (key == FormatKey) format = value;
                 else if (key == "source" || key == "media_id" || key == "title_id") continue;
                 else if (key != IconKey && !slots.ContainsKey(key)) continue;
                 else if (!IsPlainFileInside(folder, value)) listedMissing = true;
@@ -103,12 +122,34 @@ public sealed class DiscArtFolder
                 }
             }
             Stat(stamp, index);
-            return new DiscArtFolder(folder, files, icon, indexed: true, readComplete, listedMissing, stamp.ToString());
+            var collections = new Dictionary<DiscArtCollection, IReadOnlyList<DiscArtEntry>>();
+            foreach (var collection in Enum.GetValues<DiscArtCollection>())
+                collections[collection] = OpenCollection(Path.Combine(folder, Folder(collection)), stamp);
+            return new DiscArtFolder(folder, files, icon, indexed: true, readComplete && format == Format, listedMissing, stamp.ToString(), collections);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new DiscArtFolder(folder, [], null, indexed: false, readComplete: false, listedFileMissing: false, "");
+            return new DiscArtFolder(folder, [], null, indexed: false, readComplete: false, listedFileMissing: false, "", []);
         }
+    }
+
+    // A collection's list: one line per picture, "file<TAB>title<TAB>detail<TAB>points". A missing list is an empty
+    // collection; a line naming a file that is gone is skipped.
+    private static IReadOnlyList<DiscArtEntry> OpenCollection(string folder, StringBuilder stamp)
+    {
+        var list = Path.Combine(folder, ListFileName);
+        if (!File.Exists(list)) return [];
+        var entries = new List<DiscArtEntry>();
+        foreach (var line in File.ReadLines(list))
+        {
+            if (line.Length == 0 || line.StartsWith('#')) continue;
+            var fields = line.Split('\t');
+            if (!IsPlainFileInside(folder, fields[0])) continue;
+            var points = fields.Length > 3 && int.TryParse(fields[3], out var value) ? value : 0;
+            entries.Add(new DiscArtEntry(Path.Combine(folder, fields[0]), fields.ElementAtOrDefault(1) ?? "", fields.ElementAtOrDefault(2) ?? "", points));
+        }
+        Stat(stamp, list);
+        return entries;
     }
 
     // An index entry is a file name in the folder, never a path out of it; and the file must still be there.
@@ -127,6 +168,10 @@ public sealed class DiscArtFolder
     /// <summary>The full path of the multi-purpose <c>.ico</c> (window, taskbar and shortcut icon), or null.</summary>
     public string? IconPath => _icon is null ? null : Path.Combine(_folder, _icon);
 
+    /// <summary>The pictures of a collection, in the order the disc gave them; empty when the folder has none.</summary>
+    public IReadOnlyList<DiscArtEntry> Entries(DiscArtCollection collection) =>
+        _collections.TryGetValue(collection, out var entries) ? entries : [];
+
     /// <summary>
     /// An index from a read that went through without a problem exists, and every file it lists is there. A disc that
     /// genuinely lacks an image still gives a complete folder; one with a file gone, or a read that logged a problem
@@ -141,8 +186,10 @@ public sealed class DiscArtFolder
     /// (some may already hold the new disc's bytes), so the folder never lists a file that is gone. One writer at a time (<see cref="WriterLock"/>).
     /// </summary>
     /// <param name="cleanRead">The read that produced <paramref name="images"/> logged no problem; only then does the index say <c>read=complete</c>.</param>
+    /// <param name="collections">The pictures of each collection read; a collection left out is emptied.</param>
     internal static IReadOnlyList<DiscArtSlot> Write(string folder, IReadOnlyDictionary<DiscArtSlot, byte[]> images, string source,
-        DiscIdentity? disc, bool cleanRead, Action<string> problem)
+        DiscIdentity? disc, bool cleanRead, Action<string> problem,
+        IReadOnlyDictionary<DiscArtCollection, IReadOnlyList<DiscArtItem>>? collections = null)
     {
         lock (WriterLock)
         {
@@ -178,9 +225,12 @@ public sealed class DiscArtFolder
                     problem("the title icon is not a PNG of 256 pixels or less, so no .ico was made.");
                 }
             }
+            index.Append(FormatKey).Append('=').Append(Format).Append('\n');
             if (clean) index.Append(ReadKey).Append('=').Append(ReadComplete).Append('\n');
 
             foreach (var (name, bytes) in wanted) WriteAtomically(Path.Combine(folder, name), bytes);
+            foreach (var collection in Enum.GetValues<DiscArtCollection>())
+                WriteCollection(Path.Combine(folder, Folder(collection)), collections?.GetValueOrDefault(collection) ?? []);
             WriteAtomically(Path.Combine(folder, IndexFileName), Encoding.UTF8.GetBytes(index.ToString()));
 
             var keep = wanted.Select(file => file.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -191,6 +241,34 @@ public sealed class DiscArtFolder
             return found;
         }
     }
+
+    // The pictures first, then the list that names them, then the files the list no longer names. An empty collection
+    // removes its list and pictures (the folder itself stays; Explorer may have it open).
+    private static void WriteCollection(string folder, IReadOnlyList<DiscArtItem> items)
+    {
+        if (items.Count == 0 && !Directory.Exists(folder)) return;
+        Directory.CreateDirectory(folder);
+        DeleteStrayTemporaries(folder);
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = new StringBuilder("# Top Spin 4 Recomp: file, title, detail, points. Written by the Launcher.\n");
+        for (var i = 0; i < items.Count; i++)
+        {
+            var name = $"{i + 1:D3}{ArtImageFile.Describe(items[i].Image).Extension}";
+            WriteAtomically(Path.Combine(folder, name), items[i].Image);
+            keep.Add(name);
+            list.Append(name).Append('\t').Append(Field(items[i].Title)).Append('\t').Append(Field(items[i].Detail))
+                .Append('\t').Append(items[i].Points).Append('\n');
+        }
+        if (items.Count > 0)
+        {
+            keep.Add(ListFileName);
+            WriteAtomically(Path.Combine(folder, ListFileName), Encoding.UTF8.GetBytes(list.ToString()));
+        }
+        foreach (var path in Directory.EnumerateFiles(folder))
+            DeleteObsolete(folder, Path.GetFileName(path), keep);
+    }
+
+    private static string Field(string text) => text.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ').Trim();
 
     // A one-image icon file: ICONDIR (reserved, type 1, count), one ICONDIRENTRY, then the PNG itself (Windows Vista and later
     // read PNG entries). The title icon is 64 pixels; Windows scales it down for the smaller sizes.

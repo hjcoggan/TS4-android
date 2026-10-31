@@ -15,6 +15,25 @@ public enum DiscArtSlot
     SetupBackground,
 }
 
+/// <summary>The sets of pictures the Launcher takes from the player's disc, each in its own folder inside the art folder.</summary>
+public enum DiscArtCollection
+{
+    /// <summary>The achievement icons, names and descriptions in <c>default.xex</c>'s title resource.</summary>
+    Achievements,
+    /// <summary>Player portraits from the game's archives.</summary>
+    Players,
+    /// <summary>Venue pictures from the game's archives.</summary>
+    Venues,
+}
+
+/// <summary>One picture of a collection as it is read from the disc.</summary>
+/// <param name="Image">A PNG or JPEG.</param>
+/// <param name="Points">The gamerscore for an achievement; 0 otherwise.</param>
+public sealed record DiscArtItem(byte[] Image, string Title, string Detail, int Points = 0);
+
+/// <summary>One picture of a collection as the art folder holds it.</summary>
+public sealed record DiscArtEntry(string ImagePath, string Title, string Detail, int Points);
+
 /// <summary>The disc an art folder was read from, as its default.xex names it.</summary>
 internal readonly record struct DiscIdentity(uint MediaId, uint TitleId);
 
@@ -102,14 +121,15 @@ public static class DiscArt
         }
 
         var images = new Dictionary<DiscArtSlot, byte[]>();
+        var collections = new Dictionary<DiscArtCollection, IReadOnlyList<DiscArtItem>>();
         ReadNxeArt(disc, images, Problem);
         ReadPressStart(disc, images, Problem);
-        var module = ReadModule(disc, images, Problem);
+        var module = ReadModule(disc, images, collections, Problem);
         // An index is written for a read that logged nothing; a read with a problem is tried again next time (DiscArtFolder.IsComplete).
         var clean = problems.Count == 0;
         try
         {
-            var found = DiscArtFolder.Write(artFolder, images, origin, module, clean, Problem);
+            var found = DiscArtFolder.Write(artFolder, images, origin, module, clean, Problem, collections);
             return new DiscArtResult(found, problems);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -136,8 +156,10 @@ public static class DiscArt
         }
     }
 
-    // default.xex: its title image is the icon. Its execution info also names the disc the art came from.
-    private static DiscIdentity? ReadModule(IDiscFileSource disc, Dictionary<DiscArtSlot, byte[]> images, Action<string> problem)
+    // default.xex: its title image is the icon, and its title resource holds the achievements. Its execution info also
+    // names the disc the art came from.
+    private static DiscIdentity? ReadModule(IDiscFileSource disc, Dictionary<DiscArtSlot, byte[]> images,
+        Dictionary<DiscArtCollection, IReadOnlyList<DiscArtItem>> collections, Action<string> problem)
     {
         byte[]? bytes;
         try
@@ -151,18 +173,50 @@ public static class DiscArt
         }
         if (bytes is null) return null;
         DiscIdentity? identity = null;
+        Xdbf? resource;
         try
         {
-            // The header is read once: it names the disc, and the title image is found through it.
+            // The header is read once: it names the disc, and the title resource is found through it.
             var execution = XexHeader.Parse(bytes)?.Execution;
             if (execution is { } info) identity = new DiscIdentity(info.MediaId, info.TitleId);
-            if (XexTitleImage.Read(bytes, execution) is { } icon) Accept(images, DiscArtSlot.TitleIcon, $"{Module}: title image", icon, problem);
+            resource = XexTitleImage.ReadResource(bytes, execution);
+            if (resource?.Image(XexTitleImage.TitleImageId) is { } icon) Accept(images, DiscArtSlot.TitleIcon, $"{Module}: title image", icon, problem);
         }
         catch (Exception error)
         {
             problem($"{Module} is damaged: {error.Message}");
+            return identity;
         }
+        if (resource is not null) ReadAchievements(resource, collections, problem);
         return identity;
+    }
+
+    // Each achievement with its icon; one whose icon is missing or not a picture is left out, the others still count.
+    private static void ReadAchievements(Xdbf resource, Dictionary<DiscArtCollection, IReadOnlyList<DiscArtItem>> collections, Action<string> problem)
+    {
+        try
+        {
+            var items = new List<DiscArtItem>();
+            foreach (var achievement in resource.Achievements())
+            {
+                if (resource.Image(achievement.ImageId) is not { } icon) continue;
+                try
+                {
+                    ArtImageFile.Describe(icon);
+                }
+                catch (Exception error)
+                {
+                    problem($"{Module}: achievement {achievement.Id}'s icon was not used: {error.Message}");
+                    continue;
+                }
+                items.Add(new DiscArtItem(icon, achievement.Name, achievement.Description.Length > 0 ? achievement.Description : achievement.HowTo, achievement.Gamerscore));
+            }
+            if (items.Count > 0) collections[DiscArtCollection.Achievements] = items;
+        }
+        catch (Exception error)
+        {
+            problem($"{Module}: the achievements could not be read: {error.Message}");
+        }
     }
 
     // The dashboard artwork: nxeart is an STFS package holding nxebg.jpg and nxeslot.jpg.
