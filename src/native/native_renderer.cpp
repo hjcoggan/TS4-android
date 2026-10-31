@@ -218,6 +218,7 @@ enum Reg : uint32_t {
   RB_DEPTHCONTROL = 0x2200,
   RB_BLENDCONTROL0 = 0x2201,
   RB_COLORCONTROL = 0x2202,
+  PA_CL_CLIP_CNTL = 0x2204,
   PA_SU_SC_MODE_CNTL = 0x2205,
   PA_CL_VTE_CNTL = 0x2206,
   PA_SU_VTX_CNTL = 0x2302,
@@ -3291,11 +3292,13 @@ void OnDrawIndexed(const uint8_t* base, uint32_t device, uint32_t primitive,
       c += fmt::format("{}{:.4g}", i % 4 ? " " : " | ",
                        LoadBEFloat(d3d + kDeviceVertexConstants + i * 4));
     }
-    TRACE("  vte {:08X} vport {:.1f} {:.1f} {:.1f} {:.1f} {:.3f} {:.3f} mode {:08X} vs c0-12:{}",
+    TRACE("  vte {:08X} vport {:.1f} {:.1f} {:.1f} {:.1f} {:.3f} {:.3f} mode {:08X} clip {:08X} "
+          "vs c0-12:{}",
           ReadReg(d3d, PA_CL_VTE_CNTL), ReadRegFloat(d3d, PA_CL_VPORT_XSCALE),
           ReadRegFloat(d3d, PA_CL_VPORT_XOFFSET), ReadRegFloat(d3d, PA_CL_VPORT_YSCALE),
           ReadRegFloat(d3d, PA_CL_VPORT_YOFFSET), ReadRegFloat(d3d, PA_CL_VPORT_ZSCALE),
-          ReadRegFloat(d3d, PA_CL_VPORT_ZOFFSET), ReadReg(d3d, PA_SU_SC_MODE_CNTL), c);
+          ReadRegFloat(d3d, PA_CL_VPORT_ZOFFSET), ReadReg(d3d, PA_SU_SC_MODE_CNTL),
+          ReadReg(d3d, PA_CL_CLIP_CNTL), c);
     if (shader_library::Hash(LoadBE32(d3d + kDevicePixelShader)) == REXCVAR_GET(ts4_native_trace_ps)) {
       for (uint32_t r = 0; r < 256; r += 4) {
         std::string c;
