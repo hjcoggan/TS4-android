@@ -41,7 +41,8 @@ REXCVAR_DEFINE_BOOL(ts4_native_texture_write_watch, true, "TopSpin4",
 REXCVAR_DEFINE_BOOL(ts4_native_async_textures, true, "TopSpin4",
                     "Native renderer: read and convert textures on worker threads; main-scene "
                     "draws show the previous content (or nothing) for a frame or two instead of "
-                    "stalling while new textures load");
+                    "stalling while new textures load (a new 1280x720 screen image is waited "
+                    "for)");
 REXCVAR_DEFINE_DOUBLE(ts4_native_lod_bias, 0.0, "TopSpin4",
                       "Native renderer debugging: added to the mip level of mipmapped textures; "
                       "negative values keep distant surfaces sharper at the cost of some shimmer "
@@ -185,6 +186,9 @@ uint64_t NsSince(std::chrono::steady_clock::time_point start) {
 constexpr uint64_t kEvictAfterFrames = 1800;
 constexpr uint32_t kDynamicStreak = 3;
 constexpr uint64_t kDynamicFrames = 600;
+// A texture of the guest's output size: a whole-screen image, read before its first draw.
+constexpr uint32_t kScreenImageWidth = 1280;
+constexpr uint32_t kScreenImageHeight = 720;
 
 // Destroys the texture's image, memory and views once frames in flight are
 // done with them, and frees its bindless slots.
@@ -810,6 +814,13 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
   }
   Texture& texture = *slot;
   texture.last_used = frame;
+  // A screen image (the guest's 1280x720: loading screens, menu backgrounds) with no content yet
+  // is read before the draw. Drawn without it, the draw samples the transparent-black default
+  // and the whole screen shows the clear colour: the blue flash of the loading screen after the
+  // title screen. Other new textures stay on the workers; waiting for the players' textures
+  // held intro frames up to 84 ms longer.
+  wait = wait || (!texture.uploaded && t.width == kScreenImageWidth &&
+                  t.height == kScreenImageHeight);
   const auto start = std::chrono::steady_clock::now();
   FinishJob(texture, upload_cb, wait);
   if (texture.checked_frame != frame && !texture.job) {
