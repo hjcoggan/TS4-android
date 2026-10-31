@@ -1631,6 +1631,9 @@ bool EnsureRendering(const uint8_t* d3d, bool need_depth, const PassClears* clea
 // The draw's clip transform (guest_decode.h) for the active target. Pixel
 // centres at .0 (PA_SU_VTX_CNTL pix_center 0, as in D3D9) shift geometry by
 // half a pixel right and down, as the emulated path does.
+// Swing's additive court sheen (SetDynamicState).
+constexpr uint64_t kCourtSheenPixelShader = 0xfaaa1d008788ebd6ull;
+
 ClipTransform DrawClipTransform(const uint8_t* d3d) {
   const bool half_pixel =
       REXCVAR_GET(ts4_native_half_pixel_offset) && !(ReadReg(d3d, PA_SU_VTX_CNTL) & 1);
@@ -1659,6 +1662,16 @@ void SetDynamicState(const uint8_t* d3d, VkCommandBuffer cb) {
   viewport.height = -2.0f * y_scale * scale;
   viewport.minDepth = std::clamp(z_offset, 0.0f, 1.0f);
   viewport.maxDepth = std::clamp(z_offset + z_scale, 0.0f, 1.0f);
+  // Swing's additive court sheen (pixel shader faaa1d008788ebd6, a 10-index quad over the
+  // court, depth test less-or-equal) ties in depth with the court-line decals under it. Which
+  // one wins changed from frame to frame as the camera swayed, so the lines pulsed by about 6
+  // levels (the shimmer at 3x). A nudge of 2^-20 towards the camera makes it win every time,
+  // as it does in most frames.
+  if (shader_library::Hash(LoadBE32(d3d + kDevicePixelShader)) == kCourtSheenPixelShader) {
+    constexpr float kNudge = 1.0f / 1048576.0f;
+    viewport.minDepth = std::max(viewport.minDepth - kNudge, 0.0f);
+    viewport.maxDepth = std::max(viewport.maxDepth - kNudge, 0.0f);
+  }
   if (viewport.width <= 0.0f) {
     viewport.x = 0.0f;
     viewport.width = float(g.active_color->width);
