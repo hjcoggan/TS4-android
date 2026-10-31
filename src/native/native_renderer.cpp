@@ -87,6 +87,10 @@ REXCVAR_DEFINE_STRING(ts4_native_dump_frames, "", "TopSpin4",
 REXCVAR_DEFINE_STRING(ts4_native_dump_dir, "", "TopSpin4",
                       "Directory ts4_native_dump_frames writes to (absolute; relative paths start "
                       "in the executable's directory)");
+REXCVAR_DEFINE_STRING(ts4_native_window_size, "", "TopSpin4",
+                      "Native renderer debugging: plan the output for a window of this size "
+                      "(WIDTHxHEIGHT, e.g. 1920x1080) instead of the real one, so a hidden-window "
+                      "scene run dumps what a player's window shows");
 REXCVAR_DEFINE_INT32(ts4_native_trace_frame, -1, "TopSpin4",
                      "Native renderer debugging: log every event of this frame number");
 REXCVAR_DEFINE_UINT32(ts4_native_debug_resolve, 0, "TopSpin4",
@@ -2110,6 +2114,14 @@ void Configure(rex::Runtime* runtime) {
 bool IsEnabled() { return g.device != nullptr; }
 
 void SetWindowSize(uint32_t width, uint32_t height) {
+  // --ts4_native_window_size stands in for the real window.
+  const std::string& forced = REXCVAR_GET(ts4_native_window_size);
+  if (unsigned forced_width = 0, forced_height = 0;
+      !forced.empty() && std::sscanf(forced.c_str(), "%ux%u", &forced_width, &forced_height) == 2 &&
+      forced_width && forced_height) {
+    width = forced_width;
+    height = forced_height;
+  }
   // A minimised window has no area: the last plan's size stays.
   if (width && height) {
     g_window_size.store((uint64_t(width) << 32) | height, std::memory_order_relaxed);
