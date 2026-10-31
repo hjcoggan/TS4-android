@@ -102,9 +102,9 @@ struct Converter {
 };
 
 // Where the game finds XenosRecomp, first match wins: named (a cvar, with
-// shader_common.h beside it); the release's xenosrecomp/ folder beside game/
-// (scripts/package.ps1); the dev build's (dev, set at configure time). Both
-// files must exist.
+// shader_common.h beside it); the release's xenosrecomp/ folder inside the game
+// folder (scripts/package.ps1), or beside it; the dev build's (dev, set at
+// configure time). Both files must exist.
 std::optional<Converter> FindConverter(const std::filesystem::path& game_directory,
                                        const std::filesystem::path& named,
                                        const Converter& dev);

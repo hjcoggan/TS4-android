@@ -289,6 +289,18 @@ TEST_CASE("the release's XenosRecomp beside the game folder is found") {
   CHECK(found->include == root.path / "xenosrecomp" / "shader_common.h");
 }
 
+TEST_CASE("the release's XenosRecomp inside the game folder is found first") {
+  TempFolder root;
+  Touch(root.path / "xenosrecomp" / "XenosRecomp.exe");
+  Touch(root.path / "xenosrecomp" / "shader_common.h");
+  Touch(root.path / "game" / "xenosrecomp" / "XenosRecomp.exe");
+  Touch(root.path / "game" / "xenosrecomp" / "shader_common.h");
+  const auto found = FindConverter(root.path / "game", {}, {});
+  REQUIRE(found);
+  CHECK(found->executable == root.path / "game" / "xenosrecomp" / "XenosRecomp.exe");
+  CHECK(found->include == root.path / "game" / "xenosrecomp" / "shader_common.h");
+}
+
 TEST_CASE("a named XenosRecomp wins, with shader_common.h beside it") {
   TempFolder root;
   Touch(root.path / "xenosrecomp" / "XenosRecomp.exe");

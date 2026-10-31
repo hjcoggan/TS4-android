@@ -264,12 +264,15 @@ std::optional<Converter> FindConverter(const std::filesystem::path& game_directo
                                        const Converter& dev) {
   constexpr char kExecutable[] = "XenosRecomp.exe";
   constexpr char kInclude[] = "shader_common.h";
-  const std::filesystem::path release = game_directory.parent_path() / "xenosrecomp";
+  // The release's xenosrecomp folder: inside the game folder (one folder to unzip), or beside it.
+  const std::filesystem::path inside = game_directory / "xenosrecomp";
+  const std::filesystem::path beside = game_directory.parent_path() / "xenosrecomp";
   std::vector<Converter> candidates;
   if (!named.empty()) {
     candidates.push_back({named, named.parent_path() / kInclude});
   }
-  candidates.push_back({release / kExecutable, release / kInclude});
+  candidates.push_back({inside / kExecutable, inside / kInclude});
+  candidates.push_back({beside / kExecutable, beside / kInclude});
   if (!dev.executable.empty()) {
     candidates.push_back(dev);
   }
