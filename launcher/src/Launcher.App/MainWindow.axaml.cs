@@ -94,11 +94,11 @@ public partial class MainWindow : Window
         _settingsLocation = new GameFilesLocationPanel(_location);
         _setupPage.LocationHost.Children.Add(_setupLocation);
         _settingsPage.LocationHost.Children.Add(_settingsLocation);
-        _location.Changed += () => Dispatcher.UIThread.Post(() =>
+        _location.Changed += () =>
         {
-            ShowFooter();
-            Refresh();
-        });
+            Dispatcher.UIThread.Post(ShowFooter);
+            RequestRefresh();
+        };
         // Home fills the page area; the other pages share the scrolling column on the scrim.
         PageHost.Children.Add(_homePage);
         FormHost.Children.Add(_setupPage);
@@ -106,7 +106,7 @@ public partial class MainWindow : Window
         FormHost.Children.Add(_achievementsPage);
         BuildRail();
 
-        _shell.Changed += () => Dispatcher.UIThread.Post(Refresh);
+        _shell.Changed += RequestRefresh;
         _setupPage.HelpPressed += OpenHelp;
         _homePage.PlayPressed += async () => await StartGame();
         _homePage.ActionPressed += async action => await OnHomeAction(action);
@@ -434,6 +434,8 @@ public partial class MainWindow : Window
         foreach (var bitmap in old.Values) bitmap.Dispose();
     }
 
+    private (bool Home, PageLook Look, ThemePalette Palette, Bitmap? Background)? _shownLook;
+
     private Bitmap? Picture(ThemeSource source) => source.ArtPath is { } path && _pictures.TryGetValue(path, out var bitmap) ? bitmap : null;
 
     // What the theme says the page draws: its picture, then the scrim over it. Home fades from dark on the left (where its
@@ -444,6 +446,10 @@ public partial class MainWindow : Window
         var look = _theme.LookFor(page);
         var palette = _theme.Palette;
         var background = Picture(look.Background);
+        // Refresh runs often; the backdrop is rebuilt only when what it shows changes.
+        var lookKey = (page == LauncherPage.Home, look, palette, background);
+        if (_shownLook is { } shown && shown.Equals(lookKey)) return;
+        _shownLook = lookKey;
         BackgroundImage.Source = background;
         BackgroundImage.IsVisible = background is not null;
         OriginalBackdrop.Background = background is null ? Gradient(palette.Base, palette.Panel, new(0, 0, RelativeUnit.Relative), new(1, 1, RelativeUnit.Relative)) : null;
@@ -489,6 +495,22 @@ public partial class MainWindow : Window
         EndPoint = end,
         GradientStops = { new(Avalonia.Media.Color.Parse(from), 0), new(Avalonia.Media.Color.Parse(to), 1) },
     };
+
+    // Setup reports progress through Changed many times a second, from worker threads: one refresh waits on the UI thread
+    // at a time, so a burst of reports never queues more refreshes than the UI thread can draw (that froze the window
+    // as setup ended).
+    private int _refreshPending;
+
+    private void RequestRefresh()
+    {
+        if (Interlocked.Exchange(ref _refreshPending, 1) == 1) return;
+        // Below rendering and input, so the window paints and answers while reports keep coming.
+        Dispatcher.UIThread.Post(() =>
+        {
+            Volatile.Write(ref _refreshPending, 0);
+            Refresh();
+        }, DispatcherPriority.Background);
+    }
 
     // Draws the page the shell says. Focus moves only when the page changes, so a pad press is never undone.
     private void Refresh()
