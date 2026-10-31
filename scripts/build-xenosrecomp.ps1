@@ -41,6 +41,11 @@ New-Item -ItemType Directory -Force $build | Out-Null
 $resource = "$build/XenosRecomp-version.res"
 & rc.exe /nologo /fo $resource "$PSScriptRoot/xenosrecomp/XenosRecomp.rc"
 if ($LASTEXITCODE -ne 0) { throw "rc.exe failed on scripts/xenosrecomp/XenosRecomp.rc (exit $LASTEXITCODE)" }
+# The resource is a linker flag, which ninja does not track: an exe older than it is linked again.
+$exe = "$build/XenosRecomp/XenosRecomp.exe"
+if ((Test-Path -LiteralPath $exe) -and (Get-Item -LiteralPath $exe).LastWriteTime -lt (Get-Item -LiteralPath $resource).LastWriteTime) {
+    Remove-Item -LiteralPath $exe -Force
+}
 Invoke-Hidden $cmake @('-S', $source, '-B', $build, '-G', 'Ninja', "-DCMAKE_BUILD_TYPE=$Configuration",
     '-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_CXX_FLAGS=-DSVR2011_RECOMP', '-DXENOS_RECOMP_DXIL=OFF',
     "-DCMAKE_EXE_LINKER_FLAGS=$($resource -replace '\\', '/')") -LogPath "$projectRoot/analysis/configure-xenosrecomp.log"
