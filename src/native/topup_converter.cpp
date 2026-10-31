@@ -23,6 +23,7 @@
 #include "native/pipelines.h"
 #include "native/shader_library.h"
 #include "native/shader_topup.h"
+#include "native/thread_budget.h"
 
 REXCVAR_DEFINE_BOOL(ts4_live_shader_topups, true, "TopSpin4",
                     "Convert shaders the shader pack lacks (the autosave icon, the splash) with "
@@ -48,6 +49,7 @@ struct State {
   live_topup::Queue queue;
   bool enabled = false;
   bool started = false;
+  uint32_t workers = 1;  // conversions at once (thread_budget::LiveConversions)
   fs::path folder;  // <cache_root>/shader-topup
   uint64_t converter_id = 0;
   live_topup::Converter converter;
@@ -208,6 +210,8 @@ void Work() {
     const live_topup::Counts counts = s.queue.counts();
     REXLOG_INFO("shader top-up: live conversions {} converted, {} failed, {} waiting",
                 counts.converted, counts.failed, counts.queued);
+    // A conversion slot is free again.
+    s.work.notify_one();
   }
 }
 
@@ -232,6 +236,8 @@ void Configure(const fs::path& cache_root, uint64_t converter_id) {
   }
   std::lock_guard lock(s.mutex);
   s.folder = cache_root / ShaderTopUp::kFolderName;
+  s.workers = thread_budget::LiveConversions(std::thread::hardware_concurrency());
+  s.queue = live_topup::Queue(s.workers);
   s.converter_id = converter_id;
   s.converter = *converter;
   std::error_code error;
@@ -245,7 +251,8 @@ void Configure(const fs::path& cache_root, uint64_t converter_id) {
   }
 #endif
   s.enabled = true;
-  REXLOG_INFO("shader top-up: live conversion with {}", PathText(s.converter.executable));
+  REXLOG_INFO("shader top-up: live conversion with {}, {} at once", PathText(s.converter.executable),
+              s.workers);
 }
 
 void Offer(const uint8_t* container, size_t size, bool is_pixel_shader) {
@@ -261,7 +268,9 @@ void Offer(const uint8_t* container, size_t size, bool is_pixel_shader) {
   }
   if (!s.started) {
     s.started = true;
-    std::thread(Work).detach();
+    for (uint32_t i = 0; i < s.workers; ++i) {
+      std::thread(Work).detach();
+    }
   }
   s.work.notify_one();
 }

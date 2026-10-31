@@ -17,12 +17,13 @@ bool Queue::Offer(Item item) {
 }
 
 std::optional<Item> Queue::Next() {
-  if (waiting_.empty()) {
+  if (waiting_.empty() || converting_ >= max_converting_) {
     return std::nullopt;
   }
   Item item = std::move(waiting_.front());
   waiting_.erase(waiting_.begin());
   state_[item.name] = State::kConverting;
+  ++converting_;
   return item;
 }
 
@@ -30,6 +31,7 @@ void Queue::Finish(const std::string& name, bool converted) {
   const auto it = state_.find(name);
   if (it != state_.end() && it->second == State::kConverting) {
     it->second = converted ? State::kConverted : State::kFailed;
+    --converting_;
   }
 }
 

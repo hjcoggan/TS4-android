@@ -29,6 +29,12 @@ inline Workers ForPlay(uint32_t logical_cpus) {
   return {each, each};
 }
 
+// How many shaders the live top-up converter converts at once (each is a XenosRecomp
+// process): two on small machines, else as many as the pipeline workers.
+inline uint32_t LiveConversions(uint32_t logical_cpus) {
+  return std::max(ForPlay(logical_cpus).pipelines, 2u);
+}
+
 inline Workers ForPrepare(uint32_t logical_cpus) {
   return {std::max(logical_cpus, 2u), ForPlay(logical_cpus).textures};
 }

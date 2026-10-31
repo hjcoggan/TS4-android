@@ -36,7 +36,7 @@ TEST_CASE("a shader the pack lacks is queued for conversion once") {
 }
 
 TEST_CASE("shaders are converted in the order the game met them") {
-  Queue queue;
+  Queue queue(2);
   queue.Offer(Shader("vs_309cb027862dbde6.bin"));
   queue.Offer(Shader("ps_69d28119d5fe8475.bin"));
   CHECK(queue.Next()->name == "vs_309cb027862dbde6.bin");
@@ -51,6 +51,37 @@ TEST_CASE("a converted shader is never converted again in the session") {
   CHECK_FALSE(queue.Next());
   CHECK(queue.counts().converted == 1);
   CHECK(queue.counts().queued == 0);
+}
+
+TEST_CASE("the queue hands out up to its budget at once and finishes every queued shader") {
+  Queue queue(3);
+  for (int i = 0; i < 7; ++i) {
+    queue.Offer(Shader("ps_" + std::to_string(i) + ".bin"));
+  }
+  std::vector<std::string> converting;
+  while (auto next = queue.Next()) {
+    converting.push_back(next->name);
+  }
+  CHECK(converting == std::vector<std::string>{"ps_0.bin", "ps_1.bin", "ps_2.bin"});
+
+  // Each finished conversion frees one slot for the next shader, in order.
+  queue.Finish("ps_1.bin", /*converted=*/true);
+  CHECK(queue.Next()->name == "ps_3.bin");
+  CHECK_FALSE(queue.Next());
+
+  size_t finished = 1;
+  std::vector<std::string> busy = {"ps_0.bin", "ps_2.bin", "ps_3.bin"};
+  while (!busy.empty()) {
+    queue.Finish(busy.front(), /*converted=*/finished % 2 == 0);
+    busy.erase(busy.begin());
+    ++finished;
+    if (auto next = queue.Next()) {
+      busy.push_back(next->name);
+    }
+  }
+  CHECK(finished == 7);
+  CHECK(queue.counts().queued == 0);
+  CHECK(queue.counts().converted + queue.counts().failed == 7);
 }
 
 TEST_CASE("a failed conversion is not retried in the session") {

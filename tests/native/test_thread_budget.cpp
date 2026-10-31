@@ -6,6 +6,7 @@
 
 using topspin4::native::thread_budget::ForPlay;
 using topspin4::native::thread_budget::ForPrepare;
+using topspin4::native::thread_budget::LiveConversions;
 
 TEST_CASE("on 8 or fewer logical CPUs play keeps one pipeline and one texture worker") {
   for (uint32_t cpus : {1u, 2u, 4u, 6u, 8u}) {
@@ -42,4 +43,11 @@ TEST_CASE("prepare keeps the texture workers of play") {
   for (uint32_t cpus : {0u, 4u, 8u, 16u, 32u}) {
     CHECK(ForPrepare(cpus).textures == ForPlay(cpus).textures);
   }
+}
+
+TEST_CASE("live top-ups convert at least two shaders at once, more on larger machines") {
+  CHECK(LiveConversions(0) == 2);
+  CHECK(LiveConversions(8) == 2);
+  CHECK(LiveConversions(16) == 4);
+  CHECK(LiveConversions(32) == 4);
 }

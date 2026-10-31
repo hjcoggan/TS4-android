@@ -36,19 +36,24 @@ struct Counts {
 };
 
 // Each shader is converted at most once a session: a shader offered again,
-// being converted, converted or failed is not queued again. Not thread-safe;
-// the caller locks.
+// being converted, converted or failed is not queued again. Up to
+// max_converting shaders are converted at once. Not thread-safe; the caller
+// locks.
 class Queue {
  public:
+  explicit Queue(size_t max_converting = 1) : max_converting_(max_converting) {}
   // True when the shader was queued now.
   bool Offer(Item item);
-  // The oldest queued shader, now being converted; none when nothing waits.
+  // The oldest queued shader, now being converted; none when nothing waits or
+  // max_converting are already being converted.
   std::optional<Item> Next();
   void Finish(const std::string& name, bool converted);
   Counts counts() const;
 
  private:
   enum class State { kQueued, kConverting, kConverted, kFailed };
+  size_t max_converting_;
+  size_t converting_ = 0;
   std::unordered_map<std::string, State> state_;
   std::vector<Item> waiting_;
 };
