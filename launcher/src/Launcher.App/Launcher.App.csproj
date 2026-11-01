@@ -26,6 +26,8 @@
     <AvaloniaResource Include="Assets/Fonts/*.ttf" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The screenshot tool sets App.Options as Program does. -->
+    <InternalsVisibleTo Include="Launcher.Screenshots" />
     <ProjectReference Include="../Launcher.Core/Launcher.Core.csproj" />
   </ItemGroup>
 </Project>

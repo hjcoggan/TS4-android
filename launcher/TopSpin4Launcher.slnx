@@ -7,4 +7,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Launcher.Tests/Launcher.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Launcher.Screenshots/Launcher.Screenshots.csproj" />
+  </Folder>
 </Solution>

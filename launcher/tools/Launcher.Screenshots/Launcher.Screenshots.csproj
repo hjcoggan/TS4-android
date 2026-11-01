@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Renders the Launcher's pages to PNG with Avalonia's headless platform: no window opens and the
+    game is never played. Copied from WWE All Stars' Launcher.Screenshots (ADR-0004) for the README's
+    Launcher shots (ADR-0012). Output goes to an ignored folder; docs/images gets the picked ones.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TopSpin4.Launcher.Screenshots</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- As the Launcher: dates and numbers the same on every machine. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Launcher.App/Launcher.App.csproj" />
+  </ItemGroup>
+</Project>
