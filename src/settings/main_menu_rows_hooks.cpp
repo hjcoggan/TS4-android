@@ -179,10 +179,6 @@ bool RunMenuCall(PPCContext& ctx, uint8_t* base, std::string_view call) {
   f.ctx.r6.u64 = 1;
   sub_881FF158(f.ctx, base);
   const uint32_t node = Load32(base, f.ctx.r3.u32);
-  if (const uint32_t held = Load32(base, node_ref)) {
-    ReleaseRef(f, base, held);
-    Store32(base, node_ref, 0);
-  }
   ReleaseString(f, base, str);
 
   bool issued = false;
@@ -209,6 +205,11 @@ bool RunMenuCall(PPCContext& ctx, uint8_t* base, std::string_view call) {
       Log("main menu rows: issued " + action);
       issued = true;
     }
+  }
+  // The list's reference is held until its last use above.
+  if (const uint32_t held = Load32(base, node_ref)) {
+    ReleaseRef(f, base, held);
+    Store32(base, node_ref, 0);
   }
   ReleaseRef(f, base, scene);
   return issued;
