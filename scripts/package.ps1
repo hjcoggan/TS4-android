@@ -23,7 +23,7 @@ $release = "$projectRoot/out/release"
 $folder = "$release/$name"
 
 # What goes in: game folder files from the build, then the converter and the licences.
-$gameFiles = @('topspin4.exe', 'topspin4-launcher.exe', 'pipeline-keys.txt', 'README.md') +
+$gameFiles = @('topspin4.exe', 'topspin4-launcher.exe', 'pipeline-keys.txt', 'README.md', 'sounds/achievement.wav') +
     @(Get-ChildItem -LiteralPath $build -Filter '*.dll' | ForEach-Object Name)
 . "$PSScriptRoot/ConverterFiles.ps1"
 $converterFiles = Get-ConverterFiles $projectRoot
@@ -43,15 +43,17 @@ foreach ($source in @($converterFiles.Values) + @($licences.Values)) {
 }
 
 if (Test-Path -LiteralPath $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
-New-Item -ItemType Directory -Force "$folder/xenosrecomp", "$folder/licences" | Out-Null
+New-Item -ItemType Directory -Force "$folder/xenosrecomp", "$folder/licences", "$folder/sounds" | Out-Null
 foreach ($file in $gameFiles) { Copy-Item -LiteralPath "$build/$file" "$folder/$file" }
 foreach ($entry in $converterFiles.GetEnumerator()) { Copy-Item -LiteralPath $entry.Value "$folder/xenosrecomp/$($entry.Key)" }
 foreach ($entry in $licences.GetEnumerator()) { Copy-Item -LiteralPath $entry.Value "$folder/licences/$($entry.Key)" }
 
-# Nothing from the disc, no player files: only the kinds of file listed above.
+# Nothing from the disc, no player files: only the kinds of file listed above, and the project's
+# own achievement sound (data/sounds).
 $allowed = '\.(exe|dll|txt|md|h)$'
+$sound = [IO.Path]::GetFullPath("$folder/sounds/achievement.wav")
 $unexpected = Get-ChildItem -LiteralPath $folder -Recurse -File |
-    Where-Object { $_.Name -notmatch $allowed -or $_.FullName -match '\\(gamedata|updatedata|userdata|cache|logs)\\' }
+    Where-Object { ($_.Name -notmatch $allowed -and $_.FullName -ne $sound) -or $_.FullName -match '\\(gamedata|updatedata|userdata|cache|logs)\\' }
 if ($unexpected) { throw "Refusing to package: $($unexpected.FullName -join ', ')" }
 
 $zip = "$release/$name.zip"

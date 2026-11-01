@@ -1,9 +1,8 @@
 // The in-game "Achievement unlocked" toast, drawn in the manner of the Xbox 360 dashboard's: a
 // dark capsule at the screen's lower middle with a green trophy badge, "Achievement unlocked"
 // and "<points>G - <name>". It replaces the SDK's corner toast (ReXApp's
-// CreateAchievementNotificationDialog). Drawn with ImGui shapes only: no Microsoft artwork. The
-// console's unlock sound is not ours to ship either, so a sound plays only when the player puts
-// their own WAV at userdata\achievement.wav (SoundPathIn).
+// CreateAchievementNotificationDialog). Drawn with ImGui shapes only: no Microsoft artwork. Each
+// toast plays the sound ChooseSound picks (achievement_sound.h).
 
 #pragma once
 
@@ -11,6 +10,7 @@
 
 #include <rex/ui/overlay/achievement_notification.h>
 
+#include "achievement_sound.h"
 #include "achievement_toast_queue.h"
 
 struct ImFont;
@@ -22,11 +22,6 @@ namespace topspin4::achievement_toast {
 // has none (Proton), the toast draws with the font its constructor is given. Call from
 // OnConfigureFonts.
 void AddFonts(ImFontAtlas* atlas);
-
-// The player's own unlock sound in the user data folder; the toast plays it when present.
-inline std::filesystem::path SoundPathIn(const std::filesystem::path& user_data_root) {
-  return user_data_root / "achievement.wav";
-}
 
 class Toast : public rex::ui::AchievementNotificationDialog {
  public:

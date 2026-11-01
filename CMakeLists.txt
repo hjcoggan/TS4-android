@@ -98,6 +98,16 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/pipeline-keys.txt"
     VERBATIM)
 add_custom_target(topspin4_pipeline_keys ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/pipeline-keys.txt")
 add_dependencies(topspin4 topspin4_pipeline_keys)
+# The achievement toast's sound goes in sounds\ beside the exe (src/achievement_sound.h).
+set(TOPSPIN4_ACHIEVEMENT_SOUND "${CMAKE_CURRENT_SOURCE_DIR}/data/sounds/achievement.wav")
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sounds/achievement.wav"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${TOPSPIN4_ACHIEVEMENT_SOUND}"
+        "${CMAKE_CURRENT_BINARY_DIR}/sounds/achievement.wav"
+    DEPENDS "${TOPSPIN4_ACHIEVEMENT_SOUND}"
+    COMMENT "Copying the achievement sound"
+    VERBATIM)
+add_custom_target(topspin4_sounds ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/sounds/achievement.wav")
+add_dependencies(topspin4 topspin4_sounds)
 # zstd (decompression only) and smol-v unpack the shader pack; both come with XenosRecomp in
 # .tools/xenosrecomp (BSD-3 and MIT).
 set(TOPSPIN4_XENOSRECOMP_THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/.tools/xenosrecomp/thirdparty")

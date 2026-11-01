@@ -208,7 +208,8 @@ class TopSpin4App : public rex::ReXApp {
     if (!imgui_drawer()) return nullptr;
     return std::make_unique<topspin4::achievement_toast::Toast>(
         imgui_drawer(), topspin4::settings::BodyFont(),
-        topspin4::achievement_toast::SoundPathIn(user_data_root()));
+        topspin4::achievement_toast::ChooseSound(user_data_root(),
+                                                 topspin4::user_paths::ExecutableFolder()));
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {

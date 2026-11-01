@@ -1,7 +1,13 @@
-// src/achievement_toast_timeline.h: the toast's motion.
+// The achievement toast: its motion (achievement_toast_timeline.h), its queue
+// (achievement_toast_queue.h) and its sound (achievement_sound.h).
 
 #include <catch_amalgamated.hpp>
 
+#include <filesystem>
+#include <fstream>
+
+#include "achievement_sound.h"
+#include "achievement_toast_queue.h"
 #include "achievement_toast_timeline.h"
 
 using namespace topspin4::achievement_toast;
@@ -54,7 +60,6 @@ TEST_CASE("At the end the text goes, the capsule closes, then the badge", "[achi
 
 // src/achievement_toast_queue.h: the toasts waiting to show.
 
-#include "achievement_toast_queue.h"
 
 namespace {
 
@@ -91,4 +96,26 @@ TEST_CASE("Queued toasts show one at a time, each for its full time", "[achievem
   CHECK(second->age == 0);
 
   CHECK_FALSE(queue.At(Seconds(23)));
+}
+
+// src/achievement_sound.h: which sound the toast plays.
+
+
+TEST_CASE("The player's own sound wins over the shipped one, and none is fine", "[achievement_toast]") {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ts4-achievement-sound-test";
+  fs::remove_all(root);
+  const fs::path user = root / "userdata", game = root / "game";
+  fs::create_directories(user);
+  fs::create_directories(game / "sounds");
+
+  CHECK(ChooseSound(user, game).empty());
+
+  std::ofstream(ShippedSoundIn(game)) << "RIFF";
+  CHECK(ChooseSound(user, game) == ShippedSoundIn(game));
+
+  std::ofstream(PlayerSoundIn(user)) << "RIFF";
+  CHECK(ChooseSound(user, game) == PlayerSoundIn(user));
+
+  fs::remove_all(root);
 }
