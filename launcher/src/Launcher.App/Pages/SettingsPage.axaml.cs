@@ -26,6 +26,8 @@ public partial class SettingsPage : UserControl
     private string? _focusAfterDraw;
     private string? _captureKey;
     private bool _focusKeyboard;
+    // Text the game refused, by row: the redrawn box shows it again so the player can correct it.
+    private readonly Dictionary<string, string> _refusedText = [];
 
     public SettingsPage() : this(() => Task.FromResult(SettingsPageModel.Unavailable(""))) { }
 
@@ -36,7 +38,9 @@ public partial class SettingsPage : UserControl
         BackButton.Click += (_, _) => BackPressed?.Invoke();
         ResetButton.Click += (_, _) =>
         {
-            if (_model is { } model) Apply(model.ResetToDefaults());
+            if (_model is not { } model) return;
+            _refusedText.Clear();
+            Apply(model.ResetToDefaults());
         };
     }
 
@@ -213,16 +217,27 @@ public partial class SettingsPage : UserControl
         else if (row.Editable && row.TextEntry)
         {
             // Saved on Enter or when the box loses focus, not per key: every save draws the tab again.
-            var box = new TextBox { Text = row.Value, MaxLength = 15, Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+            var box = new TextBox
+            {
+                Text = _refusedText.GetValueOrDefault(row.Key, row.Value), MaxLength = 15, Width = 260,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
             AutomationProperties.SetName(box, row.Label);
             var saved = false;
-            void Save()
+            // keepFocus: Enter keeps the player in the box; leaving it (Tab, a click) must not pull the focus back.
+            void Save(bool keepFocus)
             {
+                if (box.Text == row.Value) _refusedText.Remove(row.Key);
                 if (saved || box.Text == row.Value) return;
                 saved = true;
-                _focusKeyboard = true;
-                _focusAfterDraw = row.Key;
+                if (keepFocus)
+                {
+                    _focusKeyboard = true;
+                    _focusAfterDraw = row.Key;
+                }
                 var change = model.Choose(row, box.Text ?? "");
+                if (change == SettingChange.Refused) _refusedText[row.Key] = box.Text ?? "";
+                else _refusedText.Remove(row.Key);
                 _error = change == SettingChange.Saved ? null
                     : change == SettingChange.Refused ? "A gamertag is 1 to 15 letters, digits and spaces, starting with a letter."
                     : SettingsStore.Describe(change);
@@ -234,9 +249,9 @@ public partial class SettingsPage : UserControl
             {
                 if (e.Key != Key.Enter) return;
                 e.Handled = true;
-                Save();
+                Save(keepFocus: true);
             };
-            box.LostFocus += (_, _) => Save();
+            box.LostFocus += (_, _) => Save(keepFocus: false);
             _rowButtons[row.Key] = box;
             panel.Children.Add(box);
         }
