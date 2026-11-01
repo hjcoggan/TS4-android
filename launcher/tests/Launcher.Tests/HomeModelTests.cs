@@ -97,13 +97,13 @@ public sealed class HomeModelTests : IDisposable
     }
 
     [Fact]
-    public void Help_opens_the_readme_beside_the_launcher_when_it_is_there()
+    public void Help_opens_the_help_file_beside_the_launcher_when_it_is_there()
     {
         Assert.Null(HelpDocument.Find(_root));
 
-        File.WriteAllText(Path.Combine(_root, "README.md"), "# Top Spin 4 Recomp");
+        File.WriteAllText(Path.Combine(_root, "HELP.md"), "# Top Spin 4 Recomp");
 
-        Assert.Equal(Path.Combine(_root, "README.md"), HelpDocument.Find(_root));
+        Assert.Equal(Path.Combine(_root, "HELP.md"), HelpDocument.Find(_root));
     }
 
     private string LogsFolder => Path.Combine(_root, "game", "logs");

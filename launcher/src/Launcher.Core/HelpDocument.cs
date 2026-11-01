@@ -1,11 +1,11 @@
 namespace TopSpin4.Launcher.Core;
 
-/// <summary>Where Help points: the README's help section, shipped beside the Launcher.</summary>
+/// <summary>Where Help points: HELP.md, the player help shipped beside the Launcher.</summary>
 public static class HelpDocument
 {
-    public const string FileName = "README.md";
+    public const string FileName = "HELP.md";
 
-    /// <summary>The README beside the Launcher, or null when it is not there.</summary>
+    /// <summary>HELP.md beside the Launcher, or null when it is not there.</summary>
     public static string? Find(string launcherDirectory)
     {
         var path = Path.Combine(launcherDirectory, FileName);

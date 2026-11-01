@@ -38,7 +38,7 @@ public partial class SetupPage : UserControl
         CancelButton.Click += (_, _) => Stop();
     }
 
-    /// <summary>"How do I get these files?": the window opens the README's help section.</summary>
+    /// <summary>"How do I get these files?": the window opens HELP.md.</summary>
     public event Action? HelpPressed;
 
     /// <summary>Stops a running setup; it resumes from the files already written.</summary>

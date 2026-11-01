@@ -4,7 +4,7 @@
 #
 # Needs a finished build (scripts/build.ps1 -Action Build: the game, the Launcher beside it,
 # data/pipeline-keys.txt copied) and the XenosRecomp build (scripts/build-xenosrecomp.ps1).
-# The folder holds the game exe and its DLLs, the Launcher, the pipeline key list, the README,
+# The folder holds the game exe and its DLLs, the Launcher, the pipeline key list, HELP.md (what Help opens),
 # and xenosrecomp\ (the shader converter both programs look for inside the game folder). It
 # holds no game data (ADR-0006): the player's disc and Title Update 1 are read at setup, and a
 # check below refuses to package anything that looks like game data or a player's files.
@@ -23,7 +23,7 @@ $release = "$projectRoot/out/release"
 $folder = "$release/$name"
 
 # What goes in: game folder files from the build, then the converter and the licences.
-$gameFiles = @('topspin4.exe', 'topspin4-launcher.exe', 'pipeline-keys.txt', 'README.md', 'sounds/achievement.wav') +
+$gameFiles = @('topspin4.exe', 'topspin4-launcher.exe', 'pipeline-keys.txt', 'HELP.md', 'sounds/achievement.wav') +
     @(Get-ChildItem -LiteralPath $build -Filter '*.dll' | ForEach-Object Name)
 . "$PSScriptRoot/ConverterFiles.ps1"
 $converterFiles = Get-ConverterFiles $projectRoot

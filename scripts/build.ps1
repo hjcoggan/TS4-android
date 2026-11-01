@@ -3,7 +3,7 @@ param(
     # Launcher publishes the preparation console tool (topspin4-setup) to out/launcher/publish
     # and the Avalonia Launcher (topspin4-launcher) to out/launcher/publish-app;
     # LauncherTest runs the launcher's xUnit tests. Neither needs game data. Build also runs
-    # Launcher afterwards, which copies topspin4-launcher.exe and README.md beside topspin4.exe in
+    # Launcher afterwards, which copies topspin4-launcher.exe and HELP.md beside topspin4.exe in
     # out/build/<preset>/, so a developer starts the same Launcher a player does.
     # Check runs every test that needs no game data: pytest, the host unit tests (Test), then
     # LauncherTest; with generated code present, also scripts/d3d_callsites.py. Run it before
@@ -53,12 +53,12 @@ if ($Action -in 'Launcher', 'LauncherTest') {
             '-o', "$projectRoot/out/launcher/publish-app", "-maxcpucount:$Jobs") `
             -WorkingDirectory "$projectRoot/launcher" -LogPath "$projectRoot/analysis/build-launcher-app.log"
         Write-Output "Launcher app: $projectRoot/out/launcher/publish-app/topspin4-launcher.exe"
-        # The dev build's exe folder gets the Launcher and the README (Help opens it), so a developer
+        # The dev build's exe folder gets the Launcher and HELP.md (Help opens it), so a developer
         # sees what a player sees. Only a build that exists is touched: Build calls this after CMake.
         $buildFolder = "$projectRoot/out/build/win-amd64-$($Configuration.ToLowerInvariant())"
         if (Test-Path -LiteralPath "$buildFolder/topspin4.exe") {
             Copy-Item -LiteralPath "$projectRoot/out/launcher/publish-app/topspin4-launcher.exe" "$buildFolder/topspin4-launcher.exe" -Force
-            Copy-Item -LiteralPath "$projectRoot/README.md" "$buildFolder/README.md" -Force
+            Copy-Item -LiteralPath "$projectRoot/HELP.md" "$buildFolder/HELP.md" -Force
             Write-Output "Launcher placed beside the game: $buildFolder/topspin4-launcher.exe"
             # And the shader converter, where a release has it (xenosrecomp\), or the Launcher's shader
             # step fails and Play falls back to Classic.

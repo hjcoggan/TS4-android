@@ -16,6 +16,7 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 
 ### Changed
 
+- The player help moved from README.md to HELP.md, which the release ships and the Launcher's Help opens. README.md is now the project page.
 - A fresh install now starts on the Native renderer with Resolution scale Auto, 16x anisotropic filtering and Fix original glitches on (the Default preset). MSAA stays at the game's own. A setting you never changed in an existing install moves to the new default too.
 - The Original preset is the Xbox 360 game's own look, whatever the defaults are.
 - Safe start runs the Classic renderer with every setting at the original game's behaviour, instead of the defaults.
@@ -25,4 +26,4 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 
 ### Fixed
 
-- The Launcher's **Help** opens the README in Notepad when Windows has no app for `.md` files, instead of failing.
+- The Launcher's **Help** opens in Notepad when Windows has no app for `.md` files, instead of failing.
