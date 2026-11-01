@@ -2,6 +2,7 @@
 
 #include <rex/cvar.h>
 #include <rex/logging.h>
+#include <rex/system/guest_swaps.h>
 
 #include "cutaway_rate.h"
 
@@ -13,7 +14,10 @@ namespace {
 
 bool Sixty() { return REXCVAR_GET(ts4_cutaways_60); }
 
-void Log(const char* message) { REXLOG_INFO("{}", message); }
+// Each line carries the guest swap count, so a cutaway's start and end can be matched to frames.
+void Log(const char* message) {
+  REXLOG_INFO("{} (swap {})", message, rex::system::GuestSwapCount());
+}
 
 }  // namespace
 
