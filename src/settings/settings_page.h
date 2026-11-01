@@ -20,6 +20,7 @@ namespace rex::ui {
 class ImGuiDrawer;
 }
 
+struct ImFont;
 struct ImFontAtlas;
 
 namespace topspin4::settings {
@@ -50,6 +51,9 @@ std::string CurrentPreset();
 // Adds the page's font: the game's own (Media\XUI\DroidSans-Bold.ttf in the player's game data),
 // else Segoe UI Bold when Windows has it, else ImGui's built-in font. Call from OnConfigureFonts.
 void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root);
+
+// The page's body font once AddFonts has run, or null; other overlays can draw with it.
+ImFont* BodyFont();
 
 // Registers the F4 bind and the guest input hold. Changes are saved to settings_path. run_on_ui
 // runs a function on the UI thread. Call once the ImGui drawer and the input system exist.

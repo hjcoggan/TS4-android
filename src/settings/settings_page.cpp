@@ -435,6 +435,8 @@ std::string SessionReportJson() {
   return SessionSettingsJson(g.session.safe_start, CurrentPreset());
 }
 
+ImFont* BodyFont() { return g.body; }
+
 void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root) {
   // The game's own UI font from the player's data; if it is missing, Segoe UI Bold when Windows
   // has it, else ImGui's built-in font (the page draws with whatever it got). Sizes cover a 1440p

@@ -15,6 +15,7 @@
 #include <rex/ui/vulkan/provider.h>
 #include <rex/ui/window.h>
 
+#include "achievement_toast.h"
 #include "crash_report.h"
 #include "d3d/host.h"
 #include "developer_build.h"
@@ -199,6 +200,15 @@ class TopSpin4App : public rex::ReXApp {
   // The Settings page's font: the game's own, from the player's game data.
   void OnConfigureFonts(ImFontAtlas* atlas) override {
     topspin4::settings::AddFonts(atlas, game_data_root());
+    topspin4::achievement_toast::AddFonts(atlas);
+  }
+
+  // The "Achievement unlocked" toast in the console's manner, instead of the SDK's corner one.
+  std::unique_ptr<rex::ui::AchievementNotificationDialog> CreateAchievementNotificationDialog() override {
+    if (!imgui_drawer()) return nullptr;
+    return std::make_unique<topspin4::achievement_toast::Toast>(
+        imgui_drawer(), topspin4::settings::BodyFont(),
+        topspin4::achievement_toast::SoundPathIn(user_data_root()));
   }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
@@ -223,12 +233,18 @@ class TopSpin4App : public rex::ReXApp {
     // through the Settings page's own change path; any other cvar is set directly.
     rex::ui::WindowedAppContext* context = &app_context();
     topspin4::InstallScriptInput(
-        config, &rex::system::GuestSwapCount, [context](std::string name, std::string value) {
-          context->CallInUIThread([name, value] {
+        config, &rex::system::GuestSwapCount, [this, context](std::string name, std::string value) {
+          context->CallInUIThread([this, name, value] {
             // `set settings_page open|close|toggle` drives the Settings page; its pad input is
             // the script's own pad.
             if (topspin4::settings::RunScriptCommand(name, value)) {
               REXLOG_INFO("script input: {} {}", name, value);
+            } else if (name == "achievement_toast") {
+              // `set achievement_toast <id>` shows that achievement's toast without unlocking it.
+              const bool shown = runtime() && runtime()->kernel_state() &&
+                                 achievements().ShowAchievementNotification(
+                                     uint32_t(std::strtoul(value.c_str(), nullptr, 10)));
+              REXLOG_INFO("script input: achievement_toast {} {}", value, shown ? "shown" : "unknown");
             } else if (topspin4::settings::SetPlayerSettingFromScript(name, value)) {
               // A player setting goes through the Settings page's change path, which logs it.
             } else if (rex::cvar::SetFlagByName(name, value)) {

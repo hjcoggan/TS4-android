@@ -10,6 +10,7 @@ include(cmake/rexglue.cmake)
 
 set(TOPSPIN4_SOURCES
     src/main.cpp
+    src/achievement_toast.cpp
     src/crash_report.cpp
     src/not_set_up.cpp
     src/d3d/census.cpp
@@ -174,6 +175,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_swap_choice.cpp
         tests/host/test_movie_clock.cpp
         tests/host/test_present_hold.cpp
+        tests/host/test_achievement_toast.cpp
         tests/native/test_core_dynamic_state.cpp
         tests/native/test_arena_pair.cpp
         tests/native/test_clear_plan.cpp

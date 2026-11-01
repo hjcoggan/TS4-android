@@ -1,0 +1,32 @@
+# Boot -> intro skipped -> title screen, then the "Achievement unlocked" toast (src/achievement_toast.cpp)
+# for achievement 3, shown without unlocking it. Route from boot-main-menu.toml.
+# Run: python scripts/scene_runner.py tests/scenes/achievement-toast.toml
+
+name = "achievement-toast"
+from = "boot"
+
+input = """
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 480
+set achievement_toast 3
+"""
+
+[[capture]]  # the capsule opening out of the badge
+frame = 498
+label = "toast opening"
+crops = [{ name = "toast", box = [0.25, 0.76, 0.50, 0.14] }]
+[[capture]]  # the toast held
+frame = 560
+label = "toast"
+crops = [{ name = "toast", box = [0.25, 0.76, 0.50, 0.14] }]

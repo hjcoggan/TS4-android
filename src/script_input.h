@@ -27,6 +27,7 @@
 //                               A to change a value, B to close. Wait ~300 ms after `open`
 //                               before the first press (the page ignores input until the pad
 //                               has been idle that long).
+//   set achievement_toast <id>  shows that achievement's toast without unlocking it.
 //
 // A duration <t> is milliseconds (120) or guest frames with an 'f' suffix
 // (6f). A frame step ends when the Present count reaches its start + n; the
