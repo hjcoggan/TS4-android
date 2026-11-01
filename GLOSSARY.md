@@ -84,7 +84,7 @@ The player's saved settings. It is the one source of truth that the Settings pag
 _Avoid_: config, cvars file
 
 **Settings page**:
-The in-game screen, usable with a controller, where players change settings while playing. It opens from a PC SETTINGS row in the game's own OPTIONS menu, from F4, or with a pad combo. The Launcher shows the same settings before the game starts.
+The in-game screen, usable with a controller, where players change settings while playing. It opens from a PC SETTINGS row in the game's own main menu, from F4, or with a pad combo. The Launcher shows the same settings before the game starts.
 _Avoid_: overlay, F6 menu, options menu (that is the game's own)
 
 **Launcher**:

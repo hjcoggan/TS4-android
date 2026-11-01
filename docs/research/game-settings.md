@@ -678,3 +678,55 @@ All confirmed. `881D26E8` registers `PushScene` (string xref `881D2CE8`, handler
 - That P47 fills the list before the Move row is inserted, so the row lands last.
 
 Confidence: high on the data layout and the missing 3D row in OPTIONS; medium on the hook route. The first run should log from each of the three hooks.
+
+## Addendum 3 (2026-11-01): the rows moved to the main menu
+
+The OPTIONS route of Addendum 2 §5 never worked: OPTIONS never calls `IsMoveController`
+(`8877B2B8`), so the row never appeared. PC SETTINGS and a new EXIT TO DESKTOP row now live in
+the main menu (`S4MainMenu`, list `|MainMenu`). All of this was seen in game runs unless marked.
+Code: `src/settings/main_menu_rows.h` (pure parts, host tests) and `main_menu_rows_hooks.cpp`.
+
+### Correction to §4
+- `EXPORT_PatchList` (P51) appends **three** hidden rows: the 3D config row (label ID
+  `MainButtonText3DConfig`, shown as "STEREOSCOPIC 3D"; choosing it changes scene to
+  `S4Xbox3DDisclaimer`), the 3D mode switch (`MainButtonTextTwoD`/`ThreeD`, only when
+  `Is3DAccessible()` answers yes, which it does under the recomp), and the PS3 Move tutorial row
+  (`MainButtonTextMoveTutorial`, only when `IsAnyMoveConnected()` answers yes; it changes scene
+  to `S4MoveTutorialMain`). The `MoveVideoTutorial` row assumed earlier never appears.
+- On Xbox nothing calls PatchList, so the menu shows only GAME MODES, Xbox LIVE, PLAYER ZONE,
+  UNLOCK OVERVIEW and OPTIONS.
+
+### Route
+| Hook | Address | What it does |
+| --- | --- | --- |
+| `Is3DAccessible` | `8877A338` | Asked just before the menu's UpdateList print when the menu is built: arms. Answers 0 to our PatchList (no 3D mode switch). |
+| `Pam.PPrint` | `888048F0` | A no-op in retail. On the armed `"S4MainMenu: EXPORT_UpdateList"` it issues `$S4MainMenu.EXPORT_PatchList()` on the MainMenu node, as `88908560` does for S4LockerRoomSelect (`881E87C0` scene, `881FF158` node, `881CF4C0` node name, `881C2A58(881CE2B8(node), &str, 0)`). |
+| `IsAnyMoveConnected` | `88778FA0` | Stub answering 0; answers 1 to our PatchList only (S4PG_Invitation keeps 0). |
+| text resolver | `881EC108` | 3DConfig → "PC SETTINGS", MoveTutorial → "EXIT TO DESKTOP". |
+| `ChangeScene` | `887C3370` | From the menu, `S4Xbox3DDisclaimer` opens the Settings page and `S4MoveTutorialMain` closes the window; the original is skipped. Other changes pass through. |
+
+Data layouts:
+- PPrint's Lua argument: `L = *(*(r5+8))`, index `*(r5+0xC)`; TValue (16 bytes) at
+  `*(L+0x10) + (idx-1)*16`, type at +0 (4 = string), TString at +8. The TString header is
+  **0x18** bytes: length at +0x14, characters from +0x18.
+- ChangeScene's argument: `*(*(r3+0x10)+0x380)` is an object whose +0x10 is a game String
+  (one word, the characters; refcounted header 16 bytes before).
+- Inside a running action chain `881C2A58` queues the call and returns; it runs later in the
+  same frame. So "our PatchList" is told by sequence, not by call stack: issued, then it asks
+  Is3DAccessible and then IsAnyMoveConnected (its last query).
+
+### Getting the menu back after PC SETTINGS
+The row's action (Case17108 in S4MainMenu.actions) runs `SetActiveControl('')`, the `SceneOff`
+animation and `WaitForTexturePacks()` before `ChangeScene`. Swallowing the ChangeScene leaves the
+menu current but hidden, without input. `ChangeScene('S4MainMenu')` does nothing then:
+`887BD8B8` skips a switch to the current scene. What works is `$S4MainMenu.On()` on the MainMenu
+node, which a normal return to the menu runs (via OnActivate): it rebuilds the list (UpdateList,
+so the rows come back through the hooks), plays SceneOn and gives `|MainMenu` the input. The
+selection comes back on GAME MODES.
+
+### Exit
+EXIT TO DESKTOP calls the window's `RequestClose()` on the UI thread. That skips
+`OnWindowCloseRequested`, so the session end is written first; the window's closing then exits
+with 0, as a click on X does.
+
+`IsMoveController` (`8877B2B8`) and `ForceMoveRecalibrate` (`8877B288`) are no longer hooked.

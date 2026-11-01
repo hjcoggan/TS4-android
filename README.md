@@ -27,9 +27,11 @@ Title Update 1 is a content package your console stored when it downloaded the u
 
 Every setting is in the Launcher's **Settings**, one tab per section, so you can set the game up before you play. You can also change every setting in the game, while playing, on its own Settings page:
 
-- In the game's OPTIONS menu, choose **PC SETTINGS**.
+- In the game's main menu, choose **PC SETTINGS**.
 - On a keyboard, press **F4**.
 - On a controller, hold **Back** and **Start** together.
+
+To quit, choose **EXIT TO DESKTOP** in the main menu, or close the window.
 
 In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in the game folder (`userdata`), so the Launcher and the game show the same values.
 
