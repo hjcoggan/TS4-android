@@ -61,11 +61,31 @@ Frame GameFrame() {
   return {size.x / 1280.0f, size.y / 720.0f};
 }
 
-void Rule(ImDrawList* draw, const Frame& f, float y) {
-  const ImU32 line = Col(kPalette.rule), clear = Col(kPalette.rule.WithAlpha(0));
-  const ImVec2 a = f.At(110, y), m = f.At(435, y + 2), b = f.At(760, y);
-  draw->AddRectFilledMultiColor(a, {m.x, m.y}, clear, line, line, clear);
-  draw->AddRectFilledMultiColor({m.x, a.y}, {b.x, m.y}, line, clear, clear, line);
+// A box with a vertical gradient and the game's slightly rounded corners: a rounded fill in the
+// bottom colour, the gradient over it short of the corners, then the edge.
+void GradientBox(ImDrawList* draw, const Frame& f, float x0, float y0, float x1, float y1,
+                 style::Rgba top, style::Rgba bottom, style::Rgba edge) {
+  constexpr float kRound = 3;
+  const ImVec2 a = f.At(x0, y0), b = f.At(x1, y1);
+  const float r = kRound * f.scale;
+  draw->AddRectFilled(a, b, Col(bottom), r);
+  draw->AddRectFilledMultiColor({a.x, a.y + r}, {b.x, b.y - r}, Col(top), Col(top), Col(bottom),
+                                Col(bottom));
+  draw->AddRectFilled({a.x + r, a.y}, {b.x - r, a.y + r}, Col(top));
+  draw->AddRect(a, b, Col(edge), r, 0, 1.0f * f.scale);
+}
+
+// The tennis ball the game puts beside a page's title.
+void Ball(ImDrawList* draw, const Frame& f, float x, float y, float radius) {
+  const ImVec2 c = f.At(x, y);
+  const float r = radius * f.scale;
+  draw->AddCircleFilled(c, r, Col(kPalette.ball), 32);
+  draw->AddCircle(c, r, Col(kPalette.ball_edge), 32, 1.5f * f.scale);
+  const ImU32 seam = Col(kPalette.ball_seam);
+  draw->PathArcTo({c.x - r * 1.35f, c.y}, r * 0.95f, -0.75f, 0.75f, 16);
+  draw->PathStroke(seam, 0, 1.6f * f.scale);
+  draw->PathArcTo({c.x + r * 1.35f, c.y}, r * 0.95f, 3.14159f - 0.75f, 3.14159f + 0.75f, 16);
+  draw->PathStroke(seam, 0, 1.6f * f.scale);
 }
 
 void Text(ImDrawList* draw, ImFont* font, float size, const Frame& f, float x, float y, ImU32 color,
@@ -94,8 +114,32 @@ float FittedWidth(ImFont* font, float size, const Frame& f, float max_width, con
   return width * style::FitSize(size, width, max_width) / size;
 }
 
+// A controller button in the prompts at the bottom: a coloured disc with its letter (A, B), or a
+// grey shoulder tab (LB, RB). Returns the x after it.
+float ButtonGlyph(ImDrawList* draw, ImFont* font, const Frame& f, float x, float y_center,
+                  const std::string& name) {
+  const bool shoulder = name.size() == 2;
+  const float size = 14;
+  const float text_w = TextWidth(font, size, f, name);
+  if (shoulder) {
+    const float w = text_w + 12, h = 18;
+    GradientBox(draw, f, x, y_center - h / 2, x + w, y_center + h / 2, kPalette.button_shoulder,
+                kPalette.button_shoulder, kPalette.button_edge);
+    Text(draw, font, size, f, x + 6, y_center - size * 0.62f, Col(kPalette.button_letter), name);
+    return x + w;
+  }
+  const float r = 11;
+  const style::Rgba disc = name == "A" ? kPalette.button_a : kPalette.button_b;
+  const ImVec2 c = f.At(x + r, y_center);
+  draw->AddCircleFilled(c, r * f.scale, Col(disc), 24);
+  draw->AddCircle(c, r * f.scale, Col(kPalette.button_edge), 24, 1.0f * f.scale);
+  Text(draw, font, size, f, x + r - text_w / 2, y_center - size * 0.62f, Col(kPalette.button_letter),
+       name);
+  return x + 2 * r;
+}
+
 void Arrow(ImDrawList* draw, const Frame& f, float x, float y, bool left, ImU32 color) {
-  const float w = 12, h = 13;
+  const float w = 7, h = 7;
   const ImVec2 tip = f.At(left ? x : x + w, y);
   const ImVec2 top = f.At(left ? x + w : x, y - h), bottom = f.At(left ? x + w : x, y + h);
   draw->AddTriangleFilled(tip, top, bottom, color);
@@ -255,37 +299,54 @@ class PageDialog final : public rex::ui::ImGuiDialog {
   }
 
  private:
+  // Laid out as the game's settings pages, in its 1280x720 frame: the title with a ball top left,
+  // the rows as a grey label cell beside a white value cell (x 330..950, 30 high, 34 apart), the
+  // selected row orange and a little wider with arrows round its value, a grey help bar under the
+  // rows, and the button prompts at the bottom left. The backdrop covers the whole screen in the
+  // menu's blue, so the page looks the same over the menu and over a match.
   void DrawPage() {
     ImDrawList* draw = ImGui::GetForegroundDrawList();
     const Frame f = GameFrame();
-    const ImU32 panel_top = Col(kPalette.panel_top), panel_bottom = Col(kPalette.panel_bottom);
-    draw->AddRectFilledMultiColor(f.At(90, 30), f.At(780, 714), panel_top, panel_top, panel_bottom,
-                                  panel_bottom);
-    draw->AddRect(f.At(90, 30), f.At(780, 714), Col(kPalette.panel_edge), 0, 0, 1.5f * f.scale);
-    const style::Rgba shadow = kPalette.selected_shadow;
-    FitText(draw, g.heading, 44, f, 118, 78, 630, Col(kPalette.heading), "PC SETTINGS", &shadow);
-    Rule(draw, f, 140);
+    const ImVec2 screen = ImGui::GetIO().DisplaySize;
+    const ImU32 back_top = Col(kPalette.backdrop_top), back_mid = Col(kPalette.backdrop_mid),
+                back_bottom = Col(kPalette.backdrop_bottom);
+    draw->AddRectFilledMultiColor({0, 0}, {screen.x, screen.y * 0.5f}, back_top, back_top,
+                                  back_mid, back_mid);
+    draw->AddRectFilledMultiColor({0, screen.y * 0.5f}, screen, back_mid, back_mid, back_bottom,
+                                  back_bottom);
 
+    const style::Rgba shadow = kPalette.selected_shadow;
+    constexpr float kLeft = 330, kSplit = 640, kRight = 950;
+    Ball(draw, f, 272, 88, 15);
+    FitText(draw, g.heading, 24, f, 302, 73, 600, Col(kPalette.heading), "pc settings", &shadow);
+
+    // Section names centred above the rows, between LB and RB when there are several.
     const std::vector<Section>& sections = model_.model().sections();
     const ImU32 tab_idle = Col(kPalette.tab_idle), tab_active = Col(kPalette.tab_active);
+    constexpr float kTabsY = 206, kTabSize = 20, kTabGap = 26;
     if (sections.size() > 1) {
-      float x = 130;
-      Text(draw, g.heading, 24, f, x, 148, tab_idle, "LB");
-      x += 48;
+      float total = 0;
+      for (const Section s : sections) total += TextWidth(g.heading, kTabSize, f, std::string(SectionName(s)));
+      total += kTabGap * float(sections.size() - 1);
+      float x = (kLeft + kRight) / 2 - total / 2;
+      ButtonGlyph(draw, g.heading, f, x - 52, kTabsY + kTabSize * 0.62f, "LB");
       for (size_t s = 0; s < sections.size(); ++s) {
         const std::string name(SectionName(sections[s]));
-        Text(draw, g.heading, 24, f, x, 148, s == model_.section_index() ? tab_active : tab_idle, name);
-        x += TextWidth(g.heading, 24, f, name) + 28;
+        Text(draw, g.heading, kTabSize, f, x, kTabsY, s == model_.section_index() ? tab_active : tab_idle,
+             name);
+        x += TextWidth(g.heading, kTabSize, f, name) + kTabGap;
       }
-      Text(draw, g.heading, 24, f, x, 148, tab_idle, "RB");
+      ButtonGlyph(draw, g.heading, f, x - kTabGap + 16, kTabsY + kTabSize * 0.62f, "RB");
     } else {
-      Text(draw, g.heading, 24, f, 130, 148, tab_active, std::string(SectionName(model_.section())));
+      const std::string name(SectionName(model_.section()));
+      Text(draw, g.heading, kTabSize, f, (kLeft + kRight) / 2 - TextWidth(g.heading, kTabSize, f, name) / 2,
+           kTabsY, tab_active, name);
     }
 
-    // Rows fill y 188..564 above the rule: 56 apart, closer with seven; a longer list (Controls)
-    // scrolls to keep the selected row in view.
+    // Up to eight rows; a longer list (Controls) scrolls to keep the selected row in view.
     const std::vector<Row> rows = model_.rows();
-    constexpr size_t kVisible = 7;
+    constexpr size_t kVisible = 8;
+    constexpr float kTop = 248, kHeight = 30, kStep = 34, kTextSize = 19;
     const size_t shown = std::min(rows.size(), kVisible);
     const size_t selected_row = std::min(model_.selected_index(), rows.empty() ? 0 : rows.size() - 1);
     const size_t first =
@@ -293,32 +354,30 @@ class PageDialog final : public rex::ui::ImGuiDialog {
             ? 0
             : std::min(selected_row > kVisible / 2 ? selected_row - kVisible / 2 : 0,
                        rows.size() - kVisible);
-    const float step = std::min(56.0f, 376.0f / float(std::max<size_t>(shown, 1)));
-    const float bar = step - 8;
-    // Labels take x 140..440 and values 470..710 between the arrows; either shrinks to fit.
-    const float label_size = std::min(28.0f, bar - 8), value_size = std::min(28.0f, bar - 8);
-    const float inset = (bar - label_size * 1.2f) / 2;
-    constexpr float kLabelX = 140, kLabelWidth = 300, kValueCenter = 590, kValueWidth = 240;
-    float y = 188;
     if (rows.size() > kVisible) {
-      Text(draw, g.body, 21, f, 640, 152, tab_idle,
-           std::to_string(selected_row + 1) + " / " + std::to_string(rows.size()));
+      const std::string count = std::to_string(selected_row + 1) + " / " + std::to_string(rows.size());
+      Text(draw, g.body, 17, f, kRight - TextWidth(g.body, 17, f, count), kTabsY + 2, tab_idle, count);
     }
+    // Labels fit in 290 of the 310 of their cell, values in 250 between the arrows.
+    constexpr float kLabelWidth = 290, kValueWidth = 250;
+    const float text_y = (kHeight - kTextSize * 1.2f) / 2;
+    float y = kTop;
     for (size_t i = first; i < first + shown; ++i) {
       const Row& row = rows[i];
       const bool selected = i == selected_row;
       const bool waiting = model_.capturing() && model_.capture_key() == row.key;
-      const ImVec2 a = f.At(120, y), b = f.At(750, y + bar);
       if (selected) {
-        const ImU32 top = Col(kPalette.bar_top), bottom = Col(kPalette.bar_bottom);
-        draw->AddRectFilledMultiColor(a, b, top, top, bottom, bottom);
-        draw->AddRect(a, b, Col(kPalette.bar_edge), 0, 0, 1.5f * f.scale);
+        GradientBox(draw, f, kLeft - 6, y - 2, kRight + 6, y + kHeight + 2, kPalette.bar_top,
+                    kPalette.bar_bottom, kPalette.bar_edge);
+        draw->AddLine(f.At(kSplit, y + 2), f.At(kSplit, y + kHeight - 2),
+                      Col(kPalette.bar_edge.WithAlpha(110)), 1.0f * f.scale);
       } else {
-        const ImU32 top = Col(kPalette.idle_top), bottom = Col(kPalette.idle_bottom);
-        draw->AddRectFilledMultiColor(a, b, top, top, bottom, bottom);
+        GradientBox(draw, f, kLeft, y, kSplit - 1, y + kHeight, kPalette.label_top,
+                    kPalette.label_bottom, kPalette.cell_edge);
+        GradientBox(draw, f, kSplit + 1, y, kRight, y + kHeight, kPalette.value_top,
+                    kPalette.value_bottom, kPalette.cell_edge);
       }
-      // The game's selected row is white text with a shadow on orange; the others are dark text
-      // on white.
+      // White text with a shadow on the orange row, dark text on the grey and white cells.
       const style::Rgba* text_shadow = selected ? &shadow : nullptr;
       ImU32 color = Col(selected ? kPalette.selected_text : kPalette.idle_text);
       if (!row.available) color = Col(selected ? kPalette.selected_text.WithAlpha(190) : kPalette.disabled_text);
@@ -330,45 +389,84 @@ class PageDialog final : public rex::ui::ImGuiDialog {
       if (!selected && (row.mark == Mark::kLaunchOption || row.mark == Mark::kSafeStart)) {
         value_color = Col(kPalette.launch_mark);
       }
-      // Clipped to the bar as a last resort, so no text ever spills over a neighbouring row.
-      draw->PushClipRect(a, b, true);
-      FitText(draw, g.heading, label_size, f, kLabelX, y + inset, kLabelWidth, color, row.label,
-              text_shadow);
-      const float width = FittedWidth(g.heading, value_size, f, kValueWidth, value);
-      FitText(draw, g.heading, value_size, f, kValueCenter - width / 2, y + inset, kValueWidth,
-              value_color, value, text_shadow);
+      const std::string label = style::UpperLabel(row.label);
+      // Clipped to the row as a last resort, so no text ever spills over a neighbour.
+      draw->PushClipRect(f.At(kLeft - 6, y - 2), f.At(kRight + 6, y + kHeight + 2), true);
+      const float label_w = FittedWidth(g.heading, kTextSize, f, kLabelWidth, label);
+      FitText(draw, g.heading, kTextSize, f, (kLeft + kSplit) / 2 - label_w / 2, y + text_y, kLabelWidth,
+              color, label, text_shadow);
+      const float value_w = FittedWidth(g.heading, kTextSize, f, kValueWidth, value);
+      FitText(draw, g.heading, kTextSize, f, (kSplit + kRight) / 2 - value_w / 2, y + text_y,
+              kValueWidth, value_color, value, text_shadow);
       draw->PopClipRect();
       if (selected && row.editable && !row.capture && row.kind != RowKind::kAction) {
         const ImU32 arrow = Col(kPalette.selected_text);
-        Arrow(draw, f, 452, y + bar / 2, true, arrow);
-        Arrow(draw, f, 716, y + bar / 2, false, arrow);
+        Arrow(draw, f, kSplit + 10, y + kHeight / 2, true, arrow);
+        Arrow(draw, f, kRight - 17, y + kHeight / 2, false, arrow);
       }
-      y += step;
+      y += kStep;
     }
 
-    Rule(draw, f, 568);
-    if (rows.empty()) return;
-    const Row& row = rows[selected_row];
-    std::string help = row.help;
-    if (row.capture) help += " Press A, then the key to use (Esc or B cancels).";
-    if (row.kind == RowKind::kAction) help += " Press A to reset.";
-    // The help and the note under it must end above the panel's edge (y 714): the size drops a
-    // point at a time until both fit, so a long description or note is never cut off.
-    ImFont* body = g.body ? g.body : ImGui::GetFont();
-    auto height = [&](float size, const std::string& text) {
-      if (text.empty()) return 0.0f;
-      return body->CalcTextSizeA(size * f.scale, FLT_MAX, 620 * f.scale_x, text.c_str()).y / f.scale;
-    };
-    constexpr float kTextTop = 578, kTextBottom = 706, kGap = 6;
-    float size = 21;
-    while (size > 14 && kTextTop + height(size, help) + (row.note.empty() ? 0 : kGap) +
-                                height(size, row.note) > kTextBottom) {
-      size -= 1;
+    // The help bar follows the rows, as the game's does, and grows with its text; the size drops a
+    // point at a time until the help and the note fit above the prompts.
+    const Row* current = rows.empty() ? nullptr : &rows[selected_row];
+    if (current) {
+      std::string help = current->help;
+      if (current->capture) help += " Press A, then the key to use (Esc or B cancels).";
+      if (current->kind == RowKind::kAction) help += " Press A to reset.";
+      ImFont* body = g.body ? g.body : ImGui::GetFont();
+      constexpr float kPad = 8, kWrap = 600, kGap = 4;
+      auto height = [&](float size, const std::string& text) {
+        if (text.empty()) return 0.0f;
+        return body->CalcTextSizeA(size * f.scale, FLT_MAX, kWrap * f.scale_x, text.c_str()).y / f.scale;
+      };
+      // The prompts start at about 643; the bar ends above them. Text that still does not fit at
+      // the smallest size moves the bar up into the space under the rows, then is clipped there.
+      constexpr float kBarLimit = 636, kMinSize = 12;
+      float bar_top = y - kStep + kHeight + 22;
+      const float bar_top_highest = y - kStep + kHeight + 6;
+      float size = 18;
+      auto text_height = [&](float s) {
+        return height(s, help) + (current->note.empty() ? 0 : kGap + height(s, current->note));
+      };
+      while (size > kMinSize && bar_top + 2 * kPad + text_height(size) > kBarLimit) size -= 1;
+      bar_top = std::max(bar_top_highest, std::min(bar_top, kBarLimit - 2 * kPad - text_height(size)));
+      const float bar_bottom = std::min(kBarLimit, bar_top + 2 * kPad + text_height(size));
+      GradientBox(draw, f, kLeft, bar_top, kRight, bar_bottom, kPalette.help_top, kPalette.help_bottom,
+                  kPalette.help_edge);
+      draw->PushClipRect(f.At(kLeft, bar_top), f.At(kRight, bar_bottom), true);
+      const float text_x = kLeft + (kRight - kLeft - kWrap) / 2;
+      Text(draw, g.body, size, f, text_x, bar_top + kPad, Col(kPalette.help_text), help, kWrap);
+      if (!current->note.empty()) {
+        Text(draw, g.body, size, f, text_x, bar_top + kPad + height(size, help) + kGap,
+             Col(current->pending ? kPalette.note_pending : kPalette.note), current->note, kWrap);
+      }
+      draw->PopClipRect();
     }
-    Text(draw, g.body, size, f, 118, kTextTop, Col(kPalette.heading), help, 620);
-    if (!row.note.empty()) {
-      Text(draw, g.body, size, f, 118, kTextTop + height(size, help) + kGap,
-           Col(row.pending ? kPalette.note_pending : kPalette.note), row.note, 620);
+
+    // The prompts, as the game's: a button, then what it does, in lower case.
+    constexpr float kPromptY = 654, kPromptSize = 19;
+    float x = kLeft;
+    auto prompt = [&](const std::string& button, const std::string& what) {
+      x = ButtonGlyph(draw, g.heading, f, x, kPromptY, button) + 6;
+      FitText(draw, g.heading, kPromptSize, f, x, kPromptY - kPromptSize * 0.62f, 300,
+              Col(kPalette.heading), what, &shadow);
+      x += TextWidth(g.heading, kPromptSize, f, what) + 16;
+    };
+    // While a key binding waits for its key, A does nothing: only B's cancel is shown.
+    if (current && current->editable && !model_.capturing()) {
+      if (current->kind == RowKind::kAction) {
+        prompt("A", "reset");
+      } else if (current->capture) {
+        prompt("A", "set key");
+      } else {
+        prompt("A", "change");
+      }
+    }
+    prompt("B", model_.capturing() ? "cancel" : "back");
+    if (sections.size() > 1 && !model_.capturing()) {
+      x = ButtonGlyph(draw, g.heading, f, x, kPromptY, "LB") + 4;
+      prompt("RB", "section");
     }
   }
 

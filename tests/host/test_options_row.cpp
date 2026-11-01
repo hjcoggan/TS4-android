@@ -193,6 +193,11 @@ TEST_CASE("The page uses the game's font from the player's game data") {
         std::filesystem::path("D:/game") / "Media" / "XUI" / "DroidSans-Bold.ttf");
 }
 
+TEST_CASE("Row labels are upper case, as the game's") {
+  CHECK(style::UpperLabel("Resolution scale (3D)") == "RESOLUTION SCALE (3D)");
+  CHECK(style::UpperLabel("") == "");
+}
+
 TEST_CASE("Long text shrinks to fit and short text is left alone") {
   CHECK(style::FitSize(28, 100, 300) == 28);
   CHECK(style::FitSize(28, 300, 300) == 28);
@@ -203,14 +208,17 @@ TEST_CASE("Long text shrinks to fit and short text is left alone") {
 
 TEST_CASE("The page's text is readable on its backgrounds") {
   const style::Palette& p = style::kTopSpinPalette;
-  CHECK(style::Contrast(p.idle_text, p.idle_bottom) >= 4.5);
-  CHECK(style::Contrast(p.idle_value, p.idle_bottom) >= 4.5);
-  CHECK(style::Contrast(p.disabled_text, p.idle_top) >= 3.0);
-  CHECK(style::Contrast(p.launch_mark, p.idle_bottom) >= 4.5);
-  CHECK(style::Contrast(p.heading, p.panel_top) >= 4.5);
-  CHECK(style::Contrast(p.note, p.panel_bottom) >= 4.5);
-  CHECK(style::Contrast(p.note_pending, p.panel_top) >= 4.5);
-  CHECK(style::Contrast(p.tab_active, p.panel_top) >= 3.0);
+  CHECK(style::Contrast(p.idle_text, p.label_top) >= 4.5);
+  CHECK(style::Contrast(p.idle_value, p.value_top) >= 4.5);
+  CHECK(style::Contrast(p.disabled_text, p.value_bottom) >= 3.0);
+  CHECK(style::Contrast(p.disabled_text, p.label_bottom) >= 3.0);  // a disabled row's label
+  CHECK(style::Contrast(p.launch_mark, p.value_top) >= 4.5);
+  CHECK(style::Contrast(p.heading, p.backdrop_mid) >= 4.5);
+  CHECK(style::Contrast(p.help_text, p.help_top) >= 4.5);
+  CHECK(style::Contrast(p.note, p.help_top) >= 4.5);
+  CHECK(style::Contrast(p.note_pending, p.help_top) >= 4.5);
+  CHECK(style::Contrast(p.tab_active, p.backdrop_mid) >= 3.0);
+  CHECK(style::Contrast(p.tab_idle, p.backdrop_mid) >= 4.5);
   // White on the orange row, with the game's shadow under it.
   CHECK(style::Contrast(p.selected_text, p.bar_bottom) >= 3.0);
 }

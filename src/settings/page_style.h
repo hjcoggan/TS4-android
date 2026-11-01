@@ -3,8 +3,9 @@
 // (tests/host/test_options_row.cpp); settings_page.cpp draws with it.
 //
 // The font is the game's own UI font, read from the player's game data when the page starts
-// (ADR-0006: nothing of the game is committed). The palette is the front end's, sampled from a
-// capture of its menus (white rows with dark text, an orange selected row, a blue background).
+// (ADR-0006: nothing of the game is committed). The palette and layout are the front end's, sampled
+// from captures of its settings pages (grey and white row cells, an orange selected row, a grey
+// help bar, button prompts, a blue background).
 // It is not read from the data: the front end's colours live in compressed Lua scenes
 // (docs/research/game-settings.md, Addendum 2), which the runtime cannot read.
 
@@ -14,6 +15,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 
 namespace topspin4::settings::style {
 
@@ -27,43 +29,72 @@ struct Rgba {
 };
 
 struct Palette {
-  Rgba panel_top, panel_bottom, panel_edge;  // the blue behind the page
-  Rgba heading;                              // the title and help text on the panel
-  Rgba tab_active, tab_idle;                 // section names on the panel
-  Rgba rule;                                 // the lines above and below the rows
-  Rgba bar_top, bar_bottom;                  // the selected row (orange)
+  Rgba backdrop_top, backdrop_mid, backdrop_bottom;  // the blue over the whole screen
+  Rgba heading;                                      // the title and the button prompts
+  Rgba ball, ball_edge, ball_seam;                   // the tennis ball beside the title
+  Rgba tab_active, tab_idle;                         // section names above the rows
+  Rgba label_top, label_bottom;                      // a row's label cell (light grey)
+  Rgba value_top, value_bottom;                      // a row's value cell (white)
+  Rgba cell_edge;
+  Rgba bar_top, bar_bottom;                          // the selected row (orange)
   Rgba bar_edge;
-  Rgba idle_top, idle_bottom;                // the other rows (white)
-  Rgba selected_text, selected_shadow;       // on the orange row
-  Rgba idle_text, idle_value, disabled_text; // on a white row
-  Rgba launch_mark;                          // a value pinned by a Launch option, on a white row
-  Rgba note, note_pending;                   // the line under the help text
+  Rgba selected_text, selected_shadow;               // on the orange row
+  Rgba idle_text, idle_value, disabled_text;         // on a grey or white cell
+  Rgba launch_mark;                                  // a value pinned by a Launch option
+  Rgba help_top, help_bottom, help_edge;             // the grey bar under the rows
+  Rgba help_text, note, note_pending;                // on the help bar
+  Rgba button_a, button_b, button_shoulder;          // the prompt glyphs at the bottom
+  Rgba button_letter, button_edge;
 };
 
-// Sampled from the game's main menu: the selected row is orange with white text, the others are
-// white with dark grey text, on a blue background.
+// Sampled from the game's own settings pages (match settings: a grey label cell beside a white
+// value cell, the selected row orange with white text and arrows, a grey help bar under the
+// rows, button prompts at the bottom left, the title with a ball top left, all on the blue
+// menu background). The help bar is darker than the game's so its longer text stays readable.
 inline constexpr Palette kTopSpinPalette = {
-    .panel_top = {46, 98, 140, 240},
-    .panel_bottom = {22, 52, 80, 240},
-    .panel_edge = {150, 195, 225, 170},
+    .backdrop_top = {26, 58, 84, 235},
+    .backdrop_mid = {44, 92, 128, 235},
+    .backdrop_bottom = {24, 54, 78, 235},
     .heading = {255, 255, 255, 255},
-    .tab_active = {255, 190, 40, 255},
+    .ball = {214, 222, 52, 255},
+    .ball_edge = {120, 128, 20, 255},
+    .ball_seam = {250, 250, 235, 255},
+    .tab_active = {250, 175, 30, 255},
     .tab_idle = {200, 222, 238, 255},
-    .rule = {200, 225, 245, 150},
-    .bar_top = {240, 150, 10, 255},
-    .bar_bottom = {208, 98, 0, 255},
-    .bar_edge = {255, 214, 120, 255},
-    .idle_top = {250, 250, 250, 245},
-    .idle_bottom = {222, 224, 226, 245},
+    .label_top = {214, 214, 215, 255},
+    .label_bottom = {204, 205, 205, 255},
+    .value_top = {233, 233, 234, 255},
+    .value_bottom = {251, 251, 251, 255},
+    .cell_edge = {255, 255, 255, 170},
+    .bar_top = {238, 184, 22, 255},
+    .bar_bottom = {222, 112, 0, 255},
+    .bar_edge = {255, 228, 170, 255},
     .selected_text = {255, 255, 255, 255},
-    .selected_shadow = {96, 40, 0, 190},
-    .idle_text = {52, 56, 60, 255},
-    .idle_value = {52, 56, 60, 255},
-    .disabled_text = {120, 128, 136, 255},
+    .selected_shadow = {110, 50, 0, 180},
+    .idle_text = {44, 46, 48, 255},
+    .idle_value = {44, 46, 48, 255},
+    .disabled_text = {104, 108, 112, 255},
     .launch_mark = {160, 60, 0, 255},
-    .note = {196, 216, 230, 255},
-    .note_pending = {255, 214, 90, 255},
+    .help_top = {94, 96, 98, 240},
+    .help_bottom = {78, 80, 82, 240},
+    .help_edge = {190, 192, 194, 200},
+    .help_text = {255, 255, 255, 255},
+    .note = {215, 228, 236, 255},
+    .note_pending = {255, 222, 120, 255},
+    .button_a = {104, 176, 40, 255},
+    .button_b = {206, 48, 40, 255},
+    .button_shoulder = {200, 202, 204, 255},
+    .button_letter = {30, 32, 34, 255},
+    .button_edge = {255, 255, 255, 140},
 };
+
+// A row label as the game shows it: upper case (ASCII; the labels are English).
+inline std::string UpperLabel(std::string text) {
+  for (char& c : text) {
+    if (c >= 'a' && c <= 'z') c = char(c - 'a' + 'A');
+  }
+  return text;
+}
 
 // WCAG relative luminance and contrast ratio (opaque colours).
 inline double Luminance(Rgba c) {
