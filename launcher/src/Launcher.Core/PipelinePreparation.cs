@@ -84,8 +84,19 @@ public sealed class PipelinePreparation(string gameExe, Preparation preparation,
         }
     }
 
-    /// <summary>Runs the prepare. A failure is a result, never an exception, except a cancel.</summary>
+    /// <summary>
+    /// Runs the prepare. A failure is a result, never an exception, except a cancel. A crash is run once more: AMD's
+    /// driver has crashed now and then while many threads built pipeline libraries at once (0xC0000005 inside
+    /// amdvlk64), and the same step then finished on the next run.
+    /// </summary>
     public async Task<PipelineResult> RunAsync(IProgress<PipelineProgress>? progress, CancellationToken cancel)
+    {
+        var result = await RunOnceAsync(progress, cancel).ConfigureAwait(false);
+        if (result.Outcome != PipelineOutcome.Crashed || result.StartError is not null) return result;
+        return await RunOnceAsync(progress, cancel).ConfigureAwait(false);
+    }
+
+    private async Task<PipelineResult> RunOnceAsync(IProgress<PipelineProgress>? progress, CancellationToken cancel)
     {
         var inputs = CurrentInputs();
         var output = new PipelineOutput();

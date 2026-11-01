@@ -28,3 +28,4 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 ### Fixed
 
 - The Launcher's **Help** opens in Notepad when Windows has no app for `.md` files, instead of failing.
+- Setup's pipeline step runs once more when the game crashes during it. On AMD the driver could crash now and then while building pipelines; the same step then finished.

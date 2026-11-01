@@ -20,6 +20,8 @@ internal sealed class FakePipelineRunner : IPrepareRunner
 
     public string[] Lines { get; set; } = Finished;
     public int ExitCode { get; set; }
+    /// <summary>Exit codes for the next runs, in order; <see cref="ExitCode"/> once they are used up.</summary>
+    public Queue<int> ExitCodes { get; } = new();
     public int Runs { get; private set; }
     public ProcessStart? Last { get; private set; }
     /// <summary>Cancelled before the first line, as a stopped setup is.</summary>
@@ -31,8 +33,9 @@ internal sealed class FakePipelineRunner : IPrepareRunner
         Last = start;
         CancelOnStart?.Cancel();
         cancel.ThrowIfCancellationRequested();
+        var exitCode = ExitCodes.Count > 0 ? ExitCodes.Dequeue() : ExitCode;
         foreach (var line in Lines) onLine(line);
-        if (ExitCode is 0 or 3)
+        if (exitCode is 0 or 3)
         {
             var cacheRoot = start.Arguments.Single(argument => argument.StartsWith("--cache_root=", StringComparison.Ordinal))["--cache_root=".Length..];
             var store = Path.Combine(cacheRoot, PipelinePreparation.StoreFolderName);
@@ -41,6 +44,6 @@ internal sealed class FakePipelineRunner : IPrepareRunner
             File.WriteAllText(Path.Combine(store, "driver-cache.bin"), "cache");
             File.Delete(Path.Combine(store, "pipelines-stale"));
         }
-        return Task.FromResult(ExitCode);
+        return Task.FromResult(exitCode);
     }
 }

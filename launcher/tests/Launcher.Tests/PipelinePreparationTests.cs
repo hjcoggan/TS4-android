@@ -67,6 +67,23 @@ public sealed class PipelinePreparationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_crashed_prepare_is_run_once_more_and_a_second_crash_is_reported()
+    {
+        _runner.ExitCodes.Enqueue(unchecked((int)0xC0000005));
+        var recovered = await _pipelines.RunAsync(null, Token);
+        Assert.Equal(PipelineOutcome.Ready, recovered.Outcome);
+        Assert.Equal(2, _runner.Runs);
+        Assert.Equal(PipelineRebuild.None, _pipelines.Check(true));
+
+        _pipelines.Forget();
+        _runner.Lines = ["topspin4-prepare-pipelines 1"];
+        _runner.ExitCode = unchecked((int)0xC0000005);
+        var crashed = await _pipelines.RunAsync(null, Token);
+        Assert.Equal(PipelineOutcome.Crashed, crashed.Outcome);
+        Assert.Equal(4, _runner.Runs);
+    }
+
+    [Fact]
     public async Task The_stale_marker_a_changed_pack_a_new_top_up_or_a_changed_update_folder_rebuilds()
     {
         await _pipelines.RunAsync(null, Token);
