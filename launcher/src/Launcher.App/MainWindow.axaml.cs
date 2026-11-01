@@ -52,6 +52,10 @@ public partial class MainWindow : Window
     private LauncherTheme _theme = LauncherTheme.Original;
     private bool _themeLoaded;
     private Dictionary<string, Bitmap> _pictures = [];
+    // The achievement icons in grey, for the locked ones.
+    private Dictionary<string, Bitmap> _greyPictures = [];
+    private readonly string _unlocksPath;
+    private Showcase _showcase = Showcase.Empty;
     private (RowState Disc, SetupPhase Phase)? _themeKey;
     private string? _shownShaderFailure;
 
@@ -74,6 +78,8 @@ public partial class MainWindow : Window
         // Nothing is searched for or filled in: the rows stay empty until the player picks a file.
         // The disc row reads the disc's art the moment it accepts the disc; the art folder is userdata\art.
         _artFolder = UserDirectories.ArtFolder(userRoot);
+        // The game records each achievement the player earns; the Achievements page marks them.
+        _unlocksPath = AchievementUnlocks.PathIn(userRoot);
         // Once the disc is extracted (and at each start) the art is read again from there if the art folder is missing or incomplete.
         // Setup ends with the shader step: the shaders of the game's archives and Modules, converted with the XenosRecomp
         // the release ships. A pack another XenosRecomp built is rebuilt when the window opens (below), before Play.
@@ -117,6 +123,8 @@ public partial class MainWindow : Window
         Activated += (_, _) =>
         {
             ShowFooter();
+            // The game may have been run outside the Launcher and earned achievements meanwhile.
+            ReloadUnlocks();
             Refresh();
         };
 
@@ -377,6 +385,7 @@ public partial class MainWindow : Window
             await game.WaitForExitAsync();
             _home.SessionEnded(game.ExitCode);
         }
+        ReloadUnlocks();
         Show();
         Activate();
         Refresh();
@@ -390,7 +399,11 @@ public partial class MainWindow : Window
     private void ReloadTheme()
     {
         var art = DiscArtFolder.Open(_artFolder);
-        if (_themeLoaded && art.Stamp == _theme.ArtStamp) return;
+        if (_themeLoaded && art.Stamp == _theme.ArtStamp)
+        {
+            ReloadUnlocks();
+            return;
+        }
         var pictures = new Dictionary<string, Bitmap>();
         WindowIcon? icon = null;
         bool CanDraw(DiscArtSlot slot, string path)
@@ -402,7 +415,7 @@ public partial class MainWindow : Window
         }
         var theme = LauncherTheme.From(art, CanDraw);
         // The card row's pictures, decoded small: a card never shows them larger.
-        var showcase = Showcase.From(art);
+        var showcase = Showcase.From(art, AchievementUnlocks.Read(_unlocksPath));
         void LoadAll(IEnumerable<DiscArtEntry> entries, int width)
         {
             foreach (var entry in entries)
@@ -412,10 +425,16 @@ public partial class MainWindow : Window
         LoadAll(showcase.Players, 144);
         LoadAll(showcase.Venues, 400);
         LoadAll(showcase.Achievements, 64);
+        var grey = new Dictionary<string, Bitmap>();
+        foreach (var entry in showcase.Achievements)
+            if (pictures.GetValueOrDefault(entry.ImagePath) is { } colour && !grey.ContainsKey(entry.ImagePath) && LauncherLook.Grayscale(colour) is { } dull)
+                grey[entry.ImagePath] = dull;
         if (art.ImagePath(DiscArtSlot.TitleIcon) is { } iconPng && LauncherLook.Load(iconPng, Log) is { } iconBitmap) pictures[iconPng] = iconBitmap;
 
-        var old = _pictures;
+        var old = _pictures.Values.Concat(_greyPictures.Values).ToList();
         _pictures = pictures;
+        _greyPictures = grey;
+        _showcase = showcase;
         _theme = theme;
         _themeLoaded = true;
         LauncherLook.Apply(theme.Palette);
@@ -423,15 +442,29 @@ public partial class MainWindow : Window
         CreditText.Text = theme.CreditLine;
         var logo = Picture(theme.Source(DiscArtSlot.Logo));
         _homePage.ShowLogo(logo);
-        _homePage.ShowCards(showcase, path => _pictures.GetValueOrDefault(path));
-        _achievementsPage.Show(showcase, path => _pictures.GetValueOrDefault(path));
+        ShowShowcase();
         LogoImage.Source = logo;
         var railIcon = art.ImagePath(DiscArtSlot.TitleIcon) is { } path ? _pictures.GetValueOrDefault(path) : null;
         RailIcon.Source = railIcon;
         RailIcon.IsVisible = railIcon is not null;
         RailWordmark.IsVisible = railIcon is null;
         ShowPageLook(_shell.Page);
-        foreach (var bitmap in old.Values) bitmap.Dispose();
+        foreach (var bitmap in old) bitmap.Dispose();
+    }
+
+    private void ShowShowcase()
+    {
+        _homePage.ShowCards(_showcase, path => _pictures.GetValueOrDefault(path));
+        _achievementsPage.Show(_showcase, path => _pictures.GetValueOrDefault(path), path => _greyPictures.GetValueOrDefault(path));
+    }
+
+    // The game writes its unlock file as achievements are earned; the pages follow once it changed.
+    private void ReloadUnlocks()
+    {
+        var unlocks = AchievementUnlocks.Read(_unlocksPath);
+        if (unlocks.Stamp == (_showcase.Unlocks ?? AchievementUnlocks.None).Stamp) return;
+        _showcase = _showcase with { Unlocks = unlocks };
+        ShowShowcase();
     }
 
     private (bool Home, PageLook Look, ThemePalette Palette, Bitmap? Background)? _shownLook;

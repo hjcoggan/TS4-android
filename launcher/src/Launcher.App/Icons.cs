@@ -24,6 +24,7 @@ internal static class Icons
     public const string Warning = "M12,3 L22,20 H2 Z M12,9 V14 M12,17 V17.2";
     public const string Shield = "M12,3 L20,6 V12 C20,17 16,20 12,21 C8,20 4,17 4,12 V6 Z";
     public const string Back = "M15,5 L8,12 L15,19";
+    public const string Padlock = "M6,11 H18 V20 H6 Z M8.5,11 V8 A3.5,3.5 0 0 1 15.5,8 V11";
 
     /// <summary>A 24x24 icon (drawn at <paramref name="size"/>) whose stroke follows the Foreground of the button it is in.</summary>
     public static Control Make(string data, double size = 24)

@@ -32,7 +32,7 @@ public sealed class DiscArtFolder
     private const string ReadComplete = "complete";
     private const string FormatKey = "format";
     // Raised when the Launcher reads more from the disc than before, so an older folder counts as incomplete and is read again.
-    private const string Format = "3";
+    private const string Format = "4";
     private static readonly string[] Extensions = [".png", ".jpg"];
 
     /// <summary>
@@ -133,7 +133,7 @@ public sealed class DiscArtFolder
         }
     }
 
-    // A collection's list: one line per picture, "file<TAB>title<TAB>detail<TAB>points". A missing list is an empty
+    // A collection's list: one line per picture, "file<TAB>title<TAB>detail<TAB>points<TAB>id<TAB>how to". A missing list is an empty
     // collection; a line naming a file that is gone is skipped.
     private static IReadOnlyList<DiscArtEntry> OpenCollection(string folder, StringBuilder stamp)
     {
@@ -146,7 +146,9 @@ public sealed class DiscArtFolder
             var fields = line.Split('\t');
             if (!IsPlainFileInside(folder, fields[0])) continue;
             var points = fields.Length > 3 && int.TryParse(fields[3], out var value) ? value : 0;
-            entries.Add(new DiscArtEntry(Path.Combine(folder, fields[0]), fields.ElementAtOrDefault(1) ?? "", fields.ElementAtOrDefault(2) ?? "", points));
+            var id = fields.Length > 4 && int.TryParse(fields[4], out var number) ? number : 0;
+            entries.Add(new DiscArtEntry(Path.Combine(folder, fields[0]), fields.ElementAtOrDefault(1) ?? "", fields.ElementAtOrDefault(2) ?? "", points,
+                id, fields.ElementAtOrDefault(5) ?? ""));
         }
         Stat(stamp, list);
         return entries;
@@ -250,14 +252,14 @@ public sealed class DiscArtFolder
         Directory.CreateDirectory(folder);
         DeleteStrayTemporaries(folder);
         var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var list = new StringBuilder("# Top Spin 4 Recomp: file, title, detail, points. Written by the Launcher.\n");
+        var list = new StringBuilder("# Top Spin 4 Recomp: file, title, detail, points, id, how to. Written by the Launcher.\n");
         for (var i = 0; i < items.Count; i++)
         {
             var name = $"{i + 1:D3}{ArtImageFile.Describe(items[i].Image).Extension}";
             WriteAtomically(Path.Combine(folder, name), items[i].Image);
             keep.Add(name);
             list.Append(name).Append('\t').Append(Field(items[i].Title)).Append('\t').Append(Field(items[i].Detail))
-                .Append('\t').Append(items[i].Points).Append('\n');
+                .Append('\t').Append(items[i].Points).Append('\t').Append(items[i].Id).Append('\t').Append(Field(items[i].HowTo)).Append('\n');
         }
         if (items.Count > 0)
         {

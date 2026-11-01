@@ -1,7 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TopSpin4.Launcher.Pages.AchievementsPage">
-  <!-- The achievements from the player's disc: icon, name, what earns it, and its points. Drawn from Showcase. -->
+  <!-- The achievements from the player's disc, earned ones first: icon, name, what earns it, its points and, once earned,
+       when. Locked ones are greyed with a padlock. Drawn from Showcase. -->
   <StackPanel Spacing="14">
     <Grid ColumnDefinitions="Auto,*">
       <Button x:Name="BackButton" Grid.Column="0" Classes="secondary" Content="Back" />
@@ -10,6 +11,8 @@
         <TextBlock x:Name="SummaryText" Classes="small" VerticalAlignment="Center" />
       </StackPanel>
     </Grid>
+    <ProgressBar x:Name="ScoreBar" Height="6" MinHeight="6" Minimum="0" Maximum="1" IsVisible="False"
+                 Foreground="{DynamicResource AccentBrush}" Background="{DynamicResource PanelBrush}" CornerRadius="3" />
     <TextBlock x:Name="EmptyText" Classes="body" IsVisible="False"
                Text="The achievements are read from your disc during setup. Set up again to read them." />
     <WrapPanel x:Name="ListHost" ItemWidth="452" />

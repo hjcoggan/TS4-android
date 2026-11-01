@@ -40,6 +40,43 @@ internal static class LauncherLook
         }
     }
 
+    /// <summary>
+    /// A grey copy of a picture, for a locked achievement; null when its pixels are in a layout this does not read (the
+    /// page then dims the coloured picture instead).
+    /// </summary>
+    public static unsafe Bitmap? Grayscale(Bitmap source)
+    {
+        if (source.Format is not { } format || source.AlphaFormat is not { } alpha) return null;
+        var red = format == Avalonia.Platform.PixelFormat.Bgra8888 ? 2 : format == Avalonia.Platform.PixelFormat.Rgba8888 ? 0 : -1;
+        if (red < 0) return null;
+        var size = source.PixelSize;
+        WriteableBitmap? target = null;
+        try
+        {
+            target = new WriteableBitmap(size, source.Dpi, format, alpha);
+            using (var buffer = target.Lock())
+            {
+                source.CopyPixels(new PixelRect(size), buffer.Address, buffer.RowBytes * size.Height, buffer.RowBytes);
+                for (var y = 0; y < size.Height; y++)
+                {
+                    var row = (byte*)buffer.Address + y * buffer.RowBytes;
+                    for (var x = 0; x < size.Width; x++)
+                    {
+                        var pixel = row + x * 4;
+                        var grey = (byte)((pixel[red] * 77 + pixel[1] * 150 + pixel[2 - red] * 29) >> 8);
+                        pixel[0] = pixel[1] = pixel[2] = grey;
+                    }
+                }
+            }
+            return target;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            target?.Dispose();
+            return null;
+        }
+    }
+
     /// <summary>An art file decoded at <paramref name="width"/> pixels wide (a card shows it small); null and a log line when it cannot be read.</summary>
     public static Bitmap? LoadScaled(string path, int width, Action<string> log)
     {

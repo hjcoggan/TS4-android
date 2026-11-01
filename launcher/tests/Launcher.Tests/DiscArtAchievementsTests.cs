@@ -33,6 +33,8 @@ public sealed class DiscArtAchievementsTests : IDisposable
         Assert.Equal(["Ace", "Baseliner"], entries.Select(entry => entry.Title));
         Assert.Equal(["Did 2", "Won a rally"], entries.Select(entry => entry.Detail));
         Assert.Equal([10, 5], entries.Select(entry => entry.Points));
+        Assert.Equal([2, 1], entries.Select(entry => entry.Id));
+        Assert.Equal(["Do 2", "Do 1"], entries.Select(entry => entry.HowTo));
         Assert.Equal(achievements[0].Icon, File.ReadAllBytes(entries[0].ImagePath));
         Assert.Equal(achievements[1].Icon, File.ReadAllBytes(entries[1].ImagePath));
         Assert.Equal(Path.Combine(Art, "achievements"), Path.GetDirectoryName(entries[0].ImagePath));
@@ -118,6 +120,23 @@ public sealed class DiscArtAchievementsTests : IDisposable
         File.WriteAllLines(index, File.ReadAllLines(index).Where(line => !line.StartsWith("format=", StringComparison.Ordinal)));
 
         Assert.False(DiscArtFolder.Open(Art).IsComplete);
+    }
+
+    [Fact]
+    public void A_folder_written_before_the_achievement_ids_were_kept_is_read_again_from_the_disc_folder()
+    {
+        var discFolder = Path.Combine(_root, "disc");
+        Read(new TestXexImage { Achievements = [Achievement(7, 0x1, 1)] });
+        // As format 3 left it: no id or how-to on the list's lines, and format=3 in the index.
+        var list = Path.Combine(Art, "achievements", DiscArtFolder.ListFileName);
+        File.WriteAllLines(list, File.ReadAllLines(list).Select(line => line.StartsWith('#') ? line : string.Join('\t', line.Split('\t').Take(4))));
+        var index = Path.Combine(Art, DiscArtFolder.IndexFileName);
+        File.WriteAllLines(index, File.ReadAllLines(index).Select(line => line.StartsWith("format=", StringComparison.Ordinal) ? "format=3" : line));
+        Assert.Equal(0, Assert.Single(DiscArtFolder.Open(Art).Entries(DiscArtCollection.Achievements)).Id);
+
+        Assert.NotNull(DiscArt.RestoreFromFolder(discFolder, Art, _log.Add));
+
+        Assert.Equal(7, Assert.Single(DiscArtFolder.Open(Art).Entries(DiscArtCollection.Achievements)).Id);
     }
 
     [Fact]

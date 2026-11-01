@@ -200,6 +200,13 @@
     <Setter Property="Padding" Value="16,14" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
+  <!-- An achievement the player has earned: an accent edge, as the console marks it. -->
+  <Style Selector="Border.card.earned">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+    <!-- The edge takes its width from the padding, so earned and locked tiles line up. -->
+    <Setter Property="Padding" Value="13,14,16,14" />
+  </Style>
 
   <!-- A page fades in when it opens (MainWindow.ShowPage). -->
   <Style Selector="Panel#PageHost, Panel#FormHost">

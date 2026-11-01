@@ -29,10 +29,12 @@ public enum DiscArtCollection
 /// <summary>One picture of a collection as it is read from the disc.</summary>
 /// <param name="Image">A PNG or JPEG.</param>
 /// <param name="Points">The gamerscore for an achievement; 0 otherwise.</param>
-public sealed record DiscArtItem(byte[] Image, string Title, string Detail, int Points = 0);
+/// <param name="Id">The achievement's id, which the game's unlock file names it by; 0 otherwise.</param>
+/// <param name="HowTo">What to do to earn the achievement, shown while it is locked; empty otherwise.</param>
+public sealed record DiscArtItem(byte[] Image, string Title, string Detail, int Points = 0, int Id = 0, string HowTo = "");
 
 /// <summary>One picture of a collection as the art folder holds it.</summary>
-public sealed record DiscArtEntry(string ImagePath, string Title, string Detail, int Points);
+public sealed record DiscArtEntry(string ImagePath, string Title, string Detail, int Points, int Id = 0, string HowTo = "");
 
 /// <summary>The disc an art folder was read from, as its default.xex names it.</summary>
 internal readonly record struct DiscIdentity(uint MediaId, uint TitleId);
@@ -210,7 +212,8 @@ public static class DiscArt
                     problem($"{Module}: achievement {achievement.Id}'s icon was not used: {error.Message}");
                     continue;
                 }
-                items.Add(new DiscArtItem(icon, achievement.Name, achievement.Description.Length > 0 ? achievement.Description : achievement.HowTo, achievement.Gamerscore));
+                items.Add(new DiscArtItem(icon, achievement.Name, achievement.Description.Length > 0 ? achievement.Description : achievement.HowTo,
+                    achievement.Gamerscore, achievement.Id, achievement.HowTo.Length > 0 ? achievement.HowTo : achievement.Description));
             }
             if (items.Count > 0) collections[DiscArtCollection.Achievements] = items;
         }
