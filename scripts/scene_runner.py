@@ -357,6 +357,16 @@ def edge_band(reference):
 # Their runs are judged as strictly as the defaults.
 SHARED_ENHANCEMENTS = {"ts4_anisotropic_filtering", "ts4_sharpening"}
 
+# The image settings whose shipped default is an Enhancement (ADR-0011), at the original game's
+# value (kOriginalValues in src/settings/presets.h): every run starts from the original look and
+# turns on only the Enhancements it asks for.
+ORIGINAL_IMAGE = {"ts4_resolution_scale": "1", "ts4_anisotropic_filtering": "original"}
+
+
+def original_image_flags(enhance=None):
+    """The flags that keep each image setting a run does not ask for at its original value."""
+    return [f"--{key}={value}" for key, value in ORIGINAL_IMAGE.items() if key not in (enhance or {})]
+
 
 def edges_may_differ(enhance):
     """Whether the Native frame of a run with these Enhancements may differ from Classic's 1x frame
@@ -508,12 +518,13 @@ def run_scene(scene, out, exe, native_runs=0, shader_pack=None, dual_runs=0, enh
     with GameRunLock(LOCK):
         for label, run_frames in plan.items():
             if label in native:
-                flags = native_flags + (own_dump_flags(label) if dual else [])
+                flags = native_flags + (own_dump_flags(label) if dual else []) + original_image_flags()
             elif label in dual:
                 flags = (native_flags + ["--ts4_native_dual_compare=true"] + own_dump_flags(label) +
-                         [f"--{key}={value}" for key, value in (enhance or {}).items()])
+                         [f"--{key}={value}" for key, value in (enhance or {}).items()] +
+                         original_image_flags(enhance))
             else:
-                flags = ["--ts4_renderer=classic"]
+                flags = ["--ts4_renderer=classic"] + original_image_flags()
             shots[label], report = run_game(label, scene, out, exe, flags, run_frames, install)
             failures = (run_failures(report, run_frames) +
                         log_failures(read_log(out / label / "runtime.log"), scene.log))

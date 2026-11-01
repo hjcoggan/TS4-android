@@ -47,8 +47,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import compare_page  # noqa: E402
 from scene_runner import (EXE, LOCK, ROOT, GameRunLock, RunLockBusy, SceneError, apply_ramp,  # noqa: E402
-                          fit_ramp, load_rgb8, load_scene, native_failures, run_failures,
-                          run_game, shrink_to)
+                          fit_ramp, load_rgb8, load_scene, native_failures, original_image_flags,
+                          run_failures, run_game, shrink_to)
 
 # The scenes of the 1.0 scope (title and menus, Exhibition, Career, Academy, King of the Court) and
 # the practice ground, which has an Oracle frame.
@@ -119,7 +119,7 @@ def run_flags(kind, size, frames, run_dir, shader_pack=None):
         flags.append("--ts4_native_dual_compare=true")
     enhance = MATCHED if kind == "dual" else MAXIMUM
     return (flags + own_dump_flags(frames, run_dir / "native-dumps") + window_flags(size) +
-            [f"--{key}={value}" for key, value in enhance.items()])
+            [f"--{key}={value}" for key, value in enhance.items()] + original_image_flags(enhance))
 
 
 def presented_files(report, dumps):

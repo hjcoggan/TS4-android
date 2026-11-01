@@ -56,7 +56,10 @@ def test_the_dual_run_keeps_the_original_pure_and_the_max_run_turns_everything_o
     assert "--ts4_native_dual_compare=true" not in maximum
     for key, value in MATCHED.items():
         assert f"--{key}={value}" in dual
-    assert not any("anisotropic" in f or "sharpening" in f for f in dual)
+    # The shipped default turns anisotropic filtering on: the dual run pins it to the original.
+    assert "--ts4_anisotropic_filtering=original" in dual
+    assert not any("sharpening" in f for f in dual)
+    assert not any("anisotropic_filtering=original" in f for f in maximum)
     for key, value in MAXIMUM.items():
         assert f"--{key}={value}" in maximum
     for flags in (dual, maximum):
