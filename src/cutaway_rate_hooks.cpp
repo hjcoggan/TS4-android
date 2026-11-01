@@ -73,8 +73,12 @@ void LogOnce(std::atomic<bool>& logged, const char* message) {
   if (!logged.exchange(true)) Log(message);
 }
 
+// The render mode, or 0 while the renderer or its render state is not built yet.
 uint32_t Mode(const uint8_t* base) {
-  return Load32(base, Load32(base, Load32(base, kRenderer) + kRenderState) + kMode);
+  const uint32_t renderer = Load32(base, kRenderer);
+  if (!renderer) return 0;
+  const uint32_t render_state = Load32(base, renderer + kRenderState);
+  return render_state ? Load32(base, render_state + kMode) : 0;
 }
 
 // Whether this frame is a cutaway at 60, and if so its game frame number.
