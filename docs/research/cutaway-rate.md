@@ -141,3 +141,29 @@ lists under it). Result, quiet intro with `ts4_cutaways_60`: **61.53 s** (origin
 **Gate: feasible.** Every per-frame advance is either logic that already steps at 60 Hz
 (halved by running it once per frame) or one of the two per-swap leftovers, which take a half
 step (the world dt) or tick on every other frame (the morph index).
+
+## 60 fps cutscenes: the setting and its checks
+
+The prototype became the hooks in `src/cutaway_rate_hooks.cpp` (rules in
+`src/cutaway_rate_rules.h`) and the Graphics setting "60 fps cutscenes" (`ts4_cutaways_60`,
+off by default). The face player holds on odd game frames: before the call each playing
+slot's clip frame is wound back by one, and a frame where a slot is at frame 0 or has a clip
+waiting skips the call, so the player never mistakes the hold for the clip's end. Cutaway
+starts and ends are logged at either rate with the swap count.
+
+Checks, exhibition match, Classic, unattended:
+
+| Check | Result |
+|---|---|
+| Quiet intro (input cut after frame 3150) | 61.53 s, original 62.16 s (-1.0 %) |
+| Cutscene manager (`887e9ea8`) steps per second, every cutaway of a match | 58-60/s on, 58-60/s off (1 step per swap on, 2 off) |
+| A changeover (game-1 score at the chair) | 6.9 s at 59.7 steps/s |
+| Presents inside cutaways (`--present_pacing_log`) | 2346 of 2360 on the 16.7 ms step; the rest are the intro's load hitches (50-167 ms), which the run with the setting off shows too |
+| Exhibition match with the setting on | no stall, no crash, the match runs on at 60 |
+
+A match's cutaways cannot be paired one by one across runs: gameplay differs from run to run
+even at 30, and the scene's presses are counted in swaps, which a cutaway at 60 uses twice as
+fast. The steps-per-second count is the like-for-like measure: a cutaway lasts as long as its
+timeline, and the timeline steps at the same rate with the setting on and off. Each run with
+the setting on held back the same four instances (the shared list `b1e80600`, the scheduler
+`b1e7fd80` and two lists under it); no other cutaway brought new ones.
