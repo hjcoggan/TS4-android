@@ -75,3 +75,29 @@ already shows. A correct-speed 60 needs interpolation between the 30 Hz states (
 poses, camera), a large piece of engine work; driver frame generation (AMD Fluid Motion Frames,
 Lossless Scaling) is the player-side option. `ts4_cutaways_60` stays as a developer switch with
 the interval and dt hooks (`src/cutaway_rate.h`), as handles for that work.
+
+## Research tools for a real 60
+
+To find every clock a cutaway advances per frame, and whether each can take a half step:
+
+- **Guest memory snapshots:** `--ts4_memdump_frames=<frames> --ts4_dump_dir=<dir>` writes the
+  committed pages of `--ts4_memdump_range` (default `0x40000000-0xc0000000`, ~770 MiB) as
+  `mem-NNNNNN.bin`. The guest waits while a dump is written (the swap count is the same before
+  and after), so each is a clean snapshot. `scripts/memdiff.py` takes three or more dumps and
+  lists the words that change by the same step per swap, as big-endian floats and integers.
+- **Watchpoints:** `scripts/lldb.cmd` (pinned LLVM 21 lldb). A guest address is host
+  `virtual_membase + address`; a hardware watchpoint on it stops in the recompiled `sub_XXXXXXXX`
+  that writes it.
+- **Profiler:** RelWithDebInfo builds have ReXGlue's Tracy zones; `.tools/tracy-0.13.1`.
+- **Lua:** `pwsh scripts/game_lua.ps1 [-Archives Core,Melbourne]` decompiles the game's Lua into
+  `analysis/lua-src` (`scripts/arcdump` extracts, `scripts/lua_wide_strings.py` rewrites the
+  game's wide-string constant type 9, unluac decompiles with `scripts/ts4-lua-opmap.txt`). The
+  game's Lua is 5.0.2 with four opcodes added after DIV (opcodes from POW up are +4); all 421
+  scripts of four archives decompile. Cutscene animation is Havok (`CutScenes.arc`: 2093 `.hkx`
+  packfiles, stored, magic `57e0e057`).
+
+First snapshot run, the match intro at 30 fps (swaps 3602, 3612, 3622): no float advances by
+1/30 or 1/60 per frame. Integers do: +1 per frame at Swing globals `88d45cd4`, `88d45e70`,
+`88d4633c` (mirrored at `98d4...`) and heap `7018fc94`; -1 per frame at `a77027f4`, `a78b27f4`,
+`a8cbca48`, `a8cbd12c`, `a8d0dae8` (countdowns, likely shot timers in frames); +2 per frame at
+`a7828cb0` and `a8d1fcb0`. These are the next watchpoint targets.
