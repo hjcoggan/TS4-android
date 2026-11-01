@@ -313,6 +313,11 @@ class TopSpin4App : public rex::ReXApp {
                                     runtime()->memory()->physical_membase());
     if (auto* game_window = window()) {
       topspin4::crash::SetWindow(game_window->GetNativeWindowHandle());
+      // No Windows cursor over the game: hidden now, shown while the mouse moves (the Settings
+      // page), hidden again when it rests. Keyboard and mouse mode hides it while it captures.
+      app_context().CallInUIThreadDeferred([game_window] {
+        game_window->SetCursorVisibility(rex::ui::Window::CursorVisibility::kAutoHidden);
+      });
     }
     topspin4::crash::CrashIfAsked();
     // The Settings page (F4, or a script's `set settings_page open`), over the game. Needs the
