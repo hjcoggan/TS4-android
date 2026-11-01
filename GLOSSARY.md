@@ -74,7 +74,7 @@ _Avoid_: shader cache (that is the whole cache folder)
 A shader the game met that the shader pack lacked. The game writes it to the cache's `shader-topup` folder; the Launcher's Module shader step fills the same folder with the Modules' shaders before the pack is built.
 
 **Enhancement**:
-A setting that changes the game away from original behaviour. Every Enhancement defaults to original behaviour.
+A setting that changes the game away from original behaviour. Some Enhancements are on by default; each can be set back to original behaviour.
 _Avoid_: fix, improvement (when it is an opt-in setting)
 
 ## Settings
@@ -104,11 +104,11 @@ A setting given when the game is started, on the command line or in the environm
 _Avoid_: override, flag (when the player-facing idea is meant)
 
 **Safe start**:
-A session that runs on all default settings without changing the Settings file.
+A session that runs every setting at original behaviour, on the Classic renderer, without changing the Settings file.
 _Avoid_: reset (that changes the file)
 
 **Preset**:
-A named group of setting values chosen together. Original is a Preset and is the default.
+A named group of setting values chosen together: Original (original behaviour), Default (what a fresh install starts on) and Enhanced (the best look).
 
 **Resolution scale**:
 The Enhancement that renders the game at a whole multiple of its original 1280x720 and fits the result to the window. Auto picks the smallest multiple that covers the 16:9 area of the window the frame is shown in. The largest multiple is 3x.
