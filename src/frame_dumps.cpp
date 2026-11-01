@@ -51,6 +51,13 @@ REXCVAR_DEFINE_STRING(ts4_frame_hash_csv, "", "TopSpin4",
 REXCVAR_DEFINE_BOOL(ts4_fps_log, false, "TopSpin4",
                     "Log the guest frame rate (VdSwap calls) once a second, for comparison "
                     "with the Oracle's scripts/edge.ps1 -FrameLog");
+REXCVAR_DEFINE_STRING(ts4_memdump_frames, "", "TopSpin4",
+                      "Research: guest frames to dump guest memory on, comma-separated, into "
+                      "ts4_dump_dir as mem-NNNNNN.bin (scripts/memdiff.py)");
+REXCVAR_DEFINE_STRING(ts4_memdump_range, "0x40000000-0xa0000000,0xa0000000-0xc0000000",
+                      "TopSpin4",
+                      "Research: the guest address ranges ts4_memdump_frames dumps "
+                      "(start-end in hex, comma-separated); only committed pages are written");
 REXCVAR_DEFINE_INT32(ts4_renderdoc_frame, -1, "TopSpin4",
                      "With RenderDoc attached (renderdoccmd capture): capture this guest frame, "
                      "everything the GPU does between the swap before it and its own");
@@ -104,6 +111,80 @@ int64_t g_renderdoc_frame = -1;
 #if defined(_WIN32)
 RENDERDOC_API_1_1_2* g_renderdoc = nullptr;
 #endif
+
+std::set<uint64_t> g_memdump_frames;  // --ts4_memdump_frames
+std::vector<std::pair<uint32_t, uint32_t>> g_memdump_ranges;  // guest [start, end)
+
+bool ParseRanges(const std::string& text, std::vector<std::pair<uint32_t, uint32_t>>& ranges) {
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t comma = std::min(text.find(',', at), text.size());
+    const std::string item = text.substr(at, comma - at);
+    const size_t dash = item.find('-');
+    if (dash == std::string::npos) return false;
+    char* end = nullptr;
+    const unsigned long long start = std::strtoull(item.c_str(), &end, 16);
+    const unsigned long long stop = std::strtoull(item.c_str() + dash + 1, &end, 16);
+    if (stop <= start || stop > 0x100000000ull) return false;
+    ranges.emplace_back(uint32_t(start), uint32_t(stop - 1));  // inclusive end, so 4 GiB fits
+    at = comma + 1;
+  }
+  return true;
+}
+
+// The committed pages of each range, as records {u32 guest address, u32 length, bytes}
+// (big-endian header), and a mem-NNNNNN.txt with the guest swap count before and after: the game
+// runs on while the dump is written, so a reader divides changes by the swaps between dumps.
+void SaveMemoryDump(uint64_t frame) {
+#if defined(_WIN32)
+  const uint8_t* membase = g_runtime ? g_runtime->memory()->virtual_membase() : nullptr;
+  if (!membase) return;
+  char name[32];
+  std::snprintf(name, sizeof(name), "mem-%06llu", static_cast<unsigned long long>(frame));
+  const uint64_t swaps_before = rex::system::GuestSwapCount();
+  FILE* file = OpenFile(g_dir / (std::string(name) + ".bin"), "wb");
+  if (!file) {
+    REXLOG_ERROR("frame dumps: cannot write {}.bin", name);
+    return;
+  }
+  uint64_t written = 0;
+  for (const auto& [start, last] : g_memdump_ranges) {
+    uint64_t guest = start;
+    while (guest <= last) {
+      MEMORY_BASIC_INFORMATION info{};
+      if (!VirtualQuery(membase + guest, &info, sizeof(info))) break;
+      const uint64_t region_end =
+          std::min<uint64_t>(uint64_t(last) + 1,
+                             guest + (static_cast<const uint8_t*>(info.BaseAddress) +
+                                      info.RegionSize - (membase + guest)));
+      const bool readable = info.State == MEM_COMMIT &&
+                            !(info.Protect & (PAGE_NOACCESS | PAGE_GUARD)) && info.Protect != 0;
+      if (readable) {
+        for (uint64_t at = guest; at < region_end;) {
+          const uint32_t length = uint32_t(std::min<uint64_t>(region_end - at, 64ull << 20));
+          const uint32_t header[2] = {_byteswap_ulong(uint32_t(at)), _byteswap_ulong(length)};
+          std::fwrite(header, sizeof(header), 1, file);
+          std::fwrite(membase + at, 1, length, file);
+          written += length;
+          at += length;
+        }
+      }
+      guest = region_end;
+    }
+  }
+  std::fclose(file);
+  if (FILE* side = OpenFile(g_dir / (std::string(name) + ".txt"), "w")) {
+    std::fprintf(side, "frame %llu\nswaps_before %llu\nswaps_after %llu\n",
+                 static_cast<unsigned long long>(frame),
+                 static_cast<unsigned long long>(swaps_before),
+                 static_cast<unsigned long long>(rex::system::GuestSwapCount()));
+    std::fclose(side);
+  }
+  REXLOG_INFO("frame dumps: guest memory at frame {}: {} MiB", frame, written >> 20);
+#else
+  (void)frame;
+#endif
+}
 
 // Start a RenderDoc capture as the frame before the wanted one is shown, end it with the wanted
 // one: the capture then holds exactly that guest frame's GPU work, on the GPU thread that
@@ -312,6 +393,9 @@ void OnFrameShown(uint64_t frame) {
   if (g_frames.contains(frame)) {
     SaveDump(frame);
   }
+  if (g_memdump_frames.contains(frame)) {
+    SaveMemoryDump(frame);
+  }
   if (int64_t(frame) == g_exit_after) {
     REXLOG_INFO("frame dumps: exit after frame {}", frame);
     WriteReport(frame);
@@ -359,7 +443,16 @@ void Install(rex::Runtime* runtime) {
                  "CapturePresentedOutput, which this build's SDK lacks; only the guest output is "
                  "dumped");
   }
-  if (!g_frames.empty()) {
+  if (!ParseFrameList(REXCVAR_GET(ts4_memdump_frames), g_memdump_frames) ||
+      !ParseRanges(REXCVAR_GET(ts4_memdump_range), g_memdump_ranges)) {
+    REXLOG_ERROR("frame dumps: bad --ts4_memdump_frames or --ts4_memdump_range");
+    g_memdump_frames.clear();
+  }
+  if (!g_memdump_frames.empty() && g_dir.empty()) {
+    REXLOG_ERROR("frame dumps: --ts4_memdump_frames needs --ts4_dump_dir");
+    g_memdump_frames.clear();
+  }
+  if (!g_frames.empty() || !g_memdump_frames.empty()) {
     if (g_dir.empty()) {
       REXLOG_ERROR("frame dumps: --ts4_dump_frames needs --ts4_dump_dir");
       g_frames.clear();
@@ -390,7 +483,8 @@ void Install(rex::Runtime* runtime) {
       REXLOG_ERROR("frame dumps: cannot write {}", path);
     }
   }
-  if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1 && !g_frame_times &&
+  if (g_frames.empty() && g_memdump_frames.empty() && g_exit_after < 0 &&
+      g_renderdoc_frame < 1 && !g_frame_times &&
       !g_frame_hashes &&
       topspin4::crash::CrashFrameAsked() < 0 && !topspin4::relaunch::WaitingForFirstFrame()) {
     return;

@@ -85,6 +85,14 @@ $artifacts = @(
         Sha256 = '608619F8619075629C9C69F361352A0DA6ED7E62F83A0E19C63E0EA32EB7629D'
         Destination = '.tools/python-3.10.11-embed'
         Executable = '.tools/python-3.10.11-embed/python310.dll'
+    },
+    @{
+        # The Lua 5.0 decompiler scripts/game_lua.ps1 uses (needs Java on PATH).
+        File = 'unluac_2025_12_23.jar'
+        Url = 'https://downloads.sourceforge.net/project/unluac/Unstable/unluac_2025_12_23.jar'
+        Sha256 = '98BE0FA84AC73CA66DCE2842A2E4512226F4C611B6500DC96415571FC5538FCC'
+        Destination = '.tools/unluac'
+        Executable = '.tools/unluac/unluac.jar'
     }
 )
 foreach ($artifact in $artifacts) {
@@ -103,6 +111,9 @@ foreach ($artifact in $artifacts) {
     }
     if ($archive.EndsWith('.zip')) {
         Expand-Archive $archive $artifact.Destination
+    } elseif ($archive.EndsWith('.jar')) {
+        New-Item -ItemType Directory -Force $artifact.Destination | Out-Null
+        Copy-Item $archive $artifact.Executable
     } else {
         if (!$SevenZipPath) {
             $SevenZipPath = @((Get-Command 7z -ErrorAction SilentlyContinue).Source,

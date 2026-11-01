@@ -29,3 +29,7 @@ __pycache__/
 /.claude/*
 !/.claude/settings.json
 !/.claude/agents/
+
+# scripts/arcdump build output
+/scripts/arcdump/bin/
+/scripts/arcdump/obj/
