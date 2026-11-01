@@ -18,6 +18,8 @@ namespace topspin4::relaunch {
 inline constexpr std::wstring_view kLaunchDataFlag = L"--ts4_launch_data";
 inline constexpr std::wstring_view kReadyFlag = L"--ts4_relaunch_ready";
 inline constexpr std::wstring_view kRectFlag = L"--ts4_relaunch_rect";
+// Tests: the scripted pad of the copy a relaunch starts (it becomes that copy's --ts4_input_script).
+inline constexpr std::wstring_view kRelaunchScriptFlag = L"--ts4_relaunch_input_script";
 
 // A launch of the game's own executable ("game:\default.xex", or the bare name).
 inline bool IsOwnTitle(std::string_view launch_path) {
@@ -40,13 +42,18 @@ inline std::wstring_view FlagOf(std::wstring_view argument) {
 
 // The new copy's arguments (without the exe): this run's, minus a scripted pad (a script drives
 // one run; replayed it would press through the title again) and minus any flag `settings`
-// sets, then `settings` ("--flag=value" each).
+// sets, then `settings` ("--flag=value" each). A --ts4_relaunch_input_script becomes the new
+// copy's --ts4_input_script.
 inline std::vector<std::wstring> ChildArguments(const std::vector<std::wstring>& arguments,
                                                 const std::vector<std::wstring>& settings) {
   std::vector<std::wstring> child;
   for (const std::wstring& argument : arguments) {
     const std::wstring_view flag = FlagOf(argument);
     if (flag == L"--ts4_input_script") continue;
+    if (flag == kRelaunchScriptFlag) {
+      child.push_back(L"--ts4_input_script" + argument.substr(flag.size()));
+      continue;
+    }
     if (std::any_of(settings.begin(), settings.end(),
                     [&](const std::wstring& setting) { return FlagOf(setting) == flag; })) {
       continue;

@@ -43,3 +43,10 @@ TEST_CASE("The old window's rectangle reads back, and a malformed one is refused
     CHECK_FALSE(ParseRect(bad, rect));
   }
 }
+
+TEST_CASE("A test's script for the relaunched copy becomes its scripted pad", "[relaunch]") {
+  const std::vector<std::wstring> arguments = {L"--ts4_input_script=C:\\first.txt",
+                                               L"--ts4_relaunch_input_script=C:\\second.txt"};
+  CHECK(ChildArguments(arguments, {}) ==
+        std::vector<std::wstring>{L"--ts4_input_script=C:\\second.txt"});
+}

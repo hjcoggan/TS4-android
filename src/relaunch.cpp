@@ -69,6 +69,35 @@ BOOL CALLBACK FindLargest(HWND window, LPARAM param) {
   return TRUE;
 }
 
+// The largest visible window of process `pid`.
+HWND LargestWindowOf(DWORD pid) {
+  struct Search {
+    DWORD pid;
+    HWND window = nullptr;
+    LONG area = 0;
+  } search{pid};
+  EnumWindows(
+      [](HWND window, LPARAM param) -> BOOL {
+        auto& search = *reinterpret_cast<Search*>(param);
+        DWORD process = 0;
+        GetWindowThreadProcessId(window, &process);
+        RECT rect;
+        if (process == search.pid && IsWindowVisible(window) && GetWindowRect(window, &rect)) {
+          const LONG area = (rect.right - rect.left) * (rect.bottom - rect.top);
+          if (area > search.area) search = {search.pid, window, area};
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&search));
+  return search.window;
+}
+
+DWORD ForegroundProcess() {
+  DWORD process = 0;
+  GetWindowThreadProcessId(GetForegroundWindow(), &process);
+  return process;
+}
+
 BOOL CALLBACK HideIfOurs(HWND window, LPARAM) {
   DWORD process = 0;
   GetWindowThreadProcessId(window, &process);
@@ -146,6 +175,16 @@ void HandOver(const std::vector<uint8_t>& data) {
                                 : waited == WAIT_OBJECT_0 + 1 ? "the new copy ended before it showed"
                                                               : "the new copy did not show in time");
     CloseHandle(ready);
+    // The keyboard and the pad are read only by the focused window. This copy, the foreground
+    // one while the player plays, may give the focus away; the new copy also asks for it.
+    if (waited == WAIT_OBJECT_0) {
+      const bool had_focus = ForegroundProcess() == pid;
+      if (HWND window = LargestWindowOf(process.dwProcessId)) {
+        if (had_focus) SetForegroundWindow(window);
+      }
+      REXLOG_INFO("relaunch: focus {} this copy; now with {}", had_focus ? "was with" : "was not with",
+                  ForegroundProcess() == process.dwProcessId ? "the new copy" : "another program");
+    }
   }
   EnumWindows(HideIfOurs, 0);
   rex::FlushLogging();
@@ -169,7 +208,8 @@ void ShowHandedOverWindow() {
                    SWP_NOZORDER | SWP_NOACTIVATE);
     }
     ShowWindow(hwnd, SW_SHOW);
-    SetForegroundWindow(hwnd);
+    const bool focused = SetForegroundWindow(hwnd);
+    REXLOG_INFO("relaunch: this copy {} the focus", focused ? "took" : "could not take");
     if (g_window->IsFullscreen()) {
       g_window->SetFullscreen(false);
       g_window->SetFullscreen(true);
