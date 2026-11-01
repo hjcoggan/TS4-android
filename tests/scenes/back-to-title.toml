@@ -1,0 +1,42 @@
+# Main menu -> B -> "Would you like to go to the Title Screen?" -> A. The game relaunches itself
+# (src/relaunch.cpp): the first copy ends and a new one boots with its launch data and shows the
+# title screen. The new copy runs without the script and dumps the later frames.
+# Run: python scripts/scene_runner.py tests/scenes/back-to-title.toml
+name = "back-to-title"
+from = "boot"
+
+input = """
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
+at 1400
+press B
+at 1480
+press A
+"""
+
+[[capture]]
+frame = 1390
+label = "main menu"
+[[capture]]
+frame = 1460
+label = "go to the Title Screen?"
+[[capture]]
+frame = 1700
+label = "relaunched"
+[[capture]]
+frame = 2300
+label = "title screen again"

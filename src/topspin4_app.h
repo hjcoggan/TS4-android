@@ -25,6 +25,7 @@
 #include "module_shaders.h"
 #include "native/native_renderer.h"
 #include "online_unavailable.h"
+#include "relaunch.h"
 #include "remapped_input.h"
 #include "script_input.h"
 #include "settings/config_file.h"
@@ -262,6 +263,16 @@ class TopSpin4App : public rex::ReXApp {
   void OnPreLaunchModule() override {
     if (topspin4::module_shaders::Requested()) {
       topspin4::module_shaders::WriteAndExit(*runtime());
+    }
+    // A relaunch (back to the title screen) hands the game the launch data it left.
+    topspin4::relaunch::RestoreLaunchData(*runtime()->kernel_state());
+  }
+
+  // The game relaunches itself to go back to the title screen; a new copy follows this one.
+  void OnGuestThreadExit(rex::system::XThread* thread) override {
+    rex::ReXApp::OnGuestThreadExit(thread);
+    if (runtime() && runtime()->kernel_state()) {
+      topspin4::relaunch::OnGuestExit(*runtime()->kernel_state());
     }
   }
 
