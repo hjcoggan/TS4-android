@@ -261,8 +261,32 @@ public partial class MainWindow : Window
 
     private void OpenHelp()
     {
-        if (HelpDocument.Find(_launcherDirectory) is { } readme) Open(readme);
-        else Say(LaunchArguments.NotFoundNextToLauncher(HelpDocument.FileName) + ".");
+        if (HelpDocument.Find(_launcherDirectory) is not { } readme)
+        {
+            Say(LaunchArguments.NotFoundNextToLauncher(HelpDocument.FileName) + ".");
+        }
+        else
+        {
+            // Windows has no app for .md files unless the player installed one, so shell-opening it fails:
+            // the README is plain text, and Notepad is on every Windows.
+            try
+            {
+                Process.Start(new ProcessStartInfo(readme) { UseShellExecute = true })?.Dispose();
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                try
+                {
+                    var notepad = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "notepad.exe")) { UseShellExecute = false };
+                    notepad.ArgumentList.Add(readme);
+                    Process.Start(notepad)?.Dispose();
+                }
+                catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    Say("Could not open the help: " + error.Message);
+                }
+            }
+        }
         Refresh();
     }
 
