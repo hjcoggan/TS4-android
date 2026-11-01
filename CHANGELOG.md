@@ -8,7 +8,6 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 
 - The Launcher's Achievements page shows which achievements you have earned: earned ones come first with their unlock date and an accent edge, locked ones are greyed with a padlock and show how to earn them. The header gives earned and total achievements and gamerscore, with a progress bar.
 - An "Achievement unlocked" notice in the manner of the Xbox 360 dashboard's (a capsule with a green trophy badge at the bottom of the screen) replaces the small corner notice.
-- An unlock sound plays with each notice; a `userdata\achievement.wav` you supply replaces it.
 - Scene scripts can show any achievement's notice without unlocking it: `set achievement_toast <id>`.
 
 ### Changed
