@@ -606,7 +606,7 @@ TEST_CASE("The export says which settings are bindings, for which device and for
   }
   CHECK(pads == 16);
   CHECK(keys == 24);
-  CHECK(others == 8);
+  CHECK(others == 9);
   for (const Json& row : root.at("settings").items) {
     if (row.at("key").text == "ts4_pad_ls") CHECK(row.at("binding").at("action").text == "LS click");
     if (row.at("key").text == "keybind_lstick_up") {

@@ -34,7 +34,7 @@ ModelContext Context(std::string_view renderer = kRendererNative) {
 TEST_CASE("The page lists the Graphics settings in registry order with labels, values and help") {
   SettingsModel model(Context(), {}, Defaults());
   const std::vector<Row> rows = model.Rows(Section::kGraphics);
-  REQUIRE(rows.size() == 7);  // the Preset row, then the six settings
+  REQUIRE(rows.size() == 8);  // the Preset row, then the seven settings
   CHECK(rows[0].kind == RowKind::kPreset);
   CHECK(rows[1].label == "Renderer");
   CHECK(rows[1].value_label == "Classic");
@@ -45,6 +45,8 @@ TEST_CASE("The page lists the Graphics settings in registry order with labels, v
   CHECK(rows[5].label == "Sharpening");
   CHECK(rows[5].value_label == "Off");
   CHECK(rows[6].label == "Fix original glitches");
+  CHECK(rows[7].label == "60 fps cutscenes");
+  CHECK(rows[7].value_label == "Off");
   for (const Row& row : rows) {
     CHECK_FALSE(row.help.empty());
     CHECK(row.available);

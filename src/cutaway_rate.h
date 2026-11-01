@@ -1,14 +1,16 @@
-// 60 fps cutaways (ts4_cutaways_60): a developer switch, off by default, not a player setting.
+// 60 fps cutscenes (ts4_cutaways_60, the Graphics setting "60 fps cutscenes"; off by default).
 //
 // Swing picks a render mode per scene; mode 1 (match intro, close-ups between points, replays,
 // the changeover) is the 30 fps one (docs/research/cutaway-rate.md):
 //   88739a40  the frame's render setup: present interval 2 at device+0x35f0 in mode 1, else 1
 //   887c6b98  the world step: dt 0.03333f (0x880d1088) in mode 1, else 0.01666f, passed in f1
 //             to 881e5de8 once per rendered frame
-// With the switch on, the hooks present mode 1 at interval 1 and step the world by the 60 fps
-// dt. That is not enough: the cutaways advance per rendered frame in many other systems too, so
-// the match intro took 35.6 s instead of the original 62.2 s (31.4 s at interval 1 alone). A
-// correct-speed 60 needs interpolation between the 30 Hz states; these hooks are its handles.
+// In mode 1 the game reaches its cutaway services (the cutscene and animation managers among
+// them) through a scheduler list with two parents, so the cutaway logic steps at 60 Hz and
+// every other step is presented. With the setting on, mode 1 presents at interval 1, each
+// scheduler (886117e8) and list (88611d90) runs once per game frame, the world steps by 1/60,
+// and the face player (8817c608), which steps once per presented frame, holds on odd frames.
+// The cutaways then run at 60 at their original speed (the intro: 61.5 s against 62.2 s).
 //
 // The hooks are built into the Swing Module's DLL (cutaway_rate_hooks.cpp); they reach the exe
 // through this sink, which lives in the D3D sink's shared library (d3d/sink.h).

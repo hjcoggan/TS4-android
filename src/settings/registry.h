@@ -190,6 +190,10 @@ inline const std::vector<Setting>& PlayerSettings() {
        "Fix original glitches: glitches the original game has too, fixed (the white flash "
        "after a loading screen, before the new scene draws). Off keeps the original",
        Section::kGraphics, "Fix original glitches", 60},
+      {"ts4_cutaways_60", Setting::Kind::kBool, "false", {},
+       "60 fps cutscenes: the match intro, close-ups between points, replays and changeovers "
+       "at 60 fps instead of the original 30, at their original speed",
+       Section::kGraphics, "60 fps cutscenes", 70},
       {"mnk_mode", Setting::Kind::kBool, "false", {},
        "Play with keyboard and mouse, as a controller of their own",
        Section::kControls, "Keyboard and mouse", 10},

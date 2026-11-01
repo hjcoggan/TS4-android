@@ -40,12 +40,11 @@ REXCVAR_DEFINE_BOOL(ts4_fix_glitches, false, "TopSpin4",
                     "a new scene draws")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
-// 60 fps cutaways (cutaway_rate.h): a developer switch, not a player setting. The game steps
-// its cutaways per rendered frame across many systems, so at 60 they run about 1.75x fast
-// (docs/research/cutaway-rate.md); a correct-speed 60 needs interpolation.
+// 60 fps cutscenes (cutaway_rate.h): the game's 30 fps cutaways presented at 60, at their
+// original speed (docs/research/cutaway-rate.md). Off keeps the original 30.
 REXCVAR_DEFINE_BOOL(ts4_cutaways_60, false, "TopSpin4",
-                    "Developer: present cutaways at 60 fps with the 60 fps world step; they run "
-                    "about 1.75x fast (docs/research/cutaway-rate.md)")
+                    "60 fps cutscenes: the match intro, close-ups, replays and changeovers at "
+                    "60 fps instead of 30, at their original speed")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
 // Controller remapping (ticket 24, pad_bindings.h): the physical input that drives each input

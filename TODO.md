@@ -13,9 +13,6 @@ before starting.
   the pack are memexport shaders (GPU compute writing to memory, explicit fetches from fetch
   constant 95 with no vertex elements). Native converts them but drops the exports and reads 0
   for those fetches, so a draw with one does nothing useful. None was met in an exhibition match.
-- **60 fps cutscenes need interpolation.** The cutaways advance per rendered frame across ~20
-  systems, so presenting them at 60 runs them ~1.75x fast (docs/research/cutaway-rate.md);
-  `ts4_cutaways_60` is a developer switch with the handles.
 - The Launcher has no Repair button; `SetupFlow.Repair()` exists in the model only.
 
 ## 1.0 (from pc-port-1-0)
