@@ -51,6 +51,14 @@ service once per frame in both modes: one pass, every frame, nothing mode-depend
 `8865fac0`, a fixed-step catch-up loop, is not on the match path (a hook never fired).
 `FUN_8872d0c8` and `FUN_88723ed0`, called by the mode switch, are layer and visibility toggles.
 
+Half-rate simulation, rendered every frame (the first half of an interpolation design), was
+tried by skipping, on every other frame of a cutaway, every scheduler instance except the one
+that runs the main render task (`8876d978`). The intro still took 31.4 s: the cutaway timeline
+runs in that same scheduler instance as the render. Halving it needs the instance's service
+loop re-implemented with the render task kept every frame. Two traps on the way: skipping
+`8876d868` (the render task's pre-step) stalled the game, and so did a frame parity that froze
+during the match load, when schedulers run without the main render task.
+
 ## Conclusion
 
 The cutaways are authored at 30 Hz frames throughout. Running every service every other frame
