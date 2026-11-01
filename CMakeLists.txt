@@ -18,6 +18,7 @@ set(TOPSPIN4_SOURCES
     src/fault_log.cpp
     src/frame_dumps.cpp
     src/load_flash_host.cpp
+    src/cutaway_rate_host.cpp
     src/module_shaders.cpp
     src/native/geometry_cache.cpp
     src/native/live_topup.cpp
@@ -185,6 +186,7 @@ if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
         tests/host/test_script_input.cpp
         tests/host/test_swap_choice.cpp
         tests/host/test_movie_clock.cpp
+        tests/host/test_cutaway_rate.cpp
         tests/host/test_present_hold.cpp
         tests/host/test_achievement_toast.cpp
         tests/host/test_relaunch.cpp

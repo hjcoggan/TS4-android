@@ -77,9 +77,10 @@ ${_d3d_lines}" @ONLY)
 endforeach()
 
 # The sink both sides link (src/d3d/sink.h); it sits next to the exe, as the Module DLLs do.
-# It also carries the main menu rows' sink (src/settings/main_menu_sink.h).
+# It also carries the main menu rows' sink (src/settings/main_menu_sink.h), the load flash fix's
+# (src/load_flash.h) and 60 fps cutaways' (src/cutaway_rate.h).
 add_library(topspin4_d3d_sink SHARED src/d3d/sink.cpp src/settings/main_menu_sink.cpp
-    src/load_flash_sink.cpp)
+    src/load_flash_sink.cpp src/cutaway_rate_sink.cpp)
 target_compile_definitions(topspin4_d3d_sink PRIVATE TOPSPIN4_D3D_SINK_BUILD)
 target_include_directories(topspin4_d3d_sink PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src" "${TOPSPIN4_D3D_GENERATED}")
@@ -105,4 +106,6 @@ if(TARGET topspin4_Swing_DLL)
     target_sources(topspin4_Swing_DLL PRIVATE src/settings/main_menu_rows_hooks.cpp)
     # The load flash fix's hooks (src/load_flash.h).
     target_sources(topspin4_Swing_DLL PRIVATE src/load_flash_hooks.cpp)
+    # 60 fps cutaways (src/cutaway_rate.h).
+    target_sources(topspin4_Swing_DLL PRIVATE src/cutaway_rate_hooks.cpp)
 endif()
