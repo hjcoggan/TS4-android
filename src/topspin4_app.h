@@ -264,8 +264,12 @@ class TopSpin4App : public rex::ReXApp {
     if (topspin4::module_shaders::Requested()) {
       topspin4::module_shaders::WriteAndExit(*runtime());
     }
-    // A relaunch (back to the title screen) hands the game the launch data it left.
-    topspin4::relaunch::RestoreLaunchData(*runtime()->kernel_state());
+    // A relaunch (back to the title screen) hands the game the launch data it left, and shows
+    // this copy's window once the game draws (relaunch.h).
+    topspin4::relaunch::Configure(*runtime()->kernel_state(), window(),
+                                  [this](std::function<void()> function) {
+                                    app_context().CallInUIThread(std::move(function));
+                                  });
   }
 
   // The game relaunches itself to go back to the title screen; a new copy follows this one.

@@ -2,6 +2,7 @@
 
 #include "frame_dumps.h"
 #include "crash_report.h"
+#include "relaunch.h"
 
 #include <chrono>
 #include <cstdio>
@@ -283,6 +284,7 @@ void LogFrameRate() {
 }
 
 void OnFrameShown(uint64_t frame) {
+  topspin4::relaunch::OnFrameShown(frame);
   if (g_frame_times) {
     const double ms = std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - g_start)
@@ -390,7 +392,7 @@ void Install(rex::Runtime* runtime) {
   }
   if (g_frames.empty() && g_exit_after < 0 && g_renderdoc_frame < 1 && !g_frame_times &&
       !g_frame_hashes &&
-      topspin4::crash::CrashFrameAsked() < 0) {
+      topspin4::crash::CrashFrameAsked() < 0 && !topspin4::relaunch::WaitingForFirstFrame()) {
     return;
   }
   rex::system::SetFrameShownObserver(&OnFrameShown);

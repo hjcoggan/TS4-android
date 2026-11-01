@@ -1,6 +1,6 @@
-# Main menu -> B -> "Would you like to go to the Title Screen?" -> A. The game relaunches itself
-# (src/relaunch.cpp): the first copy ends and a new one boots with its launch data and shows the
-# title screen. The new copy runs without the script and dumps the later frames.
+# Main menu -> B -> "Would you like to go to the Title Screen?" -> A. The game relaunches itself,
+# as on the console and Xenia Edge (src/relaunch.h): a new copy boots with the launch data and
+# shows the title screen without the intro. It runs without the script and dumps the later frames.
 # Run: python scripts/scene_runner.py tests/scenes/back-to-title.toml
 name = "back-to-title"
 from = "boot"
