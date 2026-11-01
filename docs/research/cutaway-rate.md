@@ -67,14 +67,11 @@ service is often another `886117e8` scheduler), and most service pointers read 0
 seen. The intro still took 31.3 s and the game kept presenting 60 a second, so the zeroing did
 not take hold the way the decompile suggests; this was not pursued further.
 
-## Conclusion
+## First conclusion (superseded)
 
-The cutaways are authored at 30 Hz frames throughout. Running every service every other frame
-at interval 1 would give the right speed but the same picture twice, which is what smooth 30
-already shows. A correct-speed 60 needs interpolation between the 30 Hz states (animation
-poses, camera), a large piece of engine work; driver frame generation (AMD Fluid Motion Frames,
-Lossless Scaling) is the player-side option. `ts4_cutaways_60` stays as a developer switch with
-the interval and dt hooks (`src/cutaway_rate.h`), as handles for that work.
+The attempts above read the cutaways as authored at 30 Hz frames, so a correct-speed 60 seemed
+to need interpolation between 30 Hz states. The next section shows the opposite: the cutaway
+logic already runs at 60 Hz, and mode 1 shows every other step.
 
 ## Research tools for a real 60
 
@@ -101,3 +98,46 @@ First snapshot run, the match intro at 30 fps (swaps 3602, 3612, 3622): no float
 `88d4633c` (mirrored at `98d4...`) and heap `7018fc94`; -1 per frame at `a77027f4`, `a78b27f4`,
 `a8cbca48`, `a8cbd12c`, `a8d0dae8` (countdowns, likely shot timers in frames); +2 per frame at
 `a7828cb0` and `a8d1fcb0`. These are the next watchpoint targets.
+
+## The cutaway logic runs at 60 Hz (the gate for a real 60)
+
+Phase 1 of a real 60: how the cutaways' motion is computed. Four snapshots one swap apart in the
+intro, lldb watchpoints from a marker frame, and a counting hook on the scheduler.
+
+**No frame-to-time conversion.** No float in guest memory (low 4 KB heap and XEX range included)
+steps 1/30 per swap, evenly or unevenly. The ~170 floats that step 0.032 per swap are two
+0.016 steps, written by `884841E8 <- 8846B180` (a "TtWatchDog"-marked stream timer). The
+`-1/frame` countdowns are render-side (`b22d59bc`: `887213E0` from the render pre-step
+`8876D868`, firing a resource callback at 0; `b8f5xxxx`: the `8875FEB8` render path), and
+`7018fc94` is the main loop's counter (`889BE8C8`).
+
+**Havok animation steps a fixed float.** `884085a0` is `hkaDefaultAnimationControl::update(dt)`
+(local time `+8 += speed(+0x40) * dt`), `884055a8` is `hkaAnimatedSkeleton::stepDeltaTime`.
+The game's animation manager tick `887f59d0` steps each skeleton once every 3 ticks by
+0.048 s (`N * 0.016f`, `0x880d1380`, N = 3 from `887f2058`), 0.016 s a tick on average. It
+does not use the world dt. A counting hook: in gameplay (mode 0) the tick runs once per swap,
+in a cutaway (mode 1) twice per swap, at 30 and at 60 alike.
+
+**Mode 1 runs the cutaway logic twice per swap.** The scheduler instance that holds the cutaway
+services (the animation manager `887f59d0`, the cutscene manager `887e9ea8`, ~15 more) is
+reached through a service list (`88611d90`) entered from two parent schedulers in mode 1, and
+one scheduler (entry id `d40a9431`) likewise: each runs twice per swap, with entry repeat
+counts all 1. In mode 0 the same list has one parent. So the game steps cutaway logic at 60 Hz
+and mode 1 presents every other step; at interval 1 that logic runs at 120 Hz, which is the 2x.
+
+**Per-swap leftovers.** Two things advance once per swap rather than per logic step: the world
+step (`881e5de8`, dt 1/30, already swapped for 1/60 at 60) and the face/morph player
+`8817c608`, which adds 1 to an integer frame index per call (slots at `88d45cd4` + n*0x19c,
+count at `88d45cc4`) and samples keyed bytes at it (`888c1180`, linear between keys).
+
+**Prototype: run each scheduler or list at most once per game frame in mode 1 at 60.** The
+frame is the game's own counter at `*(88d45b1c)+0x270` (the one the entry divisors use); it
+steps once per swap while presenting and keeps stepping through the match load, when swaps
+stop (keying on the swap count froze the game exactly where the intro ends). The rule skips
+the second run of four instances in the intro (the shared list, `d40a9431`'s scheduler and two
+lists under it). Result, quiet intro with `ts4_cutaways_60`: **61.53 s** (original 62.16 s,
+-1.0 %), 60 presents a second, no stall, the match continues at 60.
+
+**Gate: feasible.** Every per-frame advance is either logic that already steps at 60 Hz
+(halved by running it once per frame) or one of the two per-swap leftovers, which take a half
+step (the world dt) or tick on every other frame (the morph index).
