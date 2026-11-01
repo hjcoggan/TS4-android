@@ -1,24 +1,75 @@
-// The OPTIONS row's pure parts (ticket 11), the pad combo (ticket 07) and the page's style
+// The main menu rows' pure parts, the pad combo (ticket 07) and the page's style
 // (ticket 08). No GPU, no game.
 
 #include <catch_amalgamated.hpp>
 
 #include "pad_bindings.h"
 #include "settings/open_combo.h"
-#include "settings/options_row.h"
+#include "settings/main_menu_rows.h"
 #include "settings/page_style.h"
 
 using namespace topspin4::settings;
 
-TEST_CASE("The row answers only for the OPTIONS scene and the Move calibration label") {
-  CHECK(options_row::IsOptionsScene("S4MainMenuSubOptions"));
-  CHECK(options_row::IsOptionsScene("Scenes\\S4MainMenuSubOptions.scene"));
-  CHECK_FALSE(options_row::IsOptionsScene("S4PG_OptionsMenu"));
-  CHECK_FALSE(options_row::IsOptionsScene("S4StartScreen"));
-  CHECK_FALSE(options_row::IsOptionsScene(""));
-  CHECK(options_row::IsMoveLabelId("PS3MoveCalibrate"));
-  CHECK_FALSE(options_row::IsMoveLabelId("PS3MoveCalibrate2"));
-  CHECK_FALSE(options_row::IsMoveLabelId("MainButtonTextTwoD"));
+TEST_CASE("The two rows are relabelled and nothing else is") {
+  CHECK(main_menu::LabelFor("MainButtonText3DConfig") == "PC SETTINGS");
+  CHECK(main_menu::LabelFor("MainButtonTextMoveTutorial") == "EXIT TO DESKTOP");
+  CHECK(main_menu::LabelFor("MainButtonTextMoveTutorial2").empty());
+  CHECK(main_menu::LabelFor("MainButtonTextOptions").empty());
+  CHECK(main_menu::LabelFor("MainButtonTextMoveVideoTutorial").empty());
+  CHECK(main_menu::LabelFor("PS3MoveCalibrate").empty());
+  CHECK(main_menu::LabelFor("").empty());
+}
+
+TEST_CASE("The rows' scene changes from the menu become the two actions") {
+  using main_menu::SceneAction;
+  constexpr std::string_view menu = "S4MainMenu";
+  CHECK(main_menu::ActionForScene("S4Xbox3DDisclaimer", menu) == SceneAction::kOpenSettings);
+  CHECK(main_menu::ActionForScene("S4MoveTutorialMain", menu) == SceneAction::kExitToDesktop);
+  CHECK(main_menu::ActionForScene("S4MainMenuSubOptions", menu) == SceneAction::kNone);
+  CHECK(main_menu::ActionForScene("S4MoveTutorial", menu) == SceneAction::kNone);
+  CHECK(main_menu::ActionForScene("", menu) == SceneAction::kNone);
+  // The same scenes reached from anywhere else are the game's.
+  CHECK(main_menu::ActionForScene("S4Xbox3DDisclaimer", "S4PG_InGame") == SceneAction::kNone);
+  CHECK(main_menu::ActionForScene("S4MoveTutorialMain", "") == SceneAction::kNone);
+}
+
+TEST_CASE("Only the menu's UpdateList print triggers PatchList") {
+  CHECK(main_menu::IsUpdateListPrint("S4MainMenu: EXPORT_UpdateList"));
+  CHECK_FALSE(main_menu::IsUpdateListPrint("S4MainMenu: EXPORT_PatchList"));
+  CHECK_FALSE(main_menu::IsUpdateListPrint("S4MainMenu: EXPORT_UpdateList "));
+  CHECK_FALSE(main_menu::IsUpdateListPrint(""));
+  CHECK(main_menu::NodeCall("S4MainMenu", main_menu::kPatchListCall) ==
+        "$S4MainMenu.EXPORT_PatchList()");
+  CHECK(main_menu::NodeCall("S4MainMenu", main_menu::kMenuOnCall) == "$S4MainMenu.On()");
+}
+
+TEST_CASE("Each menu build appends the rows once, a rerun of UpdateList none") {
+  main_menu::RowSequence rows;
+  CHECK_FALSE(rows.OnUpdateList());  // UpdateList before any build
+  CHECK_FALSE(rows.OnMoveQuery());   // the Move query from elsewhere (an invitation) stays 0
+
+  CHECK_FALSE(rows.On3DQuery());     // the menu is built: the game's own answer
+  CHECK(rows.OnUpdateList());        // issue PatchList
+  CHECK(rows.On3DQuery());           // PatchList asks: ours, 0
+  CHECK(rows.OnMoveQuery());         // PatchList asks: ours, 1
+  CHECK_FALSE(rows.OnMoveQuery());   // and only once
+
+  CHECK_FALSE(rows.OnUpdateList());  // the sign-in rerun appends nothing
+
+  // Turning the menu back on builds it again.
+  CHECK_FALSE(rows.On3DQuery());
+  CHECK(rows.OnUpdateList());
+  CHECK(rows.On3DQuery());
+  CHECK(rows.OnMoveQuery());
+}
+
+TEST_CASE("A PatchList that could not be issued leaves the queries to the game") {
+  main_menu::RowSequence rows;
+  CHECK_FALSE(rows.On3DQuery());
+  CHECK(rows.OnUpdateList());
+  rows.OnPatchListFailed();
+  CHECK_FALSE(rows.On3DQuery());   // the game's own answer, and armed again
+  CHECK_FALSE(rows.OnMoveQuery()); // an invitation's Move query stays 0
 }
 
 TEST_CASE("The pad combo is Back and Start together") {

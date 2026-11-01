@@ -1,0 +1,61 @@
+# Main menu -> the two rows the host adds (src/settings/main_menu_rows.h): DOWN to PC SETTINGS,
+# A opens the Settings page, B closes it and the menu comes back. EXIT TO DESKTOP is not pressed
+# here: it ends the process before the session report, which this runner needs.
+# Run: python scripts/scene_runner.py tests/scenes/main-menu-rows.toml
+
+name = "main-menu-rows"
+from = "boot"
+log = [
+  "main menu rows: issued $S4MainMenu.EXPORT_PatchList()",
+  "main menu rows: IsAnyMoveConnected answers 1",
+  "main menu rows: a row label is resolved",
+  "main menu rows: PC SETTINGS chosen, opening the Settings page",
+  "settings page: opened from the main menu's PC SETTINGS row",
+  "main menu rows: issued $S4MainMenu.On()",
+]
+
+input = """
+# To the main menu, as boot-main-menu.toml.
+at 1
+press START
+at 70
+press START
+at 140
+press START
+at 210
+press START
+at 280
+press START
+at 350
+press START
+at 500
+press START
+at 1100
+press START
+# Main menu up by about frame 1300, GAME MODES highlighted: five DOWNs to PC SETTINGS.
+at 1450
+press DOWN
+at 1500
+press DOWN
+at 1550
+press DOWN
+at 1600
+press DOWN
+at 1650
+press DOWN
+at 1750
+press A
+# The page is open; B closes it.
+at 2000
+press B
+"""
+
+[[capture]]  # main menu, PC SETTINGS highlighted, EXIT TO DESKTOP under it
+frame = 1720
+label = "main menu rows"
+[[capture]]  # the Settings page over the menu
+frame = 1900
+label = "settings page"
+[[capture]]  # the main menu back after the page closed (GAME MODES highlighted)
+frame = 2300
+label = "menu again"

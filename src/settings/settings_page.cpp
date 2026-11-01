@@ -18,8 +18,8 @@
 
 #include "native/native_renderer.h"
 #include "settings/config_file.h"
+#include "settings/main_menu_sink.h"
 #include "settings/open_combo.h"
-#include "settings/options_row_sink.h"
 #include "settings/page_style.h"
 #include "settings/registry.h"
 
@@ -36,6 +36,7 @@ struct State {
   std::atomic<bool> hold = false;  // read on the guest thread
   PageDialog* dialog = nullptr;    // UI thread only
   std::function<void(std::function<void()>)> run_on_ui;
+  std::function<void()> request_close;  // UI thread only
   SessionStart session;  // UI thread only; file_values follows what the page saves
   ImFont* heading = nullptr;
   ImFont* body = nullptr;
@@ -409,12 +410,18 @@ void OnOpenCombo() {
   RequestOpenFromGuest();
 }
 
-void RequestOptionsRowOpen() {
-  REXLOG_INFO("settings page: opened from the OPTIONS row");
+void OpenFromMenuRow() {
+  REXLOG_INFO("settings page: opened from the main menu's PC SETTINGS row");
   RequestOpenFromGuest();
 }
 
-void LogOptionsRow(const char* message) { REXLOG_INFO("{}", message); }
+// Guest thread: the main menu's EXIT TO DESKTOP row.
+void ExitFromMenuRow() {
+  if (!g.run_on_ui || !g.request_close) return;
+  g.run_on_ui([] { g.request_close(); });
+}
+
+void LogMenuRow(const char* message) { REXLOG_INFO("{}", message); }
 
 }  // namespace
 
@@ -459,17 +466,21 @@ void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root) {
 
 void Configure(rex::ui::ImGuiDrawer* drawer, rex::input::InputSystem* input,
                const std::filesystem::path& settings_path,
-               std::function<void(std::function<void()>)> run_on_ui) {
+               std::function<void(std::function<void()>)> run_on_ui,
+               std::function<void()> request_close) {
   g.drawer = drawer;
   g.input = input;
   g.settings_path = settings_path;
   g.run_on_ui = std::move(run_on_ui);
+  g.request_close = std::move(request_close);
   if (input) input->SetGuestInputHold(HoldGuestInput);
   SetOpenComboHandler(OnOpenCombo);
-  // The OPTIONS row's hooks (options_row_hooks.cpp, in the Swing Module's DLL) reach the page here.
-  options_row::RowSink& row_sink = options_row::GetRowSink();
-  row_sink.open_page = RequestOptionsRowOpen;
-  row_sink.log = LogOptionsRow;
+  // The main menu rows' hooks (main_menu_rows_hooks.cpp, in the Swing Module's DLL) reach the
+  // page and the window here.
+  main_menu::MenuSink& menu_sink = main_menu::GetMenuSink();
+  menu_sink.open_page = OpenFromMenuRow;
+  menu_sink.exit_to_desktop = ExitFromMenuRow;
+  menu_sink.log = LogMenuRow;
   rex::ui::RegisterBind("bind_ts4_settings_page", "F4", "Open the PC SETTINGS page", Toggle);
 }
 

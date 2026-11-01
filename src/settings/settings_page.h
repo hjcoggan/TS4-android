@@ -1,5 +1,5 @@
 // The in-game Settings page (ticket 03/04): F4 opens it over the game, so does the pad combo Back +
-// Start (open_combo.h), the OPTIONS menu's PC SETTINGS row (options_row.h) and a script's
+// Start (open_combo.h), the main menu's PC SETTINGS row (main_menu_rows.h) and a script's
 // `set settings_page open`; the controller drives it while the game reads an idle pad (the input
 // hold of patch 0014). The rows come from the pure model (page_model.h). Adapted from WWE All
 // Stars' settings_page (ADR-0004, ADR-0007).
@@ -56,10 +56,12 @@ void AddFonts(ImFontAtlas* atlas, const std::filesystem::path& game_data_root);
 ImFont* BodyFont();
 
 // Registers the F4 bind and the guest input hold. Changes are saved to settings_path. run_on_ui
-// runs a function on the UI thread. Call once the ImGui drawer and the input system exist.
+// runs a function on the UI thread; request_close, called there, closes the window as its X does
+// (the main menu's EXIT TO DESKTOP row). Call once the ImGui drawer and the input system exist.
 void Configure(rex::ui::ImGuiDrawer* drawer, rex::input::InputSystem* input,
                const std::filesystem::path& settings_path,
-               std::function<void(std::function<void()>)> run_on_ui);
+               std::function<void(std::function<void()>)> run_on_ui,
+               std::function<void()> request_close);
 
 // The script input key whose value drives the page: `set settings_page open|close|toggle` opens
 // or closes it; the page then reads the script's pad (press UP/DOWN/LEFT/RIGHT/A/B).

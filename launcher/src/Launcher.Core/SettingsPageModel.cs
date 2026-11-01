@@ -85,7 +85,7 @@ public sealed class SettingsPageModel
     /// game, and how to open that page (ADR-0008; Glossary: Settings page).
     /// </summary>
     public string InGameNote =>
-        "Every setting is on this page. You can also change them while playing: choose PC SETTINGS in OPTIONS, press F4, or hold Back and Start on a controller.";
+        "Every setting is on this page. You can also change them while playing: choose PC SETTINGS in the main menu, press F4, or hold Back and Start on a controller.";
 
     /// <summary>One tab per section of the export, in its order; the Graphics tab opens with the Preset row. Empty when unavailable.</summary>
     public IReadOnlyList<SettingsTab> Tabs

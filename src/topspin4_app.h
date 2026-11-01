@@ -320,6 +320,13 @@ class TopSpin4App : public rex::ReXApp {
         topspin4::settings::SettingsPath(user_data_root()),
         [this](std::function<void()> function) {
           app_context().CallInUIThread(std::move(function));
+        },
+        // Window::RequestClose skips OnWindowCloseRequested, so the session end is written
+        // first, as a click on X writes it. The window's closing exits with 0.
+        [this] {
+          REXLOG_INFO("Main menu: EXIT TO DESKTOP, closing the window");
+          topspin4::d3d::OnSessionEnd();
+          if (auto* game_window = window()) game_window->RequestClose();
         });
   }
 

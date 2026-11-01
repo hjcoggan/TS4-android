@@ -249,7 +249,7 @@ public sealed class SettingsPageModelTests : IDisposable
         Assert.Contains("also", line);
         Assert.DoesNotContain("More settings", line);
         Assert.Contains("PC SETTINGS", line);
-        Assert.Contains("OPTIONS", line);
+        Assert.Contains("main menu", line);
         Assert.Contains("F4", line);
         Assert.Contains("Back and Start", line);
     }
