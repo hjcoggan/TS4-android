@@ -70,6 +70,14 @@ from Classic. The renderer, its hooks and every finding so far are in
 - **Same-frame captures.** `pwsh scripts/rdoc.ps1 capture … -ExtraArguments
   '--ts4_renderer=native','--ts4_native_dual_compare=true'` puts both renderers' draws in one
   capture, Native's first. `'mesh EID 4000'` dumps post-VS positions for matching vertex sets.
+- **EDRAM aliasing Native's separate images don't reproduce.** On Xenos a depth buffer lying
+  inside another's EDRAM tiles is overwritten when that one is drawn, and the game can rely on
+  it. A pass whose output depends on the shot before it (stale bloom, a depth test failing
+  everywhere) points here. See `guest::DepthEdramRange` and the "cleared" trace line.
+- **Depth ties that the GPUs break differently.** Two coplanar draws with a less-or-equal test
+  can swap winners frame to frame on Vulkan while Xenos is stable: a flicker or shimmer on
+  decals. `history` on the pixel across two frames shows the swap; a per-shader viewport-depth
+  nudge settles it (`kCourtSheenPixelShader`).
 
 ## After a fix
 
