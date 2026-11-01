@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
-## [Unreleased]
+## [1.0.0] - 2026-11-01
 
 ### Added
 
@@ -20,6 +20,7 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 - A fresh install now starts on the Native renderer with Resolution scale Auto, 16x anisotropic filtering and Fix original glitches on (the Default preset). MSAA stays at the game's own. A setting you never changed in an existing install moves to the new default too.
 - The Original preset is the Xbox 360 game's own look, whatever the defaults are.
 - Safe start runs the Classic renderer with every setting at the original game's behaviour, instead of the defaults.
+- The in-game Settings page looks like the game's own settings pages: grey and white row cells, an orange selected row, a grey help bar and the button prompts at the bottom.
 - The Windows cursor is hidden over the game; it shows while the mouse moves and hides again when it rests.
 
 - The art folder's achievement list keeps each achievement's ID and its "how to earn it" text. An art folder written by an earlier Launcher is read again from the prepared disc on the next start.
