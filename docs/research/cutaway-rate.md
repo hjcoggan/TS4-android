@@ -59,6 +59,14 @@ loop re-implemented with the render task kept every frame. Two traps on the way:
 `8876d868` (the render task's pre-step) stalled the game, and so did a frame parity that froze
 during the match load, when schedulers run without the main render task.
 
+A finer try set each scheduler entry's repeat count to 0 around the pass on odd frames, except
+the render task's. The entries are 0x40 bytes in two lists per scheduler (`*(sched+0x24)`: the
+first at `sched+*sched` with `sched[1]` entries, the second through `sched+0xc`): service
+pointer at +8, repeat count at +0x30, frame divisor at +0x34. Schedulers nest (an entry's
+service is often another `886117e8` scheduler), and most service pointers read 0 when first
+seen. The intro still took 31.3 s and the game kept presenting 60 a second, so the zeroing did
+not take hold the way the decompile suggests; this was not pursued further.
+
 ## Conclusion
 
 The cutaways are authored at 30 Hz frames throughout. Running every service every other frame
