@@ -33,6 +33,8 @@ Every setting is in the Launcher's **Settings**, one tab per section, so you can
 
 To quit, choose **EXIT TO DESKTOP** in the main menu, or close the window.
 
+A fresh install starts on the **Default** Graphics preset: the Native renderer, Resolution scale Auto, 16x anisotropic filtering, and the original game's loading-screen flash fixed. **Original** sets the image settings back to the Xbox 360 game's own look, and **Enhanced** adds 4x MSAA. **60 fps cutscenes** (off by default) plays the match intro, replays and changeovers at 60 fps instead of 30, at their original speed.
+
 In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in the game folder (`userdata`), so the Launcher and the game show the same values.
 
 ### Achievements
@@ -46,7 +48,7 @@ The Launcher's **Achievements** page lists every achievement on your disc. The o
 
 ### If the game will not start
 
-Open the Launcher and use **Safe start** under "Trouble starting?". It runs one session on the default settings and leaves your Settings file unchanged.
+Open the Launcher and use **Safe start** under "Trouble starting?". It runs one session on the Classic renderer with every setting at the original game's behaviour, and leaves your Settings file unchanged.
 
 After a crash or a graphics failure the Launcher comes back with Safe start up front, and after a crash with **Open crash report** to attach to your issue.
 
