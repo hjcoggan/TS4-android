@@ -160,6 +160,8 @@ Checks, exhibition match, Classic, unattended:
 | A changeover (game-1 score at the chair) | 6.9 s at 59.7 steps/s |
 | Presents inside cutaways (`--present_pacing_log`) | 2346 of 2360 on the 16.7 ms step; the rest are the intro's load hitches (50-167 ms), which the run with the setting off shows too |
 | Exhibition match with the setting on | no stall, no crash, the match runs on at 60 |
+| Exhibition match with the setting off (new hooks built in) | no stall, the same cutaway sequence as before; the only change is the cutaway start and end lines in the log |
+| A replay | not exercised: no run showed one (Y at the score banner's `R` prompt did not start one) |
 
 A match's cutaways cannot be paired one by one across runs: gameplay differs from run to run
 even at 30, and the scene's presses are counted in swaps, which a cutaway at 60 uses twice as
@@ -167,3 +169,7 @@ fast. The steps-per-second count is the like-for-like measure: a cutaway lasts a
 timeline, and the timeline steps at the same rate with the setting on and off. Each run with
 the setting on held back the same four instances (the shared list `b1e80600`, the scheduler
 `b1e7fd80` and two lists under it); no other cutaway brought new ones.
+
+Not yet seen on screen: a replay at 60, and the face player's skipped call (once per clip
+loop, a frame where the call does not run; if that call also submits the face's morph each
+frame, that one frame could show the face unmorphed).
