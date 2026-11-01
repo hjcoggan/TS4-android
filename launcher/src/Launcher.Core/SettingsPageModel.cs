@@ -194,8 +194,10 @@ public sealed class SettingsPageModel
         return (replacement, $"{other.Label} had {value}; it now has {replacement.Replace(",", ", ")}.");
     }
 
-    private static string RendererIn(IReadOnlyDictionary<string, string> values) =>
-        values.TryGetValue(SettingsSchema.RendererKey, out var renderer) ? renderer : "classic";
+    // The renderer the values choose; a file without one runs the schema's default.
+    private string RendererIn(IReadOnlyDictionary<string, string> values) =>
+        values.TryGetValue(SettingsSchema.RendererKey, out var renderer) ? renderer
+            : _schema!.Settings.FirstOrDefault(setting => setting.Key == SettingsSchema.RendererKey)?.Default ?? "classic";
 
     private SettingRow Row(SettingDescription setting, string value, string renderer)
     {
@@ -208,20 +210,24 @@ public sealed class SettingsPageModel
             setting.Binding);
     }
 
-    // The Preset whose values all match, else custom. A setting that does nothing on this renderer is left out of
-    // the match, so it cannot make the row read Custom (ActivePreset in src/settings/presets.h).
+    // The Preset the values match, else custom. A Preset whose every covered value matches wins. Else a setting that
+    // does nothing on this renderer is left out of the match, so it cannot make the row read Custom (ActivePreset in
+    // src/settings/presets.h).
     private string ActivePreset(IReadOnlyDictionary<string, string> values, string renderer)
     {
-        foreach (var preset in _schema!.Presets)
+        foreach (var allSettings in new[] { true, false })
         {
-            var all = true;
-            foreach (var (key, covered) in preset.Values)
+            foreach (var preset in _schema!.Presets)
             {
-                var setting = _schema.Settings.FirstOrDefault(candidate => candidate.Key == key);
-                if (setting is null || !setting.AvailableOn(renderer)) continue;
-                all &= (values.TryGetValue(key, out var current) ? current : setting.Default) == covered;
+                var all = true;
+                foreach (var (key, covered) in preset.Values)
+                {
+                    var setting = _schema.Settings.FirstOrDefault(candidate => candidate.Key == key);
+                    if (setting is null || (!allSettings && !setting.AvailableOn(renderer))) continue;
+                    all &= (values.TryGetValue(key, out var current) ? current : setting.Default) == covered;
+                }
+                if (all) return preset.Value;
             }
-            if (all) return preset.Value;
         }
         return CustomPreset;
     }

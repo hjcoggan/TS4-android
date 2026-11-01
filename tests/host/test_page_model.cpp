@@ -37,9 +37,9 @@ TEST_CASE("The page lists the Graphics settings in registry order with labels, v
   REQUIRE(rows.size() == 8);  // the Preset row, then the seven settings
   CHECK(rows[0].kind == RowKind::kPreset);
   CHECK(rows[1].label == "Renderer");
-  CHECK(rows[1].value_label == "Classic");
+  CHECK(rows[1].value_label == "Native");
   CHECK(rows[2].label == "Resolution scale");
-  CHECK(rows[2].value_label == "1x");
+  CHECK(rows[2].value_label == "Auto");
   CHECK(rows[2].choices.size() == 4);  // 1x, Auto, 2x, 3x
   CHECK(rows[3].value_label == "Original");
   CHECK(rows[5].label == "Sharpening");
@@ -56,15 +56,15 @@ TEST_CASE("The page lists the Graphics settings in registry order with labels, v
 
 TEST_CASE("A live change sets the cvar and is saved; its row moves to the new value") {
   SettingsModel model(Context(), {}, Defaults());
-  const auto changes = model.Change("ts4_anisotropic_filtering", "16");
+  const auto changes = model.Change("ts4_anisotropic_filtering", "8");
   REQUIRE(changes.size() == 1);
-  CHECK(changes[0] == SettingChange{"ts4_anisotropic_filtering", "16", true, true});
+  CHECK(changes[0] == SettingChange{"ts4_anisotropic_filtering", "8", true, true});
   const Row row = model.RowFor("ts4_anisotropic_filtering");
-  CHECK(row.value == "16");
-  CHECK(row.value_label == "16x");
+  CHECK(row.value == "8");
+  CHECK(row.value_label == "8x");
   CHECK(row.mark == Mark::kNow);
   CHECK(row.note.empty());
-  CHECK(model.Change("ts4_anisotropic_filtering", "16").empty());   // unchanged
+  CHECK(model.Change("ts4_anisotropic_filtering", "8").empty());    // unchanged
   CHECK(model.Change("ts4_anisotropic_filtering", "99").empty());   // not allowed
 }
 
@@ -74,21 +74,21 @@ TEST_CASE("A next-start change is saved, pending and not applied") {
   CHECK(row.mark == Mark::kNextStart);
   CHECK(row.note == "Applies the next time the game starts.");
   CHECK_FALSE(row.pending);
-  const auto changes = model.Change("ts4_renderer", "native");
+  const auto changes = model.Change("ts4_renderer", "classic");
   REQUIRE(changes.size() == 1);
-  CHECK(changes[0] == SettingChange{"ts4_renderer", "native", false, true});
+  CHECK(changes[0] == SettingChange{"ts4_renderer", "classic", false, true});
   row = model.RowFor("ts4_renderer");
-  CHECK(row.value == "native");
+  CHECK(row.value == "classic");
   CHECK(row.pending);
   // Changing it back to what is in effect leaves nothing pending (and the file saved again).
-  CHECK(model.Change("ts4_renderer", "classic")[0].save);
+  CHECK(model.Change("ts4_renderer", "native")[0].save);
   CHECK_FALSE(model.RowFor("ts4_renderer").pending);
 }
 
 TEST_CASE("A next-start value saved in the file is shown as pending at the next page open") {
-  SettingsModel model(Context(), {{"ts4_renderer", "native"}}, Defaults());
+  SettingsModel model(Context(), {{"ts4_renderer", "classic"}}, Defaults());
   const Row row = model.RowFor("ts4_renderer");
-  CHECK(row.value == "native");
+  CHECK(row.value == "classic");
   CHECK(row.pending);
   // A live setting shows what is in effect, not the file.
   ValueMap in_effect = Defaults();
@@ -113,7 +113,7 @@ TEST_CASE("A setting given as a Launch option is marked, and a change to it is n
   CHECK(changes[0] == SettingChange{"ts4_anisotropic_filtering", "8", true, false});
 
   // A pinned next-start setting can't apply this session or at the next start.
-  const auto renderer = model.Change("ts4_renderer", "native");
+  const auto renderer = model.Change("ts4_renderer", "classic");
   REQUIRE(renderer.size() == 1);
   CHECK_FALSE(renderer[0].set_cvar);
   CHECK_FALSE(renderer[0].save);
@@ -135,7 +135,11 @@ TEST_CASE("Native-only rows are unavailable on Classic, with the reason, and can
 TEST_CASE("Safe start rows say a change is not kept; a live one still applies") {
   ModelContext context = Context();
   context.safe_start = true;
-  SettingsModel model(context, {{"ts4_renderer", "native"}}, Defaults());
+  // Safe start runs on the original values (presets.h), whatever the file says.
+  ValueMap in_effect = Defaults();
+  in_effect["ts4_renderer"] = "classic";
+  in_effect["ts4_msaa"] = "original";
+  SettingsModel model(context, {{"ts4_renderer", "native"}}, in_effect);
   CHECK(model.RowFor("ts4_renderer").value == "classic");  // the file is ignored
   CHECK(model.RowFor("ts4_msaa").mark == Mark::kSafeStart);
   const auto live = model.Change("ts4_msaa", "4");

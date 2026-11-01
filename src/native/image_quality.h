@@ -285,7 +285,7 @@ inline Plan MakePlan(const Settings& settings, uint32_t window_width, uint32_t w
   // Above 1x, when the presenter still scales the frame up, textures are sharpened by as much
   // (the vendors' upscaler rule without its temporal term); a frame drawn at or above the window
   // is supersampled, which sharpens them already. At 1x the bias is 0 whatever the window, so the
-  // default look stays the original's (ADR-0001; owner decision 2026-10-28).
+  // Original Preset's look stays the original's (ADR-0011; owner decision 2026-10-28).
   const uint32_t render_height = 720 * plan.scale;
   plan.max_lod_bias = device.max_lod_bias;
   if (plan.scale > 1 && shown_height > render_height) {

@@ -55,6 +55,48 @@ public sealed class SettingsPageModelTests : IDisposable
         Assert.Equal(["Off", "On"], Row(Page(), "mnk_mode").Options.Select(option => option.Label));
     }
 
+    // An export whose defaults are the game's shipped ones: Native, Auto, MSAA Original, 16x, with the Default Preset.
+    private static string ShippedExport()
+    {
+        string[] settings =
+        [
+            ExportFixture.Setting("ts4_renderer", "choice", "native", ["classic", "native"], "next_start", "both", "Graphics", "Renderer", 10),
+            ExportFixture.Setting("ts4_resolution_scale", "choice", "auto", ["1", "auto", "2", "3"], "now", "native", "Graphics",
+                "Resolution scale", 20, "", ["1x", "Auto", "2x", "3x"]),
+            ExportFixture.Setting("ts4_msaa", "choice", "original", ["original", "4", "8"], "now", "native", "Graphics", "MSAA", 30, "",
+                ["Original", "4x", "8x"]),
+            ExportFixture.Setting("ts4_anisotropic_filtering", "choice", "16", ["original", "4", "8", "16"], "now", "both", "Graphics",
+                "Anisotropic filtering", 40, "", ["Original", "4x", "8x", "16x"]),
+            ExportFixture.Setting("ts4_sharpening", "choice", "off", ["off", "low", "medium", "high"], "now", "both", "Graphics", "Sharpening", 50),
+        ];
+        const string Presets = """
+            [{"value": "original", "label": "Original", "values": {"ts4_resolution_scale": "1", "ts4_msaa": "original", "ts4_anisotropic_filtering": "original", "ts4_sharpening": "off"}},
+             {"value": "default", "label": "Default", "values": {"ts4_resolution_scale": "auto", "ts4_msaa": "original", "ts4_anisotropic_filtering": "16", "ts4_sharpening": "off"}},
+             {"value": "enhanced", "label": "Enhanced", "values": {"ts4_resolution_scale": "auto", "ts4_msaa": "4", "ts4_anisotropic_filtering": "16", "ts4_sharpening": "off"}}]
+            """;
+        return ExportFixture.Json(settings, presets: Presets);
+    }
+
+    [Fact]
+    public void A_fresh_install_shows_the_default_renderer_and_its_rows_without_a_settings_file()
+    {
+        var page = Page(ShippedExport());
+
+        Assert.Equal("Native (recommended)", Row(page, "ts4_renderer").ValueLabel);
+        Assert.True(Row(page, "ts4_msaa").Available);
+        Assert.Equal("Default", Row(page, "graphics_preset").ValueLabel);
+    }
+
+    [Fact]
+    public void On_Classic_a_Preset_that_matches_every_value_is_named_even_where_only_Native_settings_differ()
+    {
+        WriteSettings("version = 2\nts4_renderer = \"classic\"\nts4_msaa = \"4\"\n");
+        Assert.Equal("Enhanced", Row(Page(ShippedExport()), "graphics_preset").ValueLabel);
+
+        WriteSettings("version = 2\nts4_renderer = \"classic\"\nts4_msaa = \"8\"\n");
+        Assert.Equal("Default", Row(Page(ShippedExport()), "graphics_preset").ValueLabel);
+    }
+
     [Fact]
     public void The_renderer_row_has_plain_options_and_shows_the_default_when_there_is_no_settings_file()
     {

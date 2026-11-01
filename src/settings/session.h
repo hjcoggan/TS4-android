@@ -11,6 +11,7 @@
 #include <rex/logging.h>
 
 #include "settings/config_file.h"
+#include "settings/presets.h"
 #include "settings/registry.h"
 #include "settings/settings_file.h"
 #include "settings/settings_page.h"
@@ -27,16 +28,20 @@ inline bool IsLaunchOption(std::string_view key) {
 
 // Reads the Settings file into the cvars, and hands the Settings page what it needs: the file's
 // values and the pinned settings. Safe start (--safe): the file is neither read, migrated, set
-// aside nor written, so every setting keeps its default and the page's changes last until the game
+// aside nor written, every setting runs at the 360 game's own behaviour (Classic, the Original
+// values, presets.h) unless given as a Launch option, and the page's changes last until the game
 // closes. Call once, from OnPostInitLogging.
 inline LoadReport StartSession(const std::filesystem::path& path, bool safe_start) {
   SessionStart session;
   session.safe_start = safe_start;
   LoadReport report;
   if (safe_start) {
-    REXLOG_WARN("Safe start: every setting is at its default, and the Settings file {} is "
-                "neither applied nor written",
+    REXLOG_WARN("Safe start: every setting is at its original value, and the Settings file {} "
+                "is neither applied nor written",
                 Utf8(path));
+    for (const auto& [key, value] : kOriginalValues) {
+      if (!IsLaunchOption(key)) rex::cvar::SetFlagByName(key, value);
+    }
   } else {
     report = LoadSettingsFile(path, [&session](std::string_view key, std::string_view value) {
       session.file_values[std::string(key)] = std::string(value);

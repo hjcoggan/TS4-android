@@ -5,9 +5,9 @@
 
 #include "settings/registry.h"
 
-REXCVAR_DEFINE_STRING(ts4_renderer, topspin4::settings::kRendererClassic.data(), "TopSpin4",
-                      "Renderer: classic (Xenos GPU emulation) or native (not built yet; Classic "
-                      "draws until it is)")
+REXCVAR_DEFINE_STRING(ts4_renderer, topspin4::settings::kRendererNative.data(), "TopSpin4",
+                      "Renderer: native (Vulkan, with the image enhancements) or classic (Xenos "
+                      "GPU emulation, the reference)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
 // Safe start (ticket 09): one session on all defaults. The Settings file is neither applied nor
@@ -19,23 +19,23 @@ REXCVAR_DEFINE_BOOL(safe, false, "TopSpin4",
 // Image Enhancements (image-quality spec; src/native/image_quality.h). Each changes while the game
 // runs: Native reads them as each frame begins, and the change callbacks of the two that Classic
 // has too set its filtering and the presenter's CAS (native_renderer.cpp, ApplyImageSettings).
-REXCVAR_DEFINE_STRING(ts4_resolution_scale, "1", "TopSpin4",
+REXCVAR_DEFINE_STRING(ts4_resolution_scale, "auto", "TopSpin4",
                       "Resolution scale (Native renderer): 1, 2 or 3 times 1280x720, or auto "
                       "(the smallest that covers the window's 16:9 area)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_msaa, "original", "TopSpin4",
                       "MSAA (Native renderer): original (the game's own), 4 or 8")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
-REXCVAR_DEFINE_STRING(ts4_anisotropic_filtering, "original", "TopSpin4",
+REXCVAR_DEFINE_STRING(ts4_anisotropic_filtering, "16", "TopSpin4",
                       "Anisotropic filtering: original (the game's own), 4, 8 or 16")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(ts4_sharpening, "off", "TopSpin4",
                       "Sharpening (CAS): off, low, medium or high")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
-// Fixes of the original game's own glitches (load_flash.h), off by default: the original bugs
-// are kept unless the player asks.
-REXCVAR_DEFINE_BOOL(ts4_fix_glitches, false, "TopSpin4",
+// Fixes of the original game's own glitches (load_flash.h), on by default (ADR-0011); off keeps
+// the original bugs.
+REXCVAR_DEFINE_BOOL(ts4_fix_glitches, true, "TopSpin4",
                     "Fix original glitches: hold the loading screen over the white flash before "
                     "a new scene draws")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);

@@ -82,10 +82,12 @@ TEST_CASE("A saved setting is written whole, through a temporary file") {
   CHECK_FALSE(fs::exists(path.string() + ".tmp"));
 }
 
-TEST_CASE("Every setting defaults to the original game's behaviour") {
-  // Classic is the reference renderer (ADR-0005); keyboard and mouse were no 360 input.
+TEST_CASE("A fresh install starts on Native with the enhancements, every default allowed") {
+  // ADR-0011: Native and the Enhanced look by default; keyboard and mouse were no 360 input.
   REQUIRE(FindSetting("ts4_renderer"));
-  CHECK(FindSetting("ts4_renderer")->default_value == "classic");
+  CHECK(FindSetting("ts4_renderer")->default_value == "native");
+  REQUIRE(FindSetting("ts4_fix_glitches"));
+  CHECK(FindSetting("ts4_fix_glitches")->default_value == "true");
   REQUIRE(FindSetting("mnk_mode"));
   CHECK(FindSetting("mnk_mode")->default_value == "false");
   for (const Setting& setting : PlayerSettings()) {
@@ -183,18 +185,18 @@ TEST_CASE("Key bindings may name any key, and may be cleared") {
   CHECK_FALSE(FindSetting("keybind_a")->Allows("a\\b"));
 }
 
-TEST_CASE("The image settings default to the original look and list their levels") {
+TEST_CASE("The image settings default to the shipped look and list their levels") {
   const Setting* scale = FindSetting("ts4_resolution_scale");
   REQUIRE(scale);
-  CHECK(scale->default_value == "1");
+  CHECK(scale->default_value == "auto");
   CHECK(scale->choices == std::vector<std::string_view>{"1", "auto", "2", "3"});
   const Setting* msaa = FindSetting("ts4_msaa");
   REQUIRE(msaa);
-  CHECK(msaa->default_value == "original");
+  CHECK(msaa->default_value == "original");  // the shipped pipeline list's keys (ADR-0010)
   CHECK(msaa->choices == std::vector<std::string_view>{"original", "4", "8"});
   const Setting* filtering = FindSetting("ts4_anisotropic_filtering");
   REQUIRE(filtering);
-  CHECK(filtering->default_value == "original");
+  CHECK(filtering->default_value == "16");
   CHECK(filtering->choices == std::vector<std::string_view>{"original", "4", "8", "16"});
   const Setting* sharpening = FindSetting("ts4_sharpening");
   REQUIRE(sharpening);
@@ -573,10 +575,15 @@ TEST_CASE("The export carries the Graphics Presets with each covered setting's v
       CHECK(values.members[v].text == presets[i].values[v].second);
     }
   }
-  // The two the page offers, as literals: Original is the defaults, Enhanced the best look.
+  // The three the page offers, as literals: Original the 360's look, Default a fresh install's,
+  // Enhanced the best look.
   CHECK(exported.items[0].at("value").text == "original");
-  CHECK(exported.items[1].at("values").at("ts4_msaa").text == "4");
-  CHECK(exported.items[1].at("values").at("ts4_resolution_scale").text == "auto");
+  CHECK(exported.items[0].at("values").at("ts4_resolution_scale").text == "1");
+  CHECK(exported.items[1].at("value").text == "default");
+  CHECK(exported.items[1].at("values").at("ts4_msaa").text == "original");
+  CHECK(exported.items[1].at("values").at("ts4_anisotropic_filtering").text == "16");
+  CHECK(exported.items[2].at("values").at("ts4_msaa").text == "4");
+  CHECK(exported.items[2].at("values").at("ts4_resolution_scale").text == "auto");
   // The help is the in-game row's own.
   CHECK(root.at("preset_help").text == PresetHelp());
   CHECK(PresetHelp().find("Enhanced: Resolution scale Auto, MSAA 4x") != std::string::npos);
@@ -624,7 +631,7 @@ TEST_CASE("The export takes applies_when from the lookup, and the switch is foun
                   "\"choices\": [\"original\", \"4\", \"8\"], "
                   "\"choice_labels\": [\"Original\", \"4x\", \"8x\"], \"applies_when\": \"now\"") !=
         std::string::npos);
-  CHECK(text.find("\"key\": \"ts4_renderer\", \"kind\": \"choice\", \"default\": \"classic\", "
+  CHECK(text.find("\"key\": \"ts4_renderer\", \"kind\": \"choice\", \"default\": \"native\", "
                   "\"choices\": [\"classic\", \"native\"], "
                   "\"choice_labels\": [\"Classic\", \"Native\"], \"applies_when\": \"next_start\"") !=
         std::string::npos);

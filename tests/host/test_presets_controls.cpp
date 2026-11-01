@@ -24,8 +24,17 @@ ValueMap Defaults() {
   return values;
 }
 
+// Every setting at the 360 game's own behaviour (presets.h): what Original and Safe start set.
+ValueMap Originals() {
+  ValueMap values;
+  for (const Setting& setting : PlayerSettings()) {
+    values[std::string(setting.key)] = std::string(OriginalValue(setting));
+  }
+  return values;
+}
+
 ValueMap WithValues(std::initializer_list<std::pair<const char*, const char*>> changes) {
-  ValueMap values = Defaults();
+  ValueMap values = Originals();
   for (const auto& [key, value] : changes) values[key] = value;
   return values;
 }
@@ -59,23 +68,34 @@ SettingChange* Find(std::vector<SettingChange>& changes, std::string_view key) {
 
 // ---- Presets (ticket 05) ----
 
-TEST_CASE("All defaults read Original on the Preset row, the first row of Graphics") {
+TEST_CASE("All defaults read Default on the Preset row, the first row of Graphics") {
   SettingsModel model(Context(), {}, Defaults());
   const Row row = model.Rows(Section::kGraphics).front();
   CHECK(row.kind == RowKind::kPreset);
   CHECK(row.label == "Graphics preset");
-  CHECK(row.value == "original");
-  CHECK(row.value_label == "Original");
-  REQUIRE(row.choices.size() == 3);  // Original, Enhanced, Custom
-  CHECK(row.choices[1].label == "Enhanced");
-  CHECK(row.choices[2].label == "Custom");
+  CHECK(row.value == "default");
+  CHECK(row.value_label == "Default");
+  REQUIRE(row.choices.size() == 4);  // Original, Default, Enhanced, Custom
+  CHECK(row.choices[1].label == "Default");
+  CHECK(row.choices[2].label == "Enhanced");
+  CHECK(row.choices[3].label == "Custom");
   CHECK(row.mark == Mark::kNow);
   CHECK(row.help.find("Enhanced: Resolution scale Auto, MSAA 4x, Anisotropic filtering 16x") !=
+        std::string::npos);
+  CHECK(row.help.find("Default: Resolution scale Auto, MSAA Original, Anisotropic filtering 16x") !=
+        std::string::npos);
+}
+
+TEST_CASE("The original values read Original, whatever the defaults are") {
+  SettingsModel model(Context(), {}, Originals());
+  CHECK(model.RowFor(kPresetKey).value == "original");
+  CHECK(model.RowFor(kPresetKey).help.find(
+            "Original: Resolution scale 1x, MSAA Original, Anisotropic filtering Original") !=
         std::string::npos);
 }
 
 TEST_CASE("Choosing Enhanced sets its four settings at once, saved and applied") {
-  SettingsModel model(Context(), {}, Defaults());
+  SettingsModel model(Context(), {}, Originals());
   const auto changes = model.Change(kPresetKey, "enhanced");
   REQUIRE(changes.size() == 3);  // sharpening is off already
   for (const SettingChange& change : changes) {
@@ -90,7 +110,7 @@ TEST_CASE("Choosing Enhanced sets its four settings at once, saved and applied")
 }
 
 TEST_CASE("Changing one covered setting reads Custom; returning to the Preset's values reads it again") {
-  SettingsModel model(Context(), {}, Defaults());
+  SettingsModel model(Context(), {}, Originals());
   model.Change(kPresetKey, "enhanced");
   model.Change("ts4_msaa", "8");
   const Row row = model.RowFor(kPresetKey);
@@ -100,7 +120,7 @@ TEST_CASE("Changing one covered setting reads Custom; returning to the Preset's 
   CHECK(model.RowFor(kPresetKey).value == "enhanced");
   // Back to the original values by hand, without touching the Preset row.
   for (const char* key : {"ts4_resolution_scale", "ts4_msaa", "ts4_anisotropic_filtering"}) {
-    model.Change(key, std::string(FindSetting(key)->default_value));
+    model.Change(key, std::string(OriginalValue(*FindSetting(key))));
   }
   CHECK(model.RowFor(kPresetKey).value == "original");
   // A setting no Preset covers does not matter.
@@ -114,6 +134,8 @@ TEST_CASE("The Preset row steps between Original and Enhanced, never onto Custom
   CHECK(model.Step(kPresetKey, 1).size() == 1);  // Custom steps on to Original: msaa goes back
   CHECK(model.RowFor(kPresetKey).value == "original");
   model.Step(kPresetKey, 1);
+  CHECK(model.RowFor(kPresetKey).value == "default");
+  model.Step(kPresetKey, 1);
   CHECK(model.RowFor(kPresetKey).value == "enhanced");
   model.Step(kPresetKey, 1);
   CHECK(model.RowFor(kPresetKey).value == "original");
@@ -125,16 +147,20 @@ TEST_CASE("The Preset row steps between Original and Enhanced, never onto Custom
 }
 
 TEST_CASE("On Classic, Enhanced's Native-only parts are unavailable and do not make the row Custom") {
-  SettingsModel model(Context(kRendererClassic), {}, Defaults());
+  SettingsModel model(Context(kRendererClassic), {}, Originals());
   CHECK(model.RowFor(kPresetKey).value == "original");
   // Native-only settings at other values do not matter on Classic.
   SettingsModel odd(Context(kRendererClassic), {},
                     WithValues({{"ts4_msaa", "8"}, {"ts4_resolution_scale", "3"}}));
   CHECK(odd.RowFor(kPresetKey).value == "original");
-  // The two filtering settings alone decide.
+  // The two filtering settings alone decide, when no Preset matches every value: Default comes
+  // first of the two that share them.
   SettingsModel enhanced(Context(kRendererClassic), {},
                          WithValues({{"ts4_anisotropic_filtering", "16"}}));
-  CHECK(enhanced.RowFor(kPresetKey).value == "enhanced");
+  CHECK(enhanced.RowFor(kPresetKey).value == "default");
+  // A Preset that matches every value, Native-only ones too, is named even on Classic.
+  SettingsModel defaults(Context(kRendererClassic), {}, Defaults());
+  CHECK(defaults.RowFor(kPresetKey).value == "default");
   CHECK_FALSE(model.RowFor("ts4_msaa").available);
   CHECK(model.RowFor(kPresetKey).note.find("Resolution scale and MSAA need the Native renderer") !=
         std::string::npos);
@@ -149,7 +175,7 @@ TEST_CASE("On Classic, Enhanced's Native-only parts are unavailable and do not m
 TEST_CASE("A Preset row is marked by its settings: Launch option, Safe start") {
   ModelContext pinned = Context();
   pinned.pinned = {"ts4_msaa"};
-  SettingsModel model(pinned, {}, Defaults());
+  SettingsModel model(pinned, {}, Originals());
   CHECK(model.RowFor(kPresetKey).mark == Mark::kLaunchOption);
   for (const SettingChange& change : model.Change(kPresetKey, "enhanced")) {
     CHECK(change.save == (change.key != "ts4_msaa"));
@@ -165,22 +191,22 @@ TEST_CASE("The session report names the Safe start and the Preset") {
   CHECK(SessionSettingsJson(true, ActivePreset(kEnhancedValues, kRendererNative)) ==
         R"("settings": {"safe_start": true, "preset": "enhanced"})");
   CHECK(ActivePreset({{"ts4_sharpening", "high"}}, kRendererNative) == "custom");
-  CHECK(ActivePreset({}, kRendererNative) == "original");
+  CHECK(ActivePreset({}, kRendererNative) == "default");  // a missing key counts as its default
 }
 
 // ---- Safe start (ticket 09) ----
 
-TEST_CASE("Under Safe start every row shows its default, changes are not saved and rows say so") {
+TEST_CASE("Under Safe start every row shows its original value, changes are not saved and rows say so") {
   ModelContext context = ControlsContext();
   context.safe_start = true;
-  // A file full of non-default values; the game ignores it, so the cvars stay at their defaults.
+  // A file full of other values; the game ignores it and sets the cvars to the original values.
   const ValueMap file = {{"ts4_renderer", "native"}, {"ts4_msaa", "8"}, {"ts4_pad_a", "b"},
                          {"ts4_pad_b", "a"},         {"mnk_mode", "true"}, {"keybind_a", "J"}};
-  SettingsModel model(context, file, Defaults());
+  SettingsModel model(context, file, Originals());
   for (Section section : {Section::kGraphics, Section::kControls}) {
     for (const Row& row : model.Rows(section)) {
       if (row.kind != RowKind::kSetting) continue;
-      CHECK(row.value == row.setting->default_value);
+      CHECK(row.value == OriginalValue(*row.setting));
       CHECK(row.mark == Mark::kSafeStart);
       CHECK_FALSE(row.pending);
       CHECK(row.note.rfind("Safe start:", 0) == 0);

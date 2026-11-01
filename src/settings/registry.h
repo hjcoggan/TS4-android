@@ -161,13 +161,13 @@ inline BindingInfo BindingOf(const Setting& setting) {
 inline const std::vector<Setting>& PlayerSettings() {
   static const std::vector<Setting> settings = [] {
     std::vector<Setting> list = {
-      {"ts4_renderer", Setting::Kind::kChoice, kRendererClassic,
+      {"ts4_renderer", Setting::Kind::kChoice, kRendererNative,
        {kRendererClassic, kRendererNative},
-       "Renderer: classic (Xenos GPU emulation, the reference) or native (Vulkan; not built "
-       "yet, so Classic draws until it is). Takes effect at the next start",
+       "Renderer: native (Vulkan, with the image enhancements) or classic (Xenos GPU "
+       "emulation, the reference). Takes effect at the next start",
        Section::kGraphics, "Renderer", 10},
       // Image Enhancements. Native only:
-      {"ts4_resolution_scale", Setting::Kind::kChoice, "1", {"1", "auto", "2", "3"},
+      {"ts4_resolution_scale", Setting::Kind::kChoice, "auto", {"1", "auto", "2", "3"},
        "Resolution scale (Native renderer): draw the game at this multiple of its 1280x720, "
        "filtered down to the window when larger; auto picks the smallest that covers the "
        "16:9 area of the window, and follows it. The GPU's limit may clamp it",
@@ -177,7 +177,7 @@ inline const std::vector<Setting>& PlayerSettings() {
        "samples where the game multisamples, for smoother edges; the GPU's limit may lower it",
        Section::kGraphics, "MSAA", 30, Setting::Renderers::kNativeOnly},
       // On both renderers:
-      {"ts4_anisotropic_filtering", Setting::Kind::kChoice, "original",
+      {"ts4_anisotropic_filtering", Setting::Kind::kChoice, "16",
        {"original", "4", "8", "16"},
        "Anisotropic filtering: original (the game's own texture filtering) or a level forced on "
        "textures seen at an angle (court lines, banners)",
@@ -186,7 +186,7 @@ inline const std::vector<Setting>& PlayerSettings() {
        "Sharpening: off, or CAS (contrast-adaptive sharpening) of the final image at low, "
        "medium or high strength",
        Section::kGraphics, "Sharpening", 50},
-      {"ts4_fix_glitches", Setting::Kind::kBool, "false", {},
+      {"ts4_fix_glitches", Setting::Kind::kBool, "true", {},
        "Fix original glitches: glitches the original game has too, fixed (the white flash "
        "after a loading screen, before the new scene draws). Off keeps the original",
        Section::kGraphics, "Fix original glitches", 60},
