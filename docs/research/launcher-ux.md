@@ -14,7 +14,7 @@ the launcher stays small, and after setup the game exe starts straight into the 
 
 Heads read:
 
-- this repo at `c6f3991` (branch `game-settings`);
+- this repo at `c5b1c00` (branch `game-settings`);
 - WWE All Stars at `D:\Projects\WWE_ALLSTARS-RECOMP` (`387e216`), written `WWE:`, whose launcher
   ours was copied from (ADR-0004);
 - upstream repos at the commits under Sources, cited with a prefix: `UR:` Unleashed Recompiled,
@@ -712,7 +712,7 @@ setup the Launcher draws its own gradient and wordmark. What changed:
 
 ## Sources
 
-- **This repo (`c6f3991`):**
+- **This repo (`c5b1c00`):**
   - `launcher/src/Launcher.App/MainWindow.axaml`, `MainWindow.axaml.cs`, `Theme.axaml`,
     `Program.cs`, `Platform/XInputPad.cs`, `Launcher.App.csproj`;
   - `launcher/src/Launcher.Core/SetupFlow.cs`, `SetupTypes.cs`, `DiscSetup.cs`,

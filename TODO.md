@@ -1,7 +1,7 @@
 # TODO
 
 Open work, one line each. The old `.scratch/` tickets these came from are in git history:
-`git show 5fbcf6f:.scratch/<feature>/issues/<file>.md`. Some statuses there were stale, so check
+`git show 9d16e91:.scratch/<feature>/issues/<file>.md`. Some statuses there were stale, so check
 before starting.
 
 ## Next

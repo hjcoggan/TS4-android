@@ -9,7 +9,7 @@ was not run.
 
 Heads read:
 
-- this repo at `3fd7796`;
+- this repo at `1fafff6`;
 - the vendored ReXGlue `.tools/rexglue-source` (`f5337cd` plus `patches/rexglue/`), written
   `SDK:` below;
 - WWE All Stars at `D:\Projects\WWE_ALLSTARS-RECOMP` (`387e216`), written `WWE:`, whose

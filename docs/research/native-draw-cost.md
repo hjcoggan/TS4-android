@@ -50,7 +50,7 @@ panel (independent flip only), judged on 60 Hz gameplay stretches (30 fps cutawa
 |---|---|
 | Start of the day | 11 % |
 | Present hold (patches 0042, 0043) | 4.2-4.8 % |
-| + depth staging reuse, fast clears (77f7636, 9adb021) | 3.8-4.5 % |
+| + depth staging reuse, fast clears (d370944, bbba5b9) | 3.8-4.5 % |
 | Same build, 4x + 4x MSAA / 3x + 8x MSAA | 2.1 % / 0.3 % |
 
 83 of the remaining 95 off-step changes follow a frame needing more than ~11.5 ms of GPU time.
@@ -78,7 +78,7 @@ Tried and reverted, with the measurement that ruled each out:
 
 ## Final state: 3x cap, and overlays
 
-The owner capped Resolution scale at 3x (2e59ab8; bringing 4x back is
+The owner capped Resolution scale at 3x (8c43471; bringing 4x back is
 `.scratch/image-quality/issues/14-resolution-scale-4x-without-stutter.md`). Match play at 3x + 8x
 MSAA, judged from 60 s over ~90 s per run:
 

@@ -7,7 +7,7 @@ was changed and the game was not run.
 
 Heads read:
 
-- this repo at `6046ee7`;
+- this repo at `b0d9853`;
 - Xenia Edge `edge` at [`82a9462`](https://github.com/has207/xenia-edge/tree/82a946231b2356901afe9e94c7ceacfffc936193)
   (2026-10-25; the Oracle binary is the older `4d07204`, oracle-baseline.md);
 - UnleashedRecomp `main` at [`cf829a9`](https://github.com/hedge-dev/UnleashedRecomp/tree/cf829a9eca8fb680fba4b0409ddeb6ca92f22e3c);

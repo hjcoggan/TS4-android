@@ -234,7 +234,7 @@ Captures of Exhibition frame 3600 on Native at 1x and at `--ts4_resolution_scale
 
 ## Tunnel glare and court-line shimmer (2026-10-31, confirmed in-game 2026-11-01 on rc4)
 
-- **Tunnel walk-out glare (`890feda`).** Swing's bloom bright pass draws a depth-tested
+- **Tunnel walk-out glare (`17b411a`).** Swing's bloom bright pass draws a depth-tested
   full-screen quad at 640x360 with its depth at EDRAM tile 0xB8, inside the scene's 1280x720
   depth. On Xenos drawing the scene overwrites that buffer, so the quad passes against freshly
   cleared depth. Native kept it as its own image holding depth from earlier shots: in some
@@ -242,7 +242,7 @@ Captures of Exhibition frame 3600 on Native at 1x and at `--ts4_resolution_scale
   a white-blue glare over the tunnel. A pass now starts such a depth buffer cleared to far when a
   depth buffer covering its tiles was drawn since (`DepthEdramRange`, `EdramRange::Covers`).
   Checked with dual-renderer frames against Classic.
-- **Baseline shimmer at 3x (`089acf3`).** Swing's additive court sheen (pixel shader
+- **Baseline shimmer at 3x (`56344b6`).** Swing's additive court sheen (pixel shader
   `faaa1d008788ebd6`, a 10-index quad, depth test less-or-equal) ties in depth with the
   court-line decals under it. Which one won changed with the camera's sway, so the baseline near
   P1 pulsed by up to 6 levels. The sheen's viewport depth range is nudged 2^-20 towards the

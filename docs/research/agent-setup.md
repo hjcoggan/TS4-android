@@ -5,7 +5,7 @@ subagents (an implementer on Sonnet, a QA reviewer on Opus 5.5 at high effort or
 more), and if so, which ones. This note recommends a roster and gives draft agent files. It
 creates no agent files and changes no settings. Nothing was built or run.
 
-Read: this repo at `6046ee7` (plus the uncommitted image-quality work), the user-level skills in
+Read: this repo at `b0d9853` (plus the uncommitted image-quality work), the user-level skills in
 `C:\Users\Martin\.claude\skills\`, the user settings, and the Claude Code docs as published on
 the date above (Claude Code 2.1.311 is installed). **[inferred]** marks my own reasoning.
 **[unverified]** marks a claim I could not check. Every other claim has a URL or a `file:line`.
