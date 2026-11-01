@@ -60,6 +60,16 @@ if ($Action -in 'Launcher', 'LauncherTest') {
             Copy-Item -LiteralPath "$projectRoot/out/launcher/publish-app/topspin4-launcher.exe" "$buildFolder/topspin4-launcher.exe" -Force
             Copy-Item -LiteralPath "$projectRoot/README.md" "$buildFolder/README.md" -Force
             Write-Output "Launcher placed beside the game: $buildFolder/topspin4-launcher.exe"
+            # And the shader converter, where a release has it (xenosrecomp\), or the Launcher's shader
+            # step fails and Play falls back to Classic.
+            . "$PSScriptRoot/ConverterFiles.ps1"
+            $missing = Copy-ConverterFiles $projectRoot $buildFolder
+            if ($missing) {
+                Write-Warning ("The shader converter is not built, so the Launcher here cannot prepare shaders. " +
+                    "Run scripts/build-xenosrecomp.ps1, then build again. Missing: $($missing -join ', ')")
+            } else {
+                Write-Output "Shader converter placed beside the game: $buildFolder/xenosrecomp"
+            }
         }
     } else {
         try {

@@ -18,7 +18,6 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $version = ([xml](Get-Content -Raw "$projectRoot/launcher/Directory.Build.props")).Project.PropertyGroup.Version | Select-Object -First 1
 $name = "TopSpin4Recomp-$version" + ($(if ($Label) { "-$Label" } else { '' }))
 $build = "$projectRoot/out/build/win-amd64-$($Configuration.ToLowerInvariant())"
-$xenosrecomp = "$projectRoot/out/build/xenosrecomp/XenosRecomp"
 $tools = "$projectRoot/.tools"
 $release = "$projectRoot/out/release"
 $folder = "$release/$name"
@@ -26,12 +25,8 @@ $folder = "$release/$name"
 # What goes in: game folder files from the build, then the converter and the licences.
 $gameFiles = @('topspin4.exe', 'topspin4-launcher.exe', 'pipeline-keys.txt', 'README.md') +
     @(Get-ChildItem -LiteralPath $build -Filter '*.dll' | ForEach-Object Name)
-$converterFiles = @{
-    'XenosRecomp.exe' = "$xenosrecomp/XenosRecomp.exe"
-    'dxcompiler.dll'  = "$xenosrecomp/dxcompiler.dll"
-    'fmt.dll'         = "$xenosrecomp/fmt.dll"
-    'shader_common.h' = "$tools/xenosrecomp/XenosRecomp/shader_common.h"
-}
+. "$PSScriptRoot/ConverterFiles.ps1"
+$converterFiles = Get-ConverterFiles $projectRoot
 $licences = @{
     'ReXGlue-LICENSE.txt'     = "$tools/rexglue-source/LICENSE"
     'XenosRecomp-LICENSE.md'  = "$tools/xenosrecomp/LICENSE.md"
