@@ -173,3 +173,19 @@ the setting on held back the same four instances (the shared list `b1e80600`, th
 Not yet seen on screen: a replay at 60, and the face player's skipped call (once per clip
 loop, a frame where the call does not run; if that call also submits the face's morph each
 frame, that one frame could show the face unmorphed).
+
+## Hair: skip the extra step, not the second run
+
+The owner saw the hair stretch off the head (the headband not matching it) in cutaways at 60.
+The once-per-frame rule kept each instance's first run in a frame. In mode 1 the main
+scheduler (entry ids, in order: ..., `a6d281f9` the extra step, `75e2d0fd` the bone palette
+composer `888008c0`, ..., `19aebef6` the normal pass, ...) runs the cutaway logic first in the
+extra step, then composes the palette, then runs the logic again in the normal pass, which
+starts with services the extra step lacks (`4638b539`, `416ec92d`). Keeping the first run moved
+the logic ahead of the palette and those services, so the hair was drawn a step off the pose.
+
+The hook now skips the extra step's scheduler (`886117e8`) whole: its entries (`7e3baa14`,
+`4583a710`, `d40a9431`, `bbf63e79`, `6d4f45ae`) all run elsewhere in the frame, so each
+service runs once, in the normal pass's order. It is found by those ids, which are name hashes
+in the scheduler data. Quiet intro: 61.30 s (-1.4 %); three consecutive frames of the tunnel
+close-up show the headband and hair on the head.
