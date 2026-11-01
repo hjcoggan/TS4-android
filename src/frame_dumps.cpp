@@ -124,7 +124,9 @@ bool ParseRanges(const std::string& text, std::vector<std::pair<uint32_t, uint32
     if (dash == std::string::npos) return false;
     char* end = nullptr;
     const unsigned long long start = std::strtoull(item.c_str(), &end, 16);
+    if (end != item.c_str() + dash || dash == 0) return false;
     const unsigned long long stop = std::strtoull(item.c_str() + dash + 1, &end, 16);
+    if (end != item.c_str() + item.size() || end == item.c_str() + dash + 1) return false;
     if (stop <= start || stop > 0x100000000ull) return false;
     ranges.emplace_back(uint32_t(start), uint32_t(stop - 1));  // inclusive end, so 4 GiB fits
     at = comma + 1;
