@@ -53,9 +53,9 @@ press B
 [[capture]]  # main menu, PC SETTINGS highlighted, EXIT TO DESKTOP under it
 frame = 1720
 label = "main menu rows"
-[[capture]]  # the Settings page over the menu
+[[capture]]  # the menu while the Settings page is open (frame dumps do not show the page)
 frame = 1900
-label = "settings page"
+label = "page open"
 [[capture]]  # the main menu back after the page closed (GAME MODES highlighted)
 frame = 2300
 label = "menu again"
