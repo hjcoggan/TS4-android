@@ -1,12 +1,12 @@
 // 60 fps cutaways' rules (cutaway_rate.h): what a frame's present interval and world step become,
-// which scheduler runs a frame keeps, and when the face player holds its frame.
+// which scheduler is skipped, and when the face player holds its frame.
 // Apart from the sink, so the host tests can include it.
 
 #pragma once
 
 #include <algorithm>
 #include <cstdint>
-#include <vector>
+#include <iterator>
 
 namespace topspin4::cutaway_rate {
 
@@ -30,26 +30,20 @@ inline uint32_t StepBits(uint32_t step_bits, uint32_t mode, bool sixty) {
                                                                      : step_bits;
 }
 
-// In a cutaway the game reaches its cutaway services twice per frame (a scheduler list with two
-// parents), so the cutaway logic steps at 60 Hz while mode 1 presents at 30. At 60 each
-// scheduler or list runs once per game frame: the first run of an instance in a frame is
-// admitted, a second one is not. A new frame number starts a new frame.
-class OncePerFrame {
- public:
-  bool Admit(uint32_t frame, uint32_t instance) {
-    if (frame != frame_) {
-      frame_ = frame;
-      ran_.clear();
-    }
-    if (std::find(ran_.begin(), ran_.end(), instance) != ran_.end()) return false;
-    ran_.push_back(instance);
-    return true;
-  }
+// In a cutaway the game steps its cutaway logic twice per frame, so it runs at 60 Hz while mode 1
+// presents at 30: a mode-1 scheduler, the extra step, runs the cutaway services a second time
+// early in the frame, before the bone palette is composed; the normal pass runs them again late
+// in the frame, after the services that read the pose. At 60 the extra step is skipped, so each
+// service runs once and in the normal pass's order. (Keeping the extra step instead drew the
+// hair one step off the head.) The extra step is known by its entries' ids (name hashes in the
+// game's scheduler data, the same every run).
+inline constexpr uint32_t kExtraStepIds[] = {0x7e3baa14, 0x4583a710, 0xd40a9431, 0xbbf63e79,
+                                             0x6d4f45ae};
+inline constexpr size_t kExtraStepEntries = std::size(kExtraStepIds);
 
- private:
-  uint32_t frame_ = ~0u;
-  std::vector<uint32_t> ran_;
-};
+inline bool IsExtraStep(const uint32_t* ids, size_t count) {
+  return count == kExtraStepEntries && std::equal(ids, ids + count, kExtraStepIds);
+}
 
 // The face player steps its clip one frame per game frame, which is 30 Hz in a cutaway at 30.
 // At 60 it holds on odd game frames: the hook winds each playing slot's frame back by one

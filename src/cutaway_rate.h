@@ -7,9 +7,10 @@
 //             to 881e5de8 once per rendered frame
 // In mode 1 the game reaches its cutaway services (the cutscene and animation managers among
 // them) through a scheduler list with two parents, so the cutaway logic steps at 60 Hz and
-// every other step is presented. With the setting on, mode 1 presents at interval 1, each
-// scheduler (886117e8) and list (88611d90) runs once per game frame, the world steps by 1/60,
-// and the face player (8817c608), which steps once per presented frame, holds on odd frames.
+// every other step is presented. With the setting on, mode 1 presents at interval 1, the extra
+// step's scheduler (886117e8) is skipped so that logic runs once a frame, the world steps by
+// 1/60, and the face player (8817c608), which steps once per presented frame, holds on odd
+// frames.
 // The cutaways then run at 60 at their original speed (the intro: 61.5 s against 62.2 s).
 //
 // The hooks are built into the Swing Module's DLL (cutaway_rate_hooks.cpp); they reach the exe

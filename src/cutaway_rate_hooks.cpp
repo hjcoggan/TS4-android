@@ -2,8 +2,8 @@
 //   88739a40  the frame's render setup (r3 the render state, mode at +0x218): after it, the
 //             present interval at device+0x35f0 becomes 1 for a cutaway at 60
 //   881e5de8  the world step (f1 dt): the cutaway's 0.03333 becomes 0.01666 at 60
-//   886117e8  a scheduler, and 88611d90 a service list (r3 the instance): at 60 each runs once
-//             per game frame, so the cutaway logic the game reaches twice a frame steps at 60 Hz
+//   886117e8  a scheduler (r3 the instance): at 60 the cutaway's extra step is skipped, so the
+//             cutaway logic the game steps twice a frame steps at 60 Hz
 //   8817c608  the face player: at 60 it holds on odd game frames, so faces keep their 30 Hz
 
 #include <algorithm>
@@ -12,8 +12,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <mutex>
-#include <vector>
 
 #include <rex/hook.h>
 
@@ -22,7 +20,6 @@
 DECLARE_REX_FUNC(sub_88739A40);
 DECLARE_REX_FUNC(sub_881E5DE8);
 DECLARE_REX_FUNC(sub_886117E8);
-DECLARE_REX_FUNC(sub_88611D90);
 DECLARE_REX_FUNC(sub_8817C608);
 
 namespace {
@@ -94,26 +91,20 @@ std::atomic<bool> g_step_logged{false};
 std::atomic<bool> g_face_logged{false};
 std::atomic<bool> g_in_cutaway{false};
 
-std::mutex g_once_mutex;
-cutaway_rate::OncePerFrame g_once;      // guarded by g_once_mutex
-std::vector<uint32_t> g_logged_repeats;  // guarded by g_once_mutex
+std::atomic<bool> g_extra_logged{false};
 
-// Whether a scheduler or list instance runs now: false for its second run in a game frame of a
-// cutaway at 60. Each instance it holds back is logged once, so a run shows the route.
-bool Runs(const uint8_t* base, uint32_t instance) {
-  uint32_t frame;
-  if (!SixtyCutaway(base, frame)) return true;
-  std::lock_guard lock(g_once_mutex);
-  if (g_once.Admit(frame, instance)) return true;
-  if (std::find(g_logged_repeats.begin(), g_logged_repeats.end(), instance) ==
-      g_logged_repeats.end()) {
-    g_logged_repeats.push_back(instance);
-    char line[96];
-    std::snprintf(line, sizeof(line), "cutaways at 60: scheduler %08x runs once per frame",
-                  instance);
-    Log(line);
-  }
-  return false;
+// Whether a scheduler instance is the extra step (cutaway_rate_rules.h): its config's first
+// entry list (*(instance+0x24): entries of 0x40 bytes at config+*config, count at config+4,
+// each entry's id at +0) holds the extra step's ids.
+bool IsExtraStep(const uint8_t* base, uint32_t instance) {
+  const uint32_t config = Load32(base, instance + 0x24);
+  if (!config) return false;
+  const uint32_t count = Load32(base, config + 4);
+  if (count != cutaway_rate::kExtraStepEntries) return false;
+  const uint32_t entries = config + Load32(base, config);
+  uint32_t ids[cutaway_rate::kExtraStepEntries];
+  for (uint32_t i = 0; i < count; ++i) ids[i] = Load32(base, entries + i * 0x40);
+  return cutaway_rate::IsExtraStep(ids, count);
 }
 
 }  // namespace
@@ -151,11 +142,12 @@ REX_HOOK_RAW(sub_881E5DE8) {
 }
 
 REX_HOOK_RAW(sub_886117E8) {
-  if (Runs(base, ctx.r3.u32)) __imp__sub_886117E8(ctx, base);
-}
-
-REX_HOOK_RAW(sub_88611D90) {
-  if (Runs(base, ctx.r3.u32)) __imp__sub_88611D90(ctx, base);
+  uint32_t frame;
+  if (SixtyCutaway(base, frame) && IsExtraStep(base, ctx.r3.u32)) {
+    LogOnce(g_extra_logged, "cutaways at 60: extra step skipped");
+    return;
+  }
+  __imp__sub_886117E8(ctx, base);
 }
 
 REX_HOOK_RAW(sub_8817C608) {

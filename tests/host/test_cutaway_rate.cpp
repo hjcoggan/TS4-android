@@ -33,21 +33,19 @@ TEST_CASE("on leaves 60 fps scenes and other steps alone") {
   CHECK(StepBits(other, kCutawayMode, true) == other);
 }
 
-TEST_CASE("once per frame admits an instance's first run in a frame only") {
-  OncePerFrame once;
-  CHECK(once.Admit(10, 0xb1e80600));
-  CHECK(once.Admit(10, 0xb1e7fd80));
-  CHECK_FALSE(once.Admit(10, 0xb1e80600));
-  CHECK_FALSE(once.Admit(10, 0xb1e7fd80));
+TEST_CASE("the extra step is the mode-1 scheduler with its five entries") {
+  const uint32_t extra[] = {0x7e3baa14, 0x4583a710, 0xd40a9431, 0xbbf63e79, 0x6d4f45ae};
+  CHECK(IsExtraStep(extra, 5));
+  CHECK_FALSE(IsExtraStep(extra, 4));
 }
 
-TEST_CASE("once per frame starts over on a new frame number") {
-  OncePerFrame once;
-  CHECK(once.Admit(10, 0xb1e80600));
-  CHECK(once.Admit(11, 0xb1e80600));
-  CHECK_FALSE(once.Admit(11, 0xb1e80600));
-  // The game frame keeps stepping while swaps stop (the match load): any change is a new frame.
-  CHECK(once.Admit(9, 0xb1e80600));
+TEST_CASE("the normal cutaway pass and the gameplay pass are not the extra step") {
+  // The normal pass shares the cutaway list (6d4f45ae) and scheduler d40a9431.
+  const uint32_t normal[] = {0x4638b539, 0x416ec92d, 0xd40a9431, 0xbbf63e79, 0x6d4f45ae};
+  CHECK_FALSE(IsExtraStep(normal, 5));
+  const uint32_t gameplay[] = {0x6d4f45ae, 0x4638b539, 0x416ec92d, 0xd40a9431, 0xf479519a,
+                               0x201756fe};
+  CHECK_FALSE(IsExtraStep(gameplay, 6));
 }
 
 TEST_CASE("the face player runs every frame unless it is a cutaway at 60") {
