@@ -25,7 +25,7 @@ Title Update 1 is a content package your console stored when it downloaded the u
 
 ### Changing settings
 
-Every setting is in the Launcher's **Settings**, one tab per section, so you can set the game up before you play. You can also change every setting in the game, while playing, on its own Settings page:
+Every setting is in the Launcher's **Settings**, one tab per section, so you can set the game up before you play. You can also change them in the game, while playing, on its own Settings page (all but the gamertag):
 
 - In the game's main menu, choose **PC SETTINGS**.
 - On a keyboard, press **F4**.
@@ -36,6 +36,8 @@ To quit, choose **EXIT TO DESKTOP** in the main menu, or close the window.
 A fresh install starts on the **Default** Graphics preset: the Native renderer, Resolution scale Auto, 16x anisotropic filtering, and the original game's loading-screen flash fixed. **Original** sets the image settings back to the Xbox 360 game's own look, and **Enhanced** adds 4x MSAA. **60 fps cutscenes** (off by default) plays the match intro, replays and changeovers at 60 fps instead of 30, at their original speed.
 
 In either Settings page, press A (or Enter) on a row to change it. To remap a key or button, press A on its row, then the key or button to use; Esc or B cancels. Changes are saved at once to the Settings file in the game folder (`userdata`), so the Launcher and the game show the same values.
+
+Your **gamertag**, the name the game shows for your profile, is on the Launcher's **Profile** tab: type it and press Enter. It can have up to 15 letters, digits and spaces, starts with a letter, and shows from the next start. Your saves stay where they are.
 
 ### Achievements
 

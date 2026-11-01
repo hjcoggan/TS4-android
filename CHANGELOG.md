@@ -12,6 +12,7 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 - The game's main menu has two new rows: **PC SETTINGS** opens the Settings page, and **EXIT TO DESKTOP** quits the game as closing its window does.
 - A **60 fps cutscenes** setting (Graphics, off by default) runs the match intro, close-ups between points, replays and changeovers at 60 fps instead of 30, at their original speed.
 - A **Default** Graphics preset, beside Original and Enhanced: the settings a fresh install starts on.
+- A **Gamertag** setting on the Launcher's new Profile tab: the name the game shows for your profile instead of "User". Saves stay in the same folder whatever the name.
 
 ### Changed
 
@@ -21,3 +22,7 @@ All notable changes to this project are recorded here, in the [Keep a Changelog]
 - The Windows cursor is hidden over the game; it shows while the mouse moves and hides again when it rests.
 
 - The art folder's achievement list keeps each achievement's ID and its "how to earn it" text. An art folder written by an earlier Launcher is read again from the prepared disc on the next start.
+
+### Fixed
+
+- The Launcher's **Help** opens the README in Notepad when Windows has no app for `.md` files, instead of failing.
