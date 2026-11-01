@@ -122,11 +122,11 @@ class TopSpin4App : public rex::ReXApp {
     // The SDK's default is no GPU plugin, which draws nothing. The developer scripts pass
     // --gpu_plugin=xenos; a player starting the exe or the Launcher passes nothing.
     SetUnlessSetElsewhere("gpu_plugin", "xenos");
-    // Top Spin 4 presents its cutaways at 30 fps. Repeating the held frame on each guest vblank
-    // between them made the 360 Hz variable-refresh panel show 10 ms / 28 ms pairs through
-    // every cutaway; skipping that present showed an even 33 ms, with play unchanged (PresentMon,
-    // ticket 16). So off here, unless the command line, environment or config set it.
-    SetUnlessSetElsewhere("present_repeat_held_vblanks", "false");
+    // Top Spin 4 presents its cutaways at 30 fps. On a variable-refresh display the SDK's default
+    // repeats each picture on the guest vblank between, so the display keeps a 60 Hz cadence as
+    // on the 360 and in Xenia Edge. Repeats once went out at the plain present offset, not the
+    // present hold's point, and showed 10 ms / 28 ms pairs (ticket 16), so they were off here;
+    // they are now held like a new frame (patch 0045).
     // There is no Xbox LIVE to sign in to. Where the game still opens the sign-in UI (its LIVE
     // prompt in another language, src/online_unavailable.h), the SDK's stub broadcast a sign-in
     // change that never happened, too early for the game's listener, and the menu waited

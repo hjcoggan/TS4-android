@@ -1,0 +1,56 @@
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index 2452131..35f7c31 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -1120,6 +1120,7 @@ class Presenter {
+   long long present_hold_last_done_us_ = -1;  // this present's completion after its vblank
+   long long present_hold_offset_us_ = 0;      // the present offset and period it was held with
+   long long present_hold_period_us_ = 0;
++  bool present_hold_repeat_ = false;  // the held present repeats the last frame
+   // steady_clock ticks when the pending frame was submitted, for the pacing log.
+   std::atomic<int64_t> guest_output_paced_frame_arrival_{0};
+   std::atomic<uint32_t> guest_output_paced_frames_replaced_{0};
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index cc327db..9e435a1 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -857,10 +857,30 @@ void Presenter::GuestOutputPacingThread() {
+       if (vblank_present == pacing::VblankPresent::kRepeat) {
+         // The last frame again, at the moment a new one would have been presented. Not a row in
+         // the swap log: its rows stay one per guest frame.
++        // With the present hold, that moment is the hold point, as for a new frame: presented at
++        // the plain offset instead, a 30 fps picture was shown for uneven halves of its 33 ms.
++        // The repeat's quick paint does not move the hold.
+         if (waiter) {
+           waiter->WaitForShown(0, period);
+         }
++        const bool hold = display_every == 0 && REXCVAR_GET(present_hold);
++        if (hold) {
++          const Clock::time_point frame_vblank = target - offset;
++          std::lock_guard hold_lock(present_hold_mutex_);
++          present_hold_offset_us_ = us(offset);
++          present_hold_period_us_ = us(period);
++          present_hold_vblank_ = frame_vblank;
++          present_hold_until_ =
++              frame_vblank + std::chrono::microseconds(present_hold_.HoldUs(
++                                 present_hold_offset_us_, present_hold_period_us_));
++          present_hold_repeat_ = true;
++        }
+         PresentLatestGuestOutput();
++        if (hold) {
++          std::lock_guard hold_lock(present_hold_mutex_);
++          present_hold_until_ = {};
++          present_hold_repeat_ = false;
++        }
+         ++repeat_presents;
+       }
+       continue;
+@@ -1004,7 +1024,7 @@ bool Presenter::HeldPresent(std::chrono::steady_clock::time_point& until) const
+ 
+ void Presenter::PresentHoldCompleted(std::chrono::steady_clock::time_point done) {
+   std::lock_guard lock(present_hold_mutex_);
+-  if (present_hold_until_ == std::chrono::steady_clock::time_point{}) {
++  if (present_hold_until_ == std::chrono::steady_clock::time_point{} || present_hold_repeat_) {
+     return;
+   }
+   present_hold_last_done_us_ =
