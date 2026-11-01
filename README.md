@@ -37,7 +37,7 @@ In either Settings page, press A (or Enter) on a row to change it. To remap a ke
 
 The Launcher's **Achievements** page lists every achievement on your disc. The ones you have earned come first, newest first, with the date you earned them; locked ones are greyed out with a padlock and say how to earn them. When you earn one in the game, an "Achievement unlocked" notice slides in at the bottom of the screen. Your unlocks are saved in the game folder (`userdata\achievements`).
 
-The notice is silent unless you add a sound: put a `.wav` file named `achievement.wav` in the `userdata` folder and it plays with each notice. The port ships no sound of its own for this.
+Each notice plays an unlock sound. To use a sound of your own, put a `.wav` file named `achievement.wav` in the `userdata` folder.
 
 ### Renderer
 
