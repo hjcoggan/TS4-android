@@ -11,6 +11,8 @@
 #include <rex/runtime.h>
 #include <rex/system/guest_swaps.h>
 #include <rex/system/host_gpu_loss.h>
+#include <rex/system/kernel_state.h>
+#include <rex/system/xam/user_profile.h>
 #include <rex/ui/keybinds.h>
 #include <rex/ui/vulkan/provider.h>
 #include <rex/ui/window.h>
@@ -30,6 +32,7 @@
 #include "remapped_input.h"
 #include "script_input.h"
 #include "settings/config_file.h"
+#include "settings/registry.h"
 #include "settings/renderer_choice.h"
 #include "settings/schema.h"
 #include "settings/session.h"
@@ -42,6 +45,7 @@ REXCVAR_DECLARE(std::string, cache_root);
 REXCVAR_DECLARE(std::string, ts4_renderer);
 REXCVAR_DECLARE(std::string, ts4_input_script);
 REXCVAR_DECLARE(bool, safe);
+REXCVAR_DECLARE(std::string, ts4_gamertag);
 
 class TopSpin4App : public rex::ReXApp {
  public:
@@ -264,6 +268,15 @@ class TopSpin4App : public rex::ReXApp {
   void OnPreLaunchModule() override {
     if (topspin4::module_shaders::Requested()) {
       topspin4::module_shaders::WriteAndExit(*runtime());
+    }
+    // The player's gamertag, before the game first asks for it. A value the settings file
+    // check would refuse (a command-line one) keeps the profile's own.
+    const std::string& gamertag = REXCVAR_GET(ts4_gamertag);
+    if (topspin4::settings::IsGamertag(gamertag)) {
+      runtime()->kernel_state()->user_profile()->set_name(gamertag);
+    } else {
+      REXLOG_WARN("ts4_gamertag \"{}\" is not a gamertag (1-15 letters, digits and spaces); "
+                  "keeping \"{}\"", gamertag, runtime()->kernel_state()->user_profile()->name());
     }
     // A relaunch (back to the title screen) hands the game the launch data it left, and shows
     // this copy's window once the game draws (relaunch.h).

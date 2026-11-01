@@ -40,6 +40,7 @@ public sealed record SettingDescription(
     /// <summary>Whether the game would accept the value (Setting::Allows in src/settings/registry.h).</summary>
     public bool Allows(string value) => Kind switch
     {
+        _ when Key == SettingsSchema.GamertagKey => SettingsSchema.IsGamertag(value),
         "bool" => value is "true" or "false",
         "text" => value.IndexOfAny(['"', '\\', '\r', '\n']) < 0,
         _ => Choices.Contains(value),
@@ -64,6 +65,17 @@ public sealed class SettingsSchema
 
     /// <summary>The renderer setting's key, whose value says which renderer the game will draw with.</summary>
     public const string RendererKey = "ts4_renderer";
+
+    /// <summary>The gamertag setting (the game's <c>kGamertagKey</c>), edited in a text box.</summary>
+    public const string GamertagKey = "ts4_gamertag";
+
+    /// <summary>
+    /// Whether the text is a gamertag the game takes (IsGamertag in src/settings/registry.h): 1 to 15
+    /// ASCII letters, digits and spaces, starting with a letter, with no trailing space.
+    /// </summary>
+    public static bool IsGamertag(string value) =>
+        value.Length is >= 1 and <= 15 && char.IsAsciiLetter(value[0]) && value[^1] != ' '
+        && value.All(c => char.IsAsciiLetterOrDigit(c) || c == ' ');
 
     public IReadOnlyList<SettingDescription> Settings { get; }
 

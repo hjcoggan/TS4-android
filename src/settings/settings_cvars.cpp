@@ -69,3 +69,10 @@ TS4_PAD_BINDING(up);
 TS4_PAD_BINDING(down);
 TS4_PAD_BINDING(left);
 TS4_PAD_BINDING(right);
+
+// The profile's gamertag (registry.h, IsGamertag): set on the profile before the game starts
+// (topspin4_app.h, OnPreLaunchModule). Display only; the saves' folder does not follow it.
+REXCVAR_DEFINE_STRING(ts4_gamertag, "User", "TopSpin4",
+                      "Gamertag: the name the game shows for the profile (1-15 letters, digits "
+                      "and spaces)")
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);

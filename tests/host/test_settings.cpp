@@ -54,6 +54,19 @@ struct Loaded {
 
 }  // namespace
 
+TEST_CASE("A gamertag is 1 to 15 ASCII letters, digits and spaces, starting with a letter") {
+  const Setting* gamertag = FindSetting(kGamertagKey);
+  REQUIRE(gamertag != nullptr);
+  CHECK(gamertag->Allows(gamertag->default_value));
+  for (std::string_view good : {"User", "Ace Server 9", "A", "Abcdefghijklmno"}) {
+    CHECK(gamertag->Allows(good));
+  }
+  for (std::string_view bad : {"", "9Lives", " Lead", "Trailing ", "Abcdefghijklmnop", "Tab\tName",
+                               "Quote\"", "\xC5\xBD" "ofie"}) {
+    CHECK_FALSE(gamertag->Allows(bad));
+  }
+}
+
 TEST_CASE("Saving a setting replaces its line and keeps every other line") {
   CHECK(SetTomlKey("# mine\nts4_renderer = \"classic\"\nother = 1\n", "ts4_renderer",
                    "\"native\"") == "# mine\nts4_renderer = \"native\"\nother = 1\n");
@@ -613,7 +626,7 @@ TEST_CASE("The export says which settings are bindings, for which device and for
   }
   CHECK(pads == 16);
   CHECK(keys == 24);
-  CHECK(others == 9);
+  CHECK(others == 10);
   for (const Json& row : root.at("settings").items) {
     if (row.at("key").text == "ts4_pad_ls") CHECK(row.at("binding").at("action").text == "LS click");
     if (row.at("key").text == "keybind_lstick_up") {

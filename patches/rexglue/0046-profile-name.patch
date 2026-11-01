@@ -1,0 +1,34 @@
+diff --git a/include/rex/system/xam/user_profile.h b/include/rex/system/xam/user_profile.h
+index ec37017..8b01eea 100644
+--- a/include/rex/system/xam/user_profile.h
++++ b/include/rex/system/xam/user_profile.h
+@@ -218,6 +218,9 @@ class UserProfile {
+ 
+   uint64_t xuid() const { return xuid_; }
+   std::string name() const { return name_; }
++  // The gamertag the title sees. Display only: the profile's content folder is fixed
++  // (ContentManager::ResolveGameUserContentPath), so a new name keeps the saves.
++  void set_name(std::string name) { name_ = std::move(name); }
+   uint32_t signin_state() const { return 1; }
+   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
+ 
+diff --git a/src/system/xam/content_manager.cpp b/src/system/xam/content_manager.cpp
+index bd6c797..20d32c9 100644
+--- a/src/system/xam/content_manager.cpp
++++ b/src/system/xam/content_manager.cpp
+@@ -442,11 +442,10 @@ X_RESULT ContentManager::UnmountAndDeleteContent(uint64_t xuid,
+ 
+ std::filesystem::path ContentManager::ResolveGameUserContentPath() {
+   auto title_id = fmt::format("{:08X}", kernel_state_->title_id());
+-  auto user_name = rex::to_path(kernel_state_->user_profile()->name());
+-
+-  // Per-game per-profile data location:
+-  // content_root/title_id/profile/user_name
+-  return root_path_ / title_id / kGameUserContentDirName / user_name;
++  // Per-game per-profile data location: content_root/title_id/profile/User. The folder is
++  // fixed, not the profile's name, so changing the gamertag (UserProfile::set_name) keeps the
++  // saves and a name is never a path.
++  return root_path_ / title_id / kGameUserContentDirName / "User";
+ }
+ 
+ std::unordered_map<string::string_key_case, ContentPackage*,

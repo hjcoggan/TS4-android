@@ -19,15 +19,32 @@ inline constexpr std::string_view kRendererClassic = "classic";
 inline constexpr std::string_view kRendererNative = "native";
 
 // The settings page's sections, in the order they are shown.
-enum class Section { kGraphics, kControls };
-inline constexpr Section kSections[] = {Section::kGraphics, Section::kControls};
+// Profile holds text the in-game page cannot type, so only the Launcher shows it (settings_page.cpp
+// lists the in-game page's sections).
+enum class Section { kGraphics, kControls, kProfile };
+inline constexpr Section kSections[] = {Section::kGraphics, Section::kControls, Section::kProfile};
 
 inline constexpr std::string_view SectionName(Section section) {
   switch (section) {
     case Section::kGraphics: return "Graphics";
     case Section::kControls: return "Controls";
+    case Section::kProfile: return "Profile";
   }
   return "";
+}
+
+// The gamertag the game shows for the signed-in profile (ts4_gamertag). As the Xbox allowed:
+// 1 to 15 ASCII letters, digits and spaces, starting with a letter, with no trailing space. The
+// Launcher checks the same (SettingDescription.Allows in launcher/src/Launcher.Core/SettingsSchema.cs).
+inline constexpr std::string_view kGamertagKey = "ts4_gamertag";
+inline bool IsGamertag(std::string_view value) {
+  if (value.empty() || value.size() > 15 || !std::isalpha((unsigned char)value.front()) ||
+      value.back() == ' ') {
+    return false;
+  }
+  return std::all_of(value.begin(), value.end(), [](char c) {
+    return (unsigned char)c < 0x80 && (std::isalnum((unsigned char)c) || c == ' ');
+  });
 }
 
 struct Setting {
@@ -58,6 +75,7 @@ struct Setting {
     if (kind == Kind::kBool) {
       return value == "true" || value == "false";
     }
+    if (key == kGamertagKey) return IsGamertag(value);
     if (kind == Kind::kText) {
       // A plain TOML basic string, as the SDK's key names are.
       return value.find_first_of("\"\\\r\n") == std::string_view::npos;
@@ -200,6 +218,10 @@ inline const std::vector<Setting>& PlayerSettings() {
       {"mnk_mouse", Setting::Kind::kBool, "false", {},
        "Keyboard and mouse: the mouse moves the right stick",
        Section::kControls, "Mouse moves right stick", 20},
+      {kGamertagKey, Setting::Kind::kText, "User", {},
+       "Gamertag: the name the game shows for your profile, up to 15 letters, digits and "
+       "spaces. Your saves stay where they are. Takes effect at the next start",
+       Section::kProfile, "Gamertag", 10},
     };
     std::vector<std::string_view> inputs;
     for (const pad::InputInfo& info : pad::kInputs) inputs.push_back(info.name);

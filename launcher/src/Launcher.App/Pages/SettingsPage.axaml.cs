@@ -210,6 +210,36 @@ public partial class SettingsPage : UserControl
             line.Children.Add(change);
             panel.Children.Add(line);
         }
+        else if (row.Editable && row.TextEntry)
+        {
+            // Saved on Enter or when the box loses focus, not per key: every save draws the tab again.
+            var box = new TextBox { Text = row.Value, MaxLength = 15, Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+            AutomationProperties.SetName(box, row.Label);
+            var saved = false;
+            void Save()
+            {
+                if (saved || box.Text == row.Value) return;
+                saved = true;
+                _focusKeyboard = true;
+                _focusAfterDraw = row.Key;
+                var change = model.Choose(row, box.Text ?? "");
+                _error = change == SettingChange.Saved ? null
+                    : change == SettingChange.Refused ? "A gamertag is 1 to 15 letters, digits and spaces, starting with a letter."
+                    : SettingsStore.Describe(change);
+                _notice = change == SettingChange.Saved ? $"{row.Label} saved. It shows the next time the game starts." : null;
+                // Leave the handler that fired before the box is replaced.
+                Dispatcher.UIThread.Post(Draw);
+            }
+            box.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter) return;
+                e.Handled = true;
+                Save();
+            };
+            box.LostFocus += (_, _) => Save();
+            _rowButtons[row.Key] = box;
+            panel.Children.Add(box);
+        }
         else if (row.Editable)
         {
             var options = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };

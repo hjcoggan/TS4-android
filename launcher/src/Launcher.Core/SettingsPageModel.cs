@@ -9,10 +9,12 @@ public enum SettingRowKind { Setting, Preset, Action }
 /// One row of the Settings page: a setting, the Graphics Preset row or the Reset controls action,
 /// with its label, current value, help and choices. A row that does nothing on the chosen renderer
 /// is not available, and <see cref="Note"/> says why. A binding row has no choices to pick from;
-/// it is <see cref="Remappable"/>: the player presses the key or pad button to use (BindingCapture).
+/// it is <see cref="Remappable"/>: the player presses the key or pad button to use (BindingCapture). A text row that is not a
+/// binding (the gamertag) is <see cref="TextEntry"/>: the player types its value.
 /// </summary>
 public sealed record SettingRow(string Key, SettingRowKind Kind, string Label, string Help, string Value, string ValueLabel,
-    IReadOnlyList<SettingOption> Options, bool Available, bool Editable, bool Remappable, string? Note, BindingDescription? Binding);
+    IReadOnlyList<SettingOption> Options, bool Available, bool Editable, bool Remappable, string? Note, BindingDescription? Binding,
+    bool TextEntry = false);
 
 /// <summary>
 /// What a remap did: the write, and one line for each other binding of the same device it clashed
@@ -205,9 +207,9 @@ public sealed class SettingsPageModel
         var options = (setting.IsBool ? new[] { "false", "true" } : setting.Choices.ToArray())
             .Select(choice => new SettingOption(choice, LabelOf(setting, choice))).ToList();
         return new SettingRow(setting.Key, SettingRowKind.Setting, setting.Label, setting.Help, value, LabelOf(setting, value), options,
-            available, Editable: available && setting.Binding is null && !setting.IsText, Remappable: available && setting.Binding is not null,
+            available, Editable: available && setting.Binding is null, Remappable: available && setting.Binding is not null,
             Note: available ? null : "Only the Native renderer uses this setting; the renderer is set to Classic.",
-            setting.Binding);
+            setting.Binding, TextEntry: setting.IsText && setting.Binding is null);
     }
 
     // The Preset the values match, else custom. A Preset whose every covered value matches wins. Else a setting that

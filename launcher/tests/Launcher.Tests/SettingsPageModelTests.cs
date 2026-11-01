@@ -282,6 +282,28 @@ public sealed class SettingsPageModelTests : IDisposable
     }
 
     [Fact]
+    public void The_gamertag_is_typed_in_and_saved_only_when_the_game_would_take_it()
+    {
+        var export = ExportFixture.Json([
+            .. ExportFixture.GameSettings,
+            ExportFixture.Setting("ts4_gamertag", "text", "User", [], "next_start", "both", "Profile", "Gamertag", 10, "Gamertag help")]);
+        var page = Page(export);
+        var row = Row(page, "ts4_gamertag");
+
+        Assert.Equal("Profile", page.Tabs[^1].Name);
+        Assert.True(row.Editable);
+        Assert.True(row.TextEntry);
+        Assert.False(Row(page, "keybind_a").TextEntry);
+        Assert.Equal("User", row.Value);
+
+        Assert.Equal(SettingChange.Saved, page.Choose(row, "Ace Server 9"));
+        Assert.Equal("Ace Server 9", Row(Page(export), "ts4_gamertag").Value);
+        foreach (var refused in new[] { "", "9Lives", "Trailing ", "SixteenLetterss!", "Abcdefghijklmnop", "Tab\tName", "Žofie" })
+            Assert.Equal(SettingChange.Refused, page.Choose(row, refused));
+        Assert.Equal("Ace Server 9", Row(Page(export), "ts4_gamertag").Value);
+    }
+
+    [Fact]
     public void The_page_says_the_other_settings_are_in_game_and_how_to_open_them()
     {
         var line = Page().InGameNote;
