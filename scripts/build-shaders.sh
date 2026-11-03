@@ -865,6 +865,21 @@ for module in Loader_DLL Swing_DLL; do
         >> "$logs/shader-arcs.log" 2>&1 || die "could not decompress $module.xex"
     "$python" -I "$out/build/module_containers.py" "$out/xex/$module.img" "$containers"
 done
+
+# Shaders the device reported missing. The native renderer dumps the raw container through
+# ShaderTopUp::Offer whenever it asks for a shader the pack lacks (src/native/shader_topup.cpp);
+# Android cannot run the converter live, so those dumps are pulled with
+#   adb pull /sdcard/.../files/cache/shader-topup/. work/shaderpack/device-topup/
+# and converted here like any other container. This is also how TU1-only variants get in, since
+# the device runs the patched modules (see docs/shaders.md, "Gaps and caveats").
+if [ -d "$out/device-topup" ]; then
+    dumped=$(count "$out/device-topup")
+    if [ "$dumped" -gt 0 ]; then
+        echo "device top-up: $dumped container(s) from a device run"
+        cp -n "$out/device-topup"/*.bin "$containers"/ 2>/dev/null || true
+    fi
+fi
+
 total=$(count "$containers")
 echo "containers: $total"
 

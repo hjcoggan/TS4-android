@@ -253,11 +253,13 @@ itself is deterministic for the same containers and patch series.
 
 ## 7. Gaps and caveats
 
-- **One container differs from the reference's count** (92 module containers here, 91 on Windows
-  after Title Update 1). The `.xexp` deltas are not applied to the Modules before scanning, so a
-  container that TU1 rewrites is shipped in its disc form; if the game asks for the TU1 variant the
-  container hash differs and that one draw has no shader. Applying `lzxdelta_apply_patch` to the
-  module image would close this; it needs the SDK's delta-patch path, not more work here.
+- **Shaders the pack lacks are collected from the device, not skipped.** The native renderer
+  writes the raw container for every shader it asks for that the pack does not hold
+  (`src/native/shader_topup.cpp` → `files/cache/shader-topup/vs_*.bin`). Pull that folder to
+  `work/shaderpack/device-topup/` and this script converts and merges them like any other
+  container. That is also how TU1-only variants enter the pack — the device runs the patched
+  modules, so nothing here has to apply the `.xexp` deltas offline. Re-run until the device stops
+  producing new dumps (`draw skips … no_shader=` reaching 0).
 - **Shaders XenosRecomp cannot convert** are set aside in `work/shaderpack/skipped/` and left out
   of the pack (the Launcher's screening behaviour). This run had none; a future one would report
   the count. On Android a skipped shader is a shader the game can never get, because the live
