@@ -392,3 +392,133 @@ building for arm64-v8a, plus ~1-2 weeks of app shell + device bring-up.
    hot-path tuning, resolution scaling; note `display_vblank` has no Android implementation, so
    the "smooth presentation" pacing path (0013) degrades to its fallback.
 
+
+---
+
+## Build status (2026-11-03)
+
+**The runtime libraries compile and link for Android arm64-v8a.** Verified twice: once from
+an empty clone and empty build directory (748 targets, exit 0) with the first 18 commits, then
+again after deleting the working copy and re-applying the whole 25-commit series with
+`prepare-sdk.sh` and rebuilding (`ninja -k 0`, exit 0, no errors; ~600 warnings, almost all
+`-Wunused-parameter` in third-party code).
+
+| Output | Size (Debug) | Notes |
+|---|---|---|
+| `out/android-arm64/librexruntimed.so` | 111 MB | core, filesystem, ui, input, audio, graphics, system, kernel |
+| `out/android-arm64/librexgpu-xenosd.so` | 65 MB | the Vulkan/Xenos GPU plugin |
+
+Both are ELF 64-bit ARM aarch64, `NEEDED libc++_shared.so`, `libandroid.so`, `liblog.so`,
+`libdl.so`, and `LOAD` segments aligned to `0x4000` (16 KB-page devices). The host-only
+`rexglue` CLI and the `rexcodegen` static library (112 MB) are **not** built for Android.
+
+### Exact commands
+
+```bash
+export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/30.0.16248370   # NDK r30, clang 21
+
+# 1. working copy: _ref/rexglue-sdk @ f5337cd + 46 reference patches + 25 Android patches
+ts4-port/scripts/prepare-sdk.sh          # idempotent; resets to f5337cd and re-applies both series
+
+# 2. configure (SDK standalone; the recompiler is excluded on Android)
+cmake -S work/rexglue-sdk -B work/build/rexglue-android -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DANDROID_STL=c++_shared \
+  -DCMAKE_BUILD_TYPE=Debug
+
+# 3. build
+ninja -C work/build/rexglue-android -k 0
+```
+
+`ts4-port`'s own `android-arm64-debug` preset + `-DTS4_WITH_REXGLUE=ON -DREXSDK_DIR=<work copy>`
+is the intended consumer path, but the app target is not part of this step (see "Left").
+
+Logs: `work/logs/sdk-android-<N>.log` (the successful from-scratch run is `sdk-android-15.log`).
+
+### What the 25-patch series does
+
+Series: `ts4-port/patches/rexglue-android/` (regenerate with
+`ts4-port/scripts/export-sdk-patches.sh`). Licences and provenance: `THIRD_PARTY.md` there.
+
+Build system
+
+1. OBJC/OBJCXX enabled after `project()` (`APPLE` is host-based before the toolchain loads;
+   a macOS host cross-compiling to Android asked for Objective-C compilers).
+2. `ANDROID` platform branch: `REX_PLATFORM=android-arm64`, own output dir, no
+   `REX_PLATFORM_LINUX` from CMake, Tracy off by default.
+3. `src/rexglue` (host recompiler) and `src/codegen` not cross-compiled; their install rules
+   made conditional.
+4. `src/ui`: no pkg-config/X11/Wayland; `surface_android.cpp` selected; links `android`.
+5. `src/core`: no `librt`, no `libpthread` (bionic has them in libc); links `dl android SDL3`.
+6. `thirdparty`: SDL's X11/Wayland/ALSA/Pulse/PipeWire backends off, `SDL_UNIX_CONSOLE_BUILD`
+   off on Android.
+7. `-Wl,-z,max-page-size=16384` for 16 KB-page devices.
+
+Platform layer
+
+8. `include/rex/ui/surface_android.h` + `src/ui/surface_android.cpp`:
+   `AndroidNativeWindowSurface` over `ANativeWindow` (size from `ANativeWindow_getWidth/Height`).
+9. `window_sdl.cpp`: `#elif REX_PLATFORM_ANDROID` include and `CreateSurfaceImpl` branch on
+   `SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER`.
+10. Background/foreground: detach the presenter on `WILL_ENTER_BACKGROUND`, reconnect it when a
+    foreground/window event reports a new `ANativeWindow` (otherwise: black screen after an
+    app switch).
+
+Missing symbols / bionic
+
+11. `rex::GetAndroidApiLevel()` + `include/rex/main_android.h` (`android_get_device_api_level`).
+12. `ASharedMemory_create` direct + `memfd_create` syscall fallback; no `/dev/ashmem`;
+    bionic 64-bit `off_t`.
+13. `OpenAndroidContentFileDescriptor`/`IsAndroidContentUri` over JNI (SDL activity's
+    `ContentResolver` + `detachFd`).
+14. `GetExecutableFolder()`: `REX_EXECUTABLE_FOLDER`/`REX_APP_FOLDER`, else `dladdr` on the
+    runtime's own library (= `nativeLibraryDir`); `GetUserFolder()` = app internal storage.
+15. GPU plugin loaded by soname on Android (`librexgpu-xenos.so` via the app's linker namespace).
+16. `chrono`: the `clock_time_conversion` fallback for Android libc++ (it has no `clock_cast`).
+17. Fibers: `src/core/fiber_android.cpp`, an AAPCS64 context switch (x19-x28, x29, x30, sp,
+    d8-d15) — bionic has no `getcontext`/`makecontext`/`swapcontext` on 64-bit.
+18. No robust mutexes (`PTHREAD_MUTEX_ROBUST` does not exist in bionic).
+19. SEH: SIGBUS treated as an access violation on Android; unclaimed SIGSEGV/SIGBUS/SIGILL
+    forwarded to the previous handler (or `SIG_DFL` + re-raise) instead of faulting forever.
+20. `"a+"` streams rewound after `fopen` (bionic starts reads at EOF; shader storage truncated).
+
+### Left (deliberately out of scope here)
+
+- **App shell** (`ts4-port/android/`, owned by another agent): Gradle + SDLActivity,
+  `libSDL3.so`, packaging `librexruntime.so` / `librexgpu-xenos.so` / the game `.so`,
+  game-data import, controller mapping.
+- **SDL static vs shared.** This series keeps `SDL_STATIC ON` (the SDK's default), which is
+  enough to compile. Gears' 0007 builds `libSDL3.so` on Android because SDLActivity loads it
+  first and it owns the JVM/activity state; a static SDL inside `librexruntime.so` would be a
+  second copy without that state (and `SDL_GetAndroidJNIEnv()` in
+  `filesystem_android.cpp` would return nothing). **Switch to `SDL_SHARED ON` for Android when
+  the app shell lands.**
+- **`host_address_offset` must be 0 on Android.** `PhysicalHeap::Initialize`
+  (`src/system/xmemory.cpp`) sets `host_address_offset = 0x1000` when
+  `allocation_granularity() > 0x1000`, while recompiled code uses the compile-time
+  `REX_PHYS_HOST_OFFSET` = 0 on Android (`resources/templates/codegen/pch_h.inja`). On a
+  16 KB-page device every access to `0xE0000000..0xFFFFFFFF` would be 0x1000 low. Either keep
+  the heap view 4 KB-aligned so the offset stays 0, or make both ends runtime. A startup
+  check in `PhysicalHeap::Initialize` (`REX_PLATFORM_ANDROID && host_address_offset != 0` →
+  log + abort) is the cheap guard; not added yet.
+- **W^X:** `IsWritableExecutableMemorySupported()` (`src/core/memory_posix.cpp`) returns true on
+  Android, but Android 10+ denies W+X anonymous mappings. Nothing allocates executable memory
+  today, so it is latent; return false (as macOS does) before anything uses it.
+- **`display_vblank`** has no Android implementation (patch 0013's `DisplayVblank::Open()`
+  returns false), so smooth presentation uses its fallback. `AChoreographer` /
+  `VK_KHR_display_timing` later.
+- **Vulkan defaults:** `vulkan_require_geometry_shader` / `vulkan_require_fill_mode_non_solid`
+  default to true off-macOS (`src/ui/vulkan/vulkan_device.cpp`); set them false for Adreno.
+  `VK_ERROR_SURFACE_LOST_KHR` on pause/resume is handled by the reconnect path above.
+- **Prior-art follow-ups worth taking** (see `THIRD_PARTY.md`): nfsmw's
+  `PageProtectionTable` + `MAP_FIXED_NOREPLACE` relocation check in `memory_posix.cpp`
+  (QueryProtect currently parses `/proc/self/maps` on every MMIO fault), Renut's
+  `query_protect.cpp` (same goal, PLT interposition), Gears' `utf8.cpp` repair (invalid
+  UTF-8 in guest names throws through guest code), Gears' SGSR1 presenter upscaler,
+  `libadrenotools` driver loading, and `0015`/`0016` (old-kernel fixed mappings, Turnip
+  sparse-memory default).
+- **FFmpeg:** the SDK's aarch64 assembly builds with NDK r30; Gears disables it on Android
+  (`thirdparty/ffmpeg-android/`) as a precaution. Not taken; revisit if XMA decode misbehaves.
+- **Device bring-up** (not attempted): 4.5 GB guest arena at a 4 GB-aligned base, GPU plugin
+  `dlopen`, swapchain + first frame, MMIO fault handling, SEH under real guest traps, page
+  size of the target device.
