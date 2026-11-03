@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:25:43 +1000
-Subject: [PATCH 11/28] core: add an aarch64 fiber backend for Android
+Subject: [PATCH 11/29] core: add an aarch64 fiber backend for Android
 
 Bionic has no getcontext/makecontext/swapcontext on 64-bit, so fiber_posix.cpp
 did not compile for Android, and the kernel's guest threads (xthread.cpp,
