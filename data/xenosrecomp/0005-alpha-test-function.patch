@@ -1,0 +1,33 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 7f6701b..4217d3a 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -64,6 +64,8 @@ struct PushConstants
+ // space, pixels to clip space for pre-transformed ones (PA_CL_VTE_CNTL scale off),
+ // which Vulkan would otherwise clip away.
+ #define g_NdcScale                 vk::RawBufferLoad<float2>(g_PushConstants.SharedConstants + 560)
++// The alpha test's Xenos compare function (RB_COLORCONTROL bits 0-2): 1 less, 2 equal, 4 greater.
++#define g_AlphaFunc                vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 568)
+ #elif defined(REBLUE_RECOMP)
+ // 256-bit boolean register file (BD bool addresses reach ~158), then per-usage 16-bit-pair swap masks.
+ #define g_Booleans(i)              vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 256 + (i)*4)
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index 08c9786..db318c9 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -2572,7 +2572,15 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     out += '{';
+ 
+                     indent();
++                #ifdef SVR2011_RECOMP
++                    // Every Xenos compare function, not only greater-or-equal: Top Spin 4's
++                    // second hair pass keeps the fragments below the threshold.
++                    out += "\t{ float alphaDelta = oC0.w - g_AlphaThreshold; uint alphaFunc = g_AlphaFunc; "
++                           "if (!(((alphaFunc & 1) && alphaDelta < 0.0) || ((alphaFunc & 2) && alphaDelta == 0.0) || "
++                           "((alphaFunc & 4) && alphaDelta > 0.0))) discard; }\n";
++                #else
+                     out += "\tclip(oC0.w - g_AlphaThreshold);\n";
++                #endif
+ 
+                     indent();
+                     out += "}";

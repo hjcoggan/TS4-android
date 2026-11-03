@@ -1,0 +1,31 @@
+// Version information for topspin4.exe. Without it Windows Defender's machine-learning model rated
+// the unsigned game exe as suspicious and took the shader converter it starts for a trojan
+// (Trojan:Win32/Bearfoos.B!ml); docs/research/defender-false-positive.md.
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION TOPSPIN4_VERSION_MAJOR, TOPSPIN4_VERSION_MINOR, TOPSPIN4_VERSION_PATCH, 0
+PRODUCTVERSION TOPSPIN4_VERSION_MAJOR, TOPSPIN4_VERSION_MINOR, TOPSPIN4_VERSION_PATCH, 0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", TOPSPIN4_DESCRIPTION
+      VALUE "FileVersion", TOPSPIN4_VERSION_TEXT
+      VALUE "InternalName", "topspin4"
+      VALUE "OriginalFilename", "topspin4.exe"
+      VALUE "ProductName", "Top Spin 4"
+      VALUE "ProductVersion", TOPSPIN4_VERSION_TEXT
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

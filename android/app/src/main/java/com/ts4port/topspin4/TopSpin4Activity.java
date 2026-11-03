@@ -153,7 +153,9 @@ public class TopSpin4Activity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {
-        return new String[] { "topspin4" };
+        // SDL3 is static inside the SDK runtime, so JNI_OnLoad is in librexruntimed;
+        // SDL_main is in libtopspin4. Release builds name the runtime "rexruntime".
+        return new String[] { "rexruntimed", "topspin4" };
     }
 
     private void hideSystemBars() {

@@ -1,0 +1,46 @@
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 7382e01..9a58079 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -211,7 +211,11 @@ uint alphaToMask(float alpha, uint2 pixel)
+ // The host sets this bit in a texture descriptor index for a Xenos gamma
+ // fetch that the shader decodes (PWL, after filtering, as Xenia).
+ #define XR_PWL_FETCH_FLAG 0x80000000u
+-#define XR_HEAP_INDEX(index) ((index) & ~XR_PWL_FETCH_FLAG)
++// Bits 29-30: a resolved texture's resolution scale minus 1 (the host draws it that many times
++// the guest's size). Fetch instruction offsets are in guest texels, so they are scaled by it.
++#define XR_OFFSET_SCALE_SHIFT 29
++#define XR_HEAP_INDEX(index) ((index) & ((1u << XR_OFFSET_SCALE_SHIFT) - 1u))
++#define XR_OFFSET_SCALE(index) (float(((index) >> XR_OFFSET_SCALE_SHIFT) & 3u) + 1.0)
+ 
+ float4 xrFetchGamma(uint resourceDescriptorIndex, float4 value)
+ {
+@@ -238,13 +242,15 @@ float4 tfetch2D(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float
+ {
+     Texture2D<float4> texture = g_Texture2DDescriptorHeap[XR_HEAP_INDEX(resourceDescriptorIndex)];
+     return xrFetchGamma(resourceDescriptorIndex,
+-        XR_SAMPLE(texture, g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord + offset / getTexture2DDimensions(texture)));
++        XR_SAMPLE(texture, g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord + offset * XR_OFFSET_SCALE(resourceDescriptorIndex) / getTexture2DDimensions(texture)));
+ }
+ 
+ float2 getWeights2D(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float2 texCoord, float2 offset)
+ {
+     Texture2D<float4> texture = g_Texture2DDescriptorHeap[XR_HEAP_INDEX(resourceDescriptorIndex)];
+-    return select(isnan(texCoord), 0.0, frac(texCoord * getTexture2DDimensions(texture) + offset - 0.5));
++    // Weights on the guest's texel grid, which a scaled resolve target is finer than.
++    float2 dimensions = float2(getTexture2DDimensions(texture)) / XR_OFFSET_SCALE(resourceDescriptorIndex);
++    return select(isnan(texCoord), 0.0, frac(texCoord * dimensions + offset - 0.5));
+ }
+ 
+ #ifdef REBLUE_RECOMP
+@@ -313,8 +319,8 @@ float4 tfetch2DBicubic(uint resourceDescriptorIndex, uint samplerDescriptorIndex
+     SamplerState samplerState = g_SamplerDescriptorHeap[samplerDescriptorIndex];
+     uint2 dimensions = getTexture2DDimensions(texture);
+     
+-    float x = texCoord.x * dimensions.x + offset.x;
+-    float y = texCoord.y * dimensions.y + offset.y;
++    float x = texCoord.x * dimensions.x + offset.x * XR_OFFSET_SCALE(resourceDescriptorIndex);
++    float y = texCoord.y * dimensions.y + offset.y * XR_OFFSET_SCALE(resourceDescriptorIndex);
+ 
+     x -= 0.5f;
+     y -= 0.5f;

@@ -70,10 +70,14 @@ macro(rexglue_setup_target target_name)
         rexglue_apply_target_settings(${target_name}_recomp)
         rexglue_apply_recomp_settings(${target_name}_recomp
             "${REXGLUE_ENTRYPOINT_INCLUDE_DIR}/topspin4_pch.h")
-        add_dependencies(${target_name}_recomp ${target_name}_codegen)
+        if(TARGET ${target_name}_codegen)
+            add_dependencies(${target_name}_recomp ${target_name}_codegen)
+        endif()
         target_link_libraries(${target_name} PRIVATE
             ${target_name}_recomp)
-        add_dependencies(${target_name} ${target_name}_codegen)
+        if(TARGET ${target_name}_codegen)
+            add_dependencies(${target_name} ${target_name}_codegen)
+        endif()
     endif()
     target_include_directories(${target_name} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -86,10 +90,28 @@ macro(rexglue_setup_target target_name)
             DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/metadata/icons"
             PREFIX "icons")
     endif()
-    rexglue_configure_target(${target_name} ${ARGN})
+    if(ANDROID)
+        # Android: the app is a library loaded by SDLActivity, whose entry is SDL_main from
+        # src/android_main.cpp. The SDK's windowed_app_main_sdl.cpp defines a plain main() that
+        # SDLActivity never calls, so it is not compiled here; the pieces
+        # rexglue_configure_target() would add are added explicitly instead.
+        target_sources(${target_name} PRIVATE ${REXGLUE_SHARE_DIR}/rex_app.cpp)
+        target_compile_definitions(${target_name} PRIVATE
+            REXGLUE_BUILD_CONFIG="$<CONFIG>")
+        rexglue_apply_target_settings(${target_name})
+        # The GPU plugin is dlopen'd by soname on Android (SDK patch), never linked.
+        if(TARGET rexgpu-xenos)
+            add_dependencies(${target_name} rexgpu-xenos)
+        endif()
+    else()
+        rexglue_configure_target(${target_name} ${ARGN})
+    endif()
 endmacro()
 
-if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
+# Codegen runs as part of the build only where the host recompiler exists (the SDK does not
+# cross-compile src/rexglue for Android). On Android the generated sources are those the Mac's
+# host build already wrote into generated/boot; they are compiled, not regenerated.
+if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES AND TARGET rex::rexglue AND NOT ANDROID)
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/codegen.build.stamp"
                ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
@@ -101,6 +123,10 @@ if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
     )
     add_custom_target(topspin4_codegen
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/codegen.build.stamp")
+elseif(REXGLUE_ENTRYPOINT_GENERATED_SOURCES AND NOT TARGET topspin4_codegen)
+    # Android (and any build without the host recompiler): codegen already ran on the Mac, but
+    # the generated dll_targets.cmake still names topspin4_codegen as a dependency.
+    add_custom_target(topspin4_codegen)
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/dll_targets.cmake")

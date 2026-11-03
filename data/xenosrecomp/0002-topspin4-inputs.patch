@@ -1,0 +1,53 @@
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index 56bcda2..f900c7c 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -123,6 +123,17 @@ static constexpr DeclUsageLocation USAGE_LOCATIONS[] =
+     { DeclUsage::TexCoord, 6, 14 },
+     { DeclUsage::TexCoord, 7, 15 },
+     { DeclUsage::Position, 1, 15 },
++#ifdef SVR2011_RECOMP
++    // Top Spin 4's morph-target streams (faces). The Native renderer's vertex input table
++    // (src/native/guest_decode.h, kInputLocations) gives them the same locations.
++    { DeclUsage::Position, 2, 16 },
++    { DeclUsage::Position, 3, 17 },
++    { DeclUsage::Position, 4, 18 },
++    { DeclUsage::Normal, 1, 19 },
++    { DeclUsage::Normal, 2, 20 },
++    { DeclUsage::Normal, 3, 21 },
++    { DeclUsage::Normal, 4, 22 },
++#endif
+ #endif
+ };
+ 
+@@ -440,6 +451,14 @@ void ShaderRecompiler::recompile(const TextureFetchInstruction& instr, bool bicu
+         break;
+     }
+ 
++#ifdef SVR2011_RECOMP
++    // A 1D texture is bound as a width x 1 2D texture (Top Spin 4's gradient maps): the fetch
++    // samples row 0 at v = 0.5.
++    const bool fetch1DAs2D = instr.dimension == TextureDimension::Texture1D;
++    if (fetch1DAs2D)
++        dimension = "2D";
++#endif
++
+     out += dimension;
+ 
+ #ifdef UNLEASHED_RECOMP
+@@ -448,6 +467,15 @@ void ShaderRecompiler::recompile(const TextureFetchInstruction& instr, bool bicu
+ #endif
+ 
+     print("({0}_Texture{1}DescriptorIndex, {0}_SamplerDescriptorIndex, ", constNamePtr, dimension);
++#ifdef SVR2011_RECOMP
++    if (fetch1DAs2D)
++    {
++        out += "float2(";
++        printSrcRegister(1);
++        print(", 0.5), float2({}, 0.0)", instr.offsetX * 0.5f);
++    }
++    else
++#endif
+     printSrcRegister(componentCount);
+ 
+     switch (instr.dimension)

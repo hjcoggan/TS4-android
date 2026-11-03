@@ -1,0 +1,155 @@
+// Scripted controller for automated runs.
+//
+// Copied from WWE All Stars (ADR-0004), which ported and trimmed it from
+// wwe-svr2011-pc (KaikoClanworth1, port/src/script_input.h at de85161), reused
+// with the author's permission.
+//
+// With --ts4_input_script=<path>, the game's only controller is a virtual pad
+// driven by commands appended to that file, one per line, while the game runs:
+//
+//   press <buttons> [t]         hold buttons (default 120 ms), then release
+//   hold <buttons> <t>          same, explicit duration
+//   stick <L|R> <x> <y> <t> [buttons|-] [rt]
+//                               hold a stick at x,y (-32768..32767), with
+//                               optional buttons and right trigger meanwhile
+//   trigger <L|R> <0-255> <t>   hold a trigger
+//   wait <t>                    neutral pad
+//   at <frame>                  neutral pad until the guest has presented
+//                               <frame> frames; nothing if that is past
+//   set <cvar> <value>          change a setting through the cvar system, so
+//                               its change callbacks fire as for a player
+//                               (a live change); takes no time, the next
+//                               step starts on the same poll
+//   set settings_page open|close|toggle
+//                               the Settings page (the game's `set` handler, not a cvar).
+//                               While it is open the game reads an idle pad and the page
+//                               reads this script's pad: press UP/DOWN to move, LEFT/RIGHT or
+//                               A to change a value, B to close. Wait ~300 ms after `open`
+//                               before the first press (the page ignores input until the pad
+//                               has been idle that long).
+//   set achievement_toast <id>  shows that achievement's toast without unlocking it.
+//
+// A duration <t> is milliseconds (120) or guest frames with an 'f' suffix
+// (6f). A frame step ends when the Present count reaches its start + n; the
+// release after a frame-timed press lasts 7f instead of 120 ms. The frame
+// count is the guest's VdSwap count (rex::system::GuestSwapCount), so `at`
+// anchors a scene to absolute frames and waits do not build up drift.
+//
+// Frame caveat for scene authors: the guest presents and polls the pad on
+// different threads, so a frame step can end one frame early or late (±1).
+// Capture a few frames after the input that leads to a shot.
+//
+// <buttons> is one or more of A B X Y START BACK LB RB LS RS UP DOWN LEFT RIGHT
+// joined with '+'. Lines starting with '#' are ignored, unknown verbs are
+// logged and skipped. Each step replaces the whole pad state of the one
+// before. A step starts at the first guest poll after the previous one ends.
+//
+// Button changes also come out as keystrokes (XamInputGetKeystroke), which XUI
+// screens and the intro videos read instead of the pad state.
+
+#pragma once
+
+#include <chrono>
+#include <deque>
+#include <filesystem>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <rex/input/input_driver.h>
+#include <rex/runtime.h>
+
+#include "settings/open_combo.h"
+
+namespace topspin4 {
+
+class ScriptInputDriver final : public rex::input::InputDriver {
+ public:
+  // Monotonic time; tests pass a hand-advanced one.
+  using Clock = std::function<std::chrono::milliseconds()>;
+  // Frames the guest has presented (rex::system::GuestSwapCount in the game).
+  using FrameSource = std::function<uint64_t()>;
+  // Applies a `set <name> <value>` command; called on the polling thread, under the driver's lock.
+  using Setter = std::function<void(std::string name, std::string value)>;
+
+  static constexpr auto kDevice = static_cast<rex::input::DeviceId>(0x53435254);  // 'SCRT'
+  // Players 2-4's pads (--ts4_input_script_p2..p4), each from its own command file.
+  static constexpr rex::input::DeviceId PlayerDevice(uint32_t player) {
+    return static_cast<rex::input::DeviceId>(0x53435230 + player);  // 'SCR2'..'SCR4'
+  }
+
+  ScriptInputDriver(std::filesystem::path command_file, Clock clock, FrameSource frames,
+                    rex::input::DeviceId id = kDevice, Setter set = {});
+
+  static std::chrono::milliseconds SteadyClock();
+
+  // Filters this pad's Back+Start combo as a real pad's is (settings/open_combo.h), so a script
+  // can open the Settings page with `press back+start` and a lone Back or Start is replayed late.
+  void EnableOpenCombo() { open_combo_ = true; }
+
+  rex::X_STATUS Setup() override;
+  void EnumerateDevices(std::vector<rex::input::DeviceInfo>& out) override;
+  rex::X_RESULT GetDeviceState(rex::input::DeviceId id,
+                               rex::input::X_INPUT_STATE* out_state) override;
+  rex::X_RESULT GetDeviceCapabilities(rex::input::DeviceId id, uint32_t flags,
+                                      rex::input::X_INPUT_CAPABILITIES* out_caps) override;
+  rex::X_RESULT SetDeviceVibration(rex::input::DeviceId id,
+                                   rex::input::X_INPUT_VIBRATION* vibration) override;
+  rex::X_RESULT GetDeviceKeystroke(rex::input::DeviceId id, uint32_t flags,
+                                   rex::input::X_INPUT_KEYSTROKE* out_keystroke) override;
+
+ private:
+  struct Step {
+    uint16_t buttons = 0;
+    uint8_t left_trigger = 0, right_trigger = 0;
+    int16_t lx = 0, ly = 0, rx = 0, ry = 0;
+    int ms = 0;
+    // Frame timing instead of ms: a length, or with `at`, an absolute frame.
+    std::optional<uint64_t> frames;
+    bool at = false;
+    // `set`: the setting and its value, applied when the step starts.
+    std::optional<std::pair<std::string, std::string>> set;
+    std::string source;  // the command line, logged when the step starts
+  };
+
+  // Starts current_ at now / frame; Over says whether its time is up.
+  void Start(std::chrono::milliseconds now, uint64_t frame);
+  bool Over(std::chrono::milliseconds now, uint64_t frame) const;
+  void PollFile(std::chrono::milliseconds now);
+  void ParseLine(const std::string& line);
+  static void ReadDuration(std::istream& in, Step& step);
+  // The step in force now, and the next packet number, under the lock.
+  Step CurrentStep(uint32_t* packet);
+  // A step's buttons as the game sees them: through the combo filter if it is on.
+  uint16_t GameButtons(uint16_t buttons);
+
+  std::filesystem::path file_;
+  rex::input::DeviceId id_;
+  Clock clock_;
+  FrameSource frames_;
+  Setter set_;
+  size_t consumed_ = 0;  // bytes of the file already parsed
+  std::optional<std::chrono::milliseconds> last_poll_;
+  std::mutex mutex_;
+  std::deque<Step> queue_;
+  bool running_ = false;
+  Step current_{};
+  std::chrono::milliseconds step_end_{0};
+  uint64_t frame_end_ = 0;
+  uint32_t packet_ = 0;
+  uint16_t keystroke_buttons_ = 0;  // the buttons GetDeviceKeystroke last reported down
+  bool open_combo_ = false;
+  settings::OpenComboGate combo_;
+};
+
+// With --ts4_input_script set, replace the runtime's input system with one
+// whose only device is a ScriptInputDriver reading that file (user 0), timing
+// frame steps by `frames`. Without it, leave the config alone. `set` commands go to `set`.
+void InstallScriptInput(rex::RuntimeConfig& config, ScriptInputDriver::FrameSource frames,
+                        ScriptInputDriver::Setter set);
+
+}  // namespace topspin4
