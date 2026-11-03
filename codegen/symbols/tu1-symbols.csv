@@ -1,0 +1,552 @@
+module,address,name,confidence,evidence
+Swing_DLL.xex,88150f60,ts4_session_stats_init,medium,tu1 function from base 88150e50; symbols.txt
+Swing_DLL.xex,88150fc0,ts4_init_search_result,medium,tu1 function from base 88150eb0; symbols.txt
+Swing_DLL.xex,88151648,ts4_runtime_dispatch_slot_38,medium,tu1 local from base 88151538; symbols.txt
+Swing_DLL.xex,881516c8,ts4_clear_netdb_owned_record,medium,tu1 function from base 881515b8; symbols.txt
+Swing_DLL.xex,88151908,ts4_runtime_record_get_word_324,medium,tu1 local from base 881517f8; unique in .text; symbols.txt
+Swing_DLL.xex,88151910,ts4_runtime_process_record_family_51810,medium,tu1 function* from base 88151810; 1 operand(s) differ in sub_88151810; symbols.txt
+Swing_DLL.xex,88151968,ts4_runtime_process_subrecord_20,medium,tu1 local from base 88151800; unique in .text; symbols.txt
+Swing_DLL.xex,88151970,ts4_runtime_record_get_word_620,medium,tu1 local from base 88151808; unique in .text; symbols.txt
+Swing_DLL.xex,88151978,ts4_runtime_process_subrecord_1c,medium,tu1 local from base 88151868; symbols.txt
+Swing_DLL.xex,88151980,ts4_runtime_record_get_word_61c,medium,tu1 local from base 88151870; unique in .text; symbols.txt
+Swing_DLL.xex,88151988,ts4_runtime_process_record_family_51878,medium,tu1 function from base 88151878; symbols.txt
+Swing_DLL.xex,88151c68,ts4_initialize_netdb_stat_record,medium,tu1 function from base 88151b08; symbols.txt
+Swing_DLL.xex,88151dd0,ts4_initialize_netdb_extended_record,medium,tu1 function from base 88151c70; symbols.txt
+Swing_DLL.xex,88151e30,ts4_runtime_process_record_family_51cd0,medium,tu1 function* from base 88151cd0; 1 operand(s) differ in sub_88151CD0; symbols.txt
+Swing_DLL.xex,88151ee8,ts4_runtime_type_code_34,medium,tu1 local from base 88151d88; unique in .text; symbols.txt
+Swing_DLL.xex,88151ef0,ts4_runtime_type_code_35,medium,tu1 local from base 88151d90; unique in .text; symbols.txt
+Swing_DLL.xex,88151ef8,ts4_runtime_type_code_36,medium,tu1 local from base 88151d98; unique in .text; symbols.txt
+Swing_DLL.xex,88151f00,ts4_runtime_type_code_37,medium,tu1 via-table from base 88151da0; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88151f18,ts4_runtime_type_code_3a,medium,tu1 local from base 88151db8; unique in .text; symbols.txt
+Swing_DLL.xex,88151f30,ts4_runtime_type_code_3d,medium,tu1 local from base 88151dd0; unique in .text; symbols.txt
+Swing_DLL.xex,88151f40,ts4_runtime_type_code_47,medium,tu1 local from base 88151de0; unique in .text; symbols.txt
+Swing_DLL.xex,88151f48,ts4_runtime_type_code_3f,medium,tu1 local from base 88151de8; unique in .text; symbols.txt
+Swing_DLL.xex,88151fa8,ts4_runtime_type_code_42,medium,tu1 local from base 88151df0; unique in .text; symbols.txt
+Swing_DLL.xex,88152008,ts4_runtime_type_code_43,medium,tu1 local from base 88151e50; unique in .text; symbols.txt
+Swing_DLL.xex,88152018,ts4_runtime_type_code_45,medium,tu1 local from base 88151e60; unique in .text; symbols.txt
+Swing_DLL.xex,88152028,ts4_runtime_type_code_46,medium,tu1 local from base 88151e70; unique in .text; symbols.txt
+Swing_DLL.xex,88152030,ts4_runtime_type_code_48,medium,tu1 local from base 88151e78; unique in .text; symbols.txt
+Swing_DLL.xex,88152038,ts4_runtime_type_code_49,medium,tu1 via-table from base 88151e80; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88152040,ts4_runtime_type_code_4a,medium,tu1 local from base 88151e88; unique in .text; symbols.txt
+Swing_DLL.xex,88152570,ts4_runtime_process_subrecord,medium,tu1 function from base 881523b8; symbols.txt
+Swing_DLL.xex,881526e8,ts4_span16_append,medium,tu1 local from base 88152530; symbols.txt
+Swing_DLL.xex,88152820,ts4_netdb_value_at_most_eight,medium,tu1 local from base 88152660; unique in .text; symbols.txt
+Swing_DLL.xex,881528a0,ts4_netdb_destroy_variant_a,medium,tu1 function from base 88152698; symbols.txt
+Swing_DLL.xex,881528e8,ts4_netdb_destroy_variant_b,medium,tu1 function from base 881526e0; symbols.txt
+Swing_DLL.xex,88152c08,ts4_netdb_release_owned_list,medium,tu1 function from base 88152a00; symbols.txt
+Swing_DLL.xex,88152ea0,ts4_span16_grow_and_append,medium,tu1 function from base 8816fee0; symbols.txt
+Swing_DLL.xex,88153008,ts4_netdb_allocate_98,medium,tu1 function from base 88152c98; symbols.txt
+Swing_DLL.xex,881530c8,ts4_netdb_allocate_94,medium,tu1 function from base 88152cf8; symbols.txt
+Swing_DLL.xex,88153128,ts4_assign_formatted_text,medium,tu1 function from base 88152d58; symbols.txt
+Swing_DLL.xex,88153240,ts4_assign_text_from_c_string,medium,tu1 function from base 88152e70; symbols.txt
+Swing_DLL.xex,88154440,ts4_create_lobby_message,medium,tu1 function from base 881540c8; symbols.txt
+Swing_DLL.xex,88154900,ts4_min_u32,medium,tu1 local from base 88154588; symbols.txt
+Swing_DLL.xex,88154910,ts4_create_3ac_object,medium,tu1 function from base 88154598; symbols.txt
+Swing_DLL.xex,88154a60,ts4_copy_block94,medium,tu1 function from base 881546e8; symbols.txt
+Swing_DLL.xex,88155898,ts4_copy_friend_leaderboard_records,medium,tu1 local from base 88155450; symbols.txt
+Swing_DLL.xex,881572c8,ts4_runtime_forward_record_minus_1c_to_98090,medium,tu1 local from base 88156e80; symbols.txt
+Swing_DLL.xex,881572d0,ts4_runtime_forward_record_minus_20_to_98048,medium,tu1 local from base 88156e88; symbols.txt
+Swing_DLL.xex,881572d8,ts4_runtime_forward_record_minus_1c_to_51cd0,medium,tu1 via-table from base 88156ea8; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,881572e0,ts4_runtime_forward_record_minus_1c_to_98000,medium,tu1 local from base 88156e90; unique in .text; symbols.txt
+Swing_DLL.xex,881572e8,ts4_runtime_forward_record_minus_1c_to_51878,medium,tu1 local from base 88156ea0; symbols.txt
+Swing_DLL.xex,881572f0,ts4_runtime_forward_record_minus_20_to_51810,medium,tu1 via-table from base 88156e98; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88157498,ts4_runtime_type_code_fe,medium,tu1 local from base 88157008; unique in .text; symbols.txt
+Swing_DLL.xex,88157500,ts4_runtime_type_code_2e,medium,tu1 via-table from base 88157070; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,881576f0,ts4_runtime_type_code_4b0,medium,tu1 local from base 881571f8; unique in .text; symbols.txt
+Swing_DLL.xex,8815f908,ts4_runtime_dispatch_slot_3c,medium,tu1 local from base 8815efc8; symbols.txt
+Swing_DLL.xex,8815f918,ts4_runtime_dispatch_slot_4c,medium,tu1 local from base 8815efd8; symbols.txt
+Swing_DLL.xex,8816d810,ts4_runtime_type_code_none,medium,tu1 data-ref from base 8815efc0; symbols.txt
+Swing_DLL.xex,8816d990,ts4_runtime_type_code_27,medium,tu1 via-table from base 8816d4a8; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,8816d9f0,ts4_runtime_type_code_28,medium,tu1 via-table from base 8816d508; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,8816daa8,ts4_runtime_type_code_05,medium,tu1 via-table from base 8816d5f8; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,8816dab0,ts4_runtime_type_code_06,medium,tu1 via-table from base 8816d600; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,8816dad0,ts4_runtime_type_code_0b,medium,tu1 via-table from base 8816d620; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,8816dfb0,ts4_runtime_type_code_400,medium,tu1 local from base 8816daf8; unique in .text; symbols.txt
+Swing_DLL.xex,8816fe20,ts4_destroy_owned_container,medium,tu1 function from base 8816f8c0; symbols.txt
+Swing_DLL.xex,8816ffe8,ts4_erase_value16_from_span,medium,tu1 local from base 8816fa88; symbols.txt
+Swing_DLL.xex,88170050,ts4_advance_bit_cursor_to_location,medium,tu1 function from base 8816faf0; symbols.txt
+Swing_DLL.xex,881702c0,ts4_span28_append,medium,tu1 local from base 8816fd60; symbols.txt
+Swing_DLL.xex,88170440,ts4_compact_owned_span16,medium,tu1 function from base 88170048; symbols.txt
+Swing_DLL.xex,88170800,ts4_span28_grow_and_append,medium,tu1 function from base 88170408; symbols.txt
+Swing_DLL.xex,88170e80,ts4_create_container_factory,medium,tu1 function from base 88170a58; symbols.txt
+Swing_DLL.xex,881711e8,ts4_create_zeroed_triplet,medium,tu1 function from base 88170dc0; symbols.txt
+Swing_DLL.xex,88171250,ts4_allocate_zeroed_triplets,medium,tu1 function from base 88170e28; symbols.txt
+Swing_DLL.xex,88171380,ts4_destroy_polymorphic_value_range,medium,tu1 function from base 88170f58; symbols.txt
+Swing_DLL.xex,881718a8,ts4_create_runtime_object_28_pool2,medium,tu1 function from base 88171480; symbols.txt
+Swing_DLL.xex,88171900,ts4_create_runtime_object_28_pool0,medium,tu1 function from base 881714d8; symbols.txt
+Swing_DLL.xex,88171958,ts4_create_runtime_object_54_pool2,medium,tu1 function from base 88171530; symbols.txt
+Swing_DLL.xex,881719b0,ts4_create_runtime_object_54_pool0,medium,tu1 function from base 88171588; symbols.txt
+Swing_DLL.xex,88171a08,ts4_create_runtime_object_80_pool2,medium,tu1 function from base 881715e0; symbols.txt
+Swing_DLL.xex,88171a60,ts4_create_runtime_object_80_pool0,medium,tu1 function from base 88171638; symbols.txt
+Swing_DLL.xex,88171ab8,ts4_create_container_factory_alias,medium,tu1 local from base 88171690; unique in .text; symbols.txt
+Swing_DLL.xex,88171ac0,ts4_create_runtime_object_54_alt_pool0,medium,tu1 function from base 88171698; symbols.txt
+Swing_DLL.xex,88171b18,ts4_create_runtime_object_20,medium,tu1 function from base 881716f0; symbols.txt
+Swing_DLL.xex,88171b70,ts4_create_runtime_object_20_pool0,medium,tu1 function from base 88171748; symbols.txt
+Swing_DLL.xex,88172038,ts4_parse_u8_decimal_if_changed,medium,tu1 local from base 88171c10; symbols.txt
+Swing_DLL.xex,881720b0,ts4_set_parsed_i64_if_changed,medium,tu1 function from base 88171c88; symbols.txt
+Swing_DLL.xex,88172110,ts4_set_parsed_u32_if_changed,medium,tu1 function from base 88171ce8; symbols.txt
+Swing_DLL.xex,88172178,ts4_destroy_variant_6b74,medium,tu1 function from base 88171d50; symbols.txt
+Swing_DLL.xex,881724e0,ts4_copy_offset_span12,medium,tu1 function from base 881720b8; symbols.txt
+Swing_DLL.xex,88172570,ts4_destroy_variant_6bc0,medium,tu1 function from base 88172148; symbols.txt
+Swing_DLL.xex,881725e0,ts4_runtime_type_code_15,medium,tu1 local from base 881721b8; unique in .text; symbols.txt
+Swing_DLL.xex,881725f0,ts4_runtime_type_code_17,medium,tu1 local from base 881721c8; unique in .text; symbols.txt
+Swing_DLL.xex,88172640,ts4_runtime_type_code_23,medium,tu1 local from base 88172218; unique in .text; symbols.txt
+Swing_DLL.xex,88172650,ts4_runtime_type_code_25,medium,tu1 via-table from base 88172228; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88172658,ts4_runtime_type_code_26,medium,tu1 via-table from base 88172230; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88177b70,ts4_clone_byte_with_object_context,medium,tu1 function from base 88153620; symbols.txt
+Swing_DLL.xex,8818ac30,ts4_runtime_record_get_word_1c,medium,tu1 via-table from base 8818b2e8; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88197228,ts4_runtime_record_get_word_98,medium,tu1 local from base 881978b8; unique in .text; symbols.txt
+Swing_DLL.xex,88197870,ts4_runtime_record_get_word_94,medium,tu1 local from base 881978b0; unique in .text; symbols.txt
+Swing_DLL.xex,881add50,ts4_clear_intrusive_list,medium,tu1 function from base 8817f670; symbols.txt
+Swing_DLL.xex,881b3ce0,ts4_object_finalize,medium,tu1 function from base 881b4590; symbols.txt
+Swing_DLL.xex,881c19f8,ScriptStringEquals,medium,tu1 function from base 881c2218; string_length_and_content_comparison
+Swing_DLL.xex,881d35b8,Script_CompetitionGameReset,high,"tu1 registration from base 88779960; registered as ""CG_Reset""; direct_CG_Reset_registration; folded in TU1 with Script_OnlinePS3_IsPlayerCreatedEnabled Script_TitleServerFeatureUnavailable"
+Swing_DLL.xex,88263870,ts4_destroy_owned_object,medium,tu1 function from base 88174b18; symbols.txt
+Swing_DLL.xex,88563498,ts4_copy_bytes,medium,tu1 local from base 88563498; symbols.txt
+Swing_DLL.xex,8856ac40,__savegprlr,medium,tu1 function from base 8856ac40; symbols.txt
+Swing_DLL.xex,8856ac90,__restgprlr,medium,tu1 function from base 8856ac90; symbols.txt
+Swing_DLL.xex,8856ad90,__savevmx,medium,tu1 function from base 8856ad90; symbols.txt
+Swing_DLL.xex,8856b028,__restvmx,medium,tu1 function from base 8856b028; symbols.txt
+Swing_DLL.xex,8856b2f0,__savefpr,medium,tu1 function from base 8856b2f0; symbols.txt
+Swing_DLL.xex,8856b33c,__restfpr,medium,tu1 function from base 8856b33c; symbols.txt
+Swing_DLL.xex,8856b7c0,_RtlCheckStack,medium,tu1 local from base 8856b7c0; symbols.txt
+Swing_DLL.xex,8857c630,ts4_memset,medium,tu1 function from base 8857c630; symbols.txt
+Swing_DLL.xex,8857c888,ts4_resume_thread,medium,tu1 function from base 8857c888; symbols.txt
+Swing_DLL.xex,8857cb00,ts4_insert_sorted_node,medium,tu1 local from base 8857cb00; symbols.txt
+Swing_DLL.xex,8857cb70,ts4_consume_to_delimiter,medium,tu1 local from base 8857cb70; symbols.txt
+Swing_DLL.xex,8857d528,ts4_increment_shared_refcount,medium,tu1 function from base 8857d528; symbols.txt
+Swing_DLL.xex,8857d580,ts4_decrement_shared_refcount,medium,tu1 function from base 8857d580; symbols.txt
+Swing_DLL.xex,8857db20,ts4_find_runtime_entry_payload,medium,tu1 function from base 8857db20; symbols.txt
+Swing_DLL.xex,88582138,ts4_call_runtime_2890,medium,tu1 local from base 88582138; symbols.txt
+Swing_DLL.xex,88582450,ts4_set_four_word_record,medium,tu1 local from base 88582450; symbols.txt
+Swing_DLL.xex,88582608,ts4_call_runtime_2610,medium,tu1 local from base 88582608; unique in .text; symbols.txt
+Swing_DLL.xex,88582628,ts4_record_status,medium,tu1 function from base 88582628; symbols.txt
+Swing_DLL.xex,88582bc8,ts4_query_system_time,medium,tu1 local from base 88582bc8; unique in .text; symbols.txt
+Swing_DLL.xex,88582f28,ts4_forward_record_status,medium,tu1 local from base 88582f28; unique in .text; symbols.txt
+Swing_DLL.xex,885830b0,ts4_forward_runtime_8bee8,medium,tu1 local from base 885830b8; unique in .text; symbols.txt
+Swing_DLL.xex,885b72c0,ts4_runtime_record_get_word_90,medium,tu1 local from base 881978a8; unique in .text; symbols.txt
+Swing_DLL.xex,885e3918,ts4_runtime_record_get_word_14,medium,tu1 via-table from base 8818b2e0; the TU2 slots of its table refs point here; symbols.txt
+Swing_DLL.xex,88606308,ts4_format_text,medium,tu1 function from base 88606318; symbols.txt
+Swing_DLL.xex,8860bbb8,FindServiceById,medium,tu1 function from base 8860bb30; service_id_lookup_used_by_registered_callback
+Swing_DLL.xex,88778fd0,Script_OnlinePS3_IsInvitationEnabled,high,"tu1 registration from base 887786a0; registered as ""OnlinePS3_IsInvitationEnabled""; direct_OnlinePS3_IsInvitationEnabled_registration"
+Swing_DLL.xex,88778fe0,Script_OnlineTrueStub,high,"tu1 registration from base 887786b0; registered as ""OnlinePS3_IsWorldTourEnabled""; direct_MakeSlotPublic_and_IsWorldTourEnabled_registrations"
+Swing_DLL.xex,88778fe8,Script_RemoveAIPlayerFromLobby,high,"tu1 registration from base 887786b8; registered as ""CG_RemoveAIPlayerFromLobby""; direct_RemoveAIPlayerFromLobby_registration"
+Swing_DLL.xex,88778ff0,Script_OnlineFalseStubA,high,"tu1 registration from base 887786c0; registered as ""CG_AddAIPlayerToLobby""; direct_debug_and_AddAIPlayer_registrations"
+Swing_DLL.xex,88778ff8,Script_OnlineFalseStubB,high,"tu1 registration from base 887786c8; registered as ""TSU_ServerRequest_CheckVersion""; direct_stats_refresh_and_version_registrations"
+Swing_DLL.xex,88779618,Script_GenerateCPUResults,high,"tu1 registration from base 88778ce8; registered as ""CG_GenerateCPUResults""; direct_GenerateCPUResults_registration"
+Swing_DLL.xex,88779620,Script_IsInASession,medium,tu1 local from base 88778cf0; direct_IsInASession_registration
+Swing_DLL.xex,88779638,Script_SessionPolicyTrue,high,"tu1 registration from base 88778d08; registered as ""IsLocalUserAllowedToChat""; direct_LockSession_MutePeer_and_chat_registrations"
+Swing_DLL.xex,88779640,Script_SetEveryoneReadyInLobby,high,"tu1 registration from base 88778d10; registered as ""SetEveryoneReadyInLobby""; direct_SetEveryoneReadyInLobby_registration"
+Swing_DLL.xex,8877a3b0,Script_ResetOnlineConfig,medium,tu1 local from base 88779968; direct_ResetOnlineConfig_registration
+Swing_DLL.xex,8877a3f8,GetSessionMatchDescriptor,medium,tu1 local from base 887799b0; exact_field_accessor_no_direct_xrefs
+Swing_DLL.xex,8877c6e0,Script_ModifySession,high,tu1 function from base 8877bc98; direct_ModifySession_registration
+Swing_DLL.xex,8877ca20,Script_IsSessionStarted,medium,tu1 local from base 8877bfd8; direct_IsSessionStarted_registration
+Swing_DLL.xex,8877ca40,Script_IsRemote,medium,tu1 local from base 8877bff8; direct_IsRemote_registration
+Swing_DLL.xex,8877cae8,Script_SetNoDisco,high,tu1 function from base 8877c0a0; direct_SetNoDisco_registration
+Swing_DLL.xex,8877e380,ts4_tsu_finalize_object,medium,tu1 function from base 8877d938; symbols.txt
+Swing_DLL.xex,887801a0,Script_TSU_ReplaceSearchResultsWithSessionStats,high,tu1 function from base 8877f758; direct_TSU_ReplaceSearchResultsWithSessionStats_registration
+Swing_DLL.xex,88780260,Script_TSU_ReplaceSearchResultsWithPerRoundStats,high,tu1 function from base 8877f818; direct_TSU_ReplaceSearchResultsWithPerRoundStats_registration
+Swing_DLL.xex,887803b8,Script_TSU_CopyLocalStatToNetDB,high,tu1 function from base 8877f970; direct_TSU_CopyLocalStatToNetDB_registration
+Swing_DLL.xex,887804e0,Script_TSU_RefreshTournamentSessions,high,tu1 function from base 8877fa98; direct_TSU_RefreshTournamentSessions_registration
+Swing_DLL.xex,88780608,Script_TSU_ResetFriendsLeaderboard,high,tu1 function from base 8877fbc0; direct_TSU_ResetFriendsLeaderboard_registration
+Swing_DLL.xex,887807c8,Script_IsLocalUserAGuest,medium,tu1 local from base 8877fcd0; direct_IsLocalUserAGuest_registration
+Swing_DLL.xex,88780880,Script_TSU_Debug_EndSeason,high,tu1 function from base 8877fd88; direct_TSU_Debug_EndSeason_registration
+Swing_DLL.xex,88780cd8,Script_IsLobbyFull,medium,tu1 local from base 887801e0; direct_IsLobbyFull_registration
+Swing_DLL.xex,88780cf8,Script_IsHost,medium,tu1 local from base 88780200; direct_IsHost_registration
+Swing_DLL.xex,887840a0,Script_TSU_IsThereEnoughTimeLeftToEnterLobbyBeforeEndOfSeason,medium,tu1 local from base 887835a8; direct_TSU_IsThereEnoughTimeLeftToEnterLobbyBeforeEndOfSeason_registration
+Swing_DLL.xex,887840c0,Script_TSU_IsThereEnoughTimeLeftBeforeEndOfSeason,medium,tu1 local from base 887835c8; direct_TSU_IsThereEnoughTimeLeftBeforeEndOfSeason_registration
+Swing_DLL.xex,887840e0,Script_TSU_ResetSeasonRankHistory,high,tu1 function from base 887835e8; direct_TSU_ResetSeasonRankHistory_registration
+Swing_DLL.xex,88784118,Script_TSU_FillFriendsLeaderboard,high,tu1 function from base 88783620; direct_TSU_FillFriendsLeaderboard_registration
+Swing_DLL.xex,88784368,TSU_GetProfileSummaries,high,tu1 function from base 88783870; direct_TSU_GetProfileSummaries_registration
+Swing_DLL.xex,887845f0,Script_TSU_Debug_RemoveFakePlayerFromLobby,high,tu1 function from base 88783af8; direct_TSU_Debug_RemoveFakePlayerFromLobby_registration
+Swing_DLL.xex,88784698,Script_TSU_Debug_AddFakePlayerToLobby,high,tu1 function from base 88783ba0; direct_TSU_Debug_AddFakePlayerToLobby_registration
+Swing_DLL.xex,887863b0,ts4_tsu_cleanup_begin,medium,tu1 function from base 887858b0; symbols.txt
+Swing_DLL.xex,88788138,Script_CG_AskForCharacter,high,tu1 function from base 88787638; direct_CG_AskForCharacter_registration
+Swing_DLL.xex,88788218,Script_TSU_DeclareMatchAsOfficial,high,tu1 function from base 88787718; direct_TSU_DeclareMatchAsOfficial_registration
+Swing_DLL.xex,88788820,Script_TSU_Debug_IndDecLobbyTimer,high,tu1 function from base 88787ce8; direct_TSU_Debug_IndDecLobbyTimer_registration
+Swing_DLL.xex,88788948,Script_TSU_Debug_SendEndSeasonToAll,high,tu1 function from base 88787e10; direct_TSU_Debug_SendEndSeasonToAll_registration
+Swing_DLL.xex,8878c138,TSU_InitFriendsLeaderboard,high,tu1 function from base 8878b600; direct_TSU_InitFriendsLeaderboard_registration
+Swing_DLL.xex,8878c358,TSU_ReadStatsAroundUser,high,tu1 function from base 8878b820; direct_TSU_ReadStatsAroundUser_registration
+Swing_DLL.xex,8878c5d8,TSU_ReadStatsByRank,high,tu1 function from base 8878baa0; direct_TSU_ReadStatsByRank_registration
+Swing_DLL.xex,8878c820,TSU_UpdateCreatedPlayerStats,high,tu1 function from base 8878bce8; direct_TSU_UpdateCreatedPlayerStats_registration
+Swing_DLL.xex,8878c858,TSU_UpdatePlayerRank,high,tu1 function from base 8878bd20; direct_TSU_UpdatePlayerRank_registration
+Swing_DLL.xex,8878c908,ts4_script_tsu_report_event,medium,tu1 function from base 8878bdd0; symbols.txt
+Swing_DLL.xex,8878c950,ts4_script_tsu_profile_service_reset,medium,tu1 function from base 8878be18; symbols.txt
+Swing_DLL.xex,8878c980,ts4_script_tsu_notify_object,medium,tu1 function from base 8878be48; symbols.txt
+Swing_DLL.xex,8878ce38,ts4_tsu_destroy_owned_object,medium,tu1 function from base 8878c300; symbols.txt
+Swing_DLL.xex,8878cec0,ts4_tsu_format_and_assign,medium,tu1 function from base 8878c388; symbols.txt
+Swing_DLL.xex,8878cff8,ts4_tsu_set_object_mode,medium,tu1 function from base 8878c4c0; symbols.txt
+Swing_DLL.xex,8878d2e8,ts4_tsu_enable_object,medium,tu1 function from base 8878c7b0; symbols.txt
+Swing_DLL.xex,8878d320,ts4_tsu_disable_object,medium,tu1 function from base 8878c7e8; symbols.txt
+Swing_DLL.xex,8878d478,ts4_tsu_cleanup_object,medium,tu1 function from base 8878c940; symbols.txt
+Swing_DLL.xex,8878f408,Minigame_ChangeDisplayGameMode,medium,tu1 function from base 8878e8d0; direct_call_from_registered_script_callback
+Swing_DLL.xex,88793178,Script_TitleServer_LoginUserOnly,high,tu1 function from base 88792638; direct_TitleServer_LoginUserOnly_registration
+Swing_DLL.xex,88793218,Script_TitleServer_DownloadPlayerInfo,high,tu1 function from base 887926d8; direct_TitleServer_DownloadPlayerInfo_registration
+Swing_DLL.xex,88793360,Script_TitleServer_Logout,high,tu1 function from base 88792820; direct_TitleServer_Logout_registration
+Swing_DLL.xex,887933c8,Script_TSU_UnloadProfile,medium,tu1 local from base 88792888; direct_TSU_UnloadProfile_registration
+Swing_DLL.xex,887937f8,Script_Minigame_ChangeDisplayGameMode,high,tu1 function from base 88792cb8; direct_Minigame_ChangeDisplayGameMode_registration
+Swing_DLL.xex,88793b40,ts4_script_player_select_unload_all_created_players,medium,tu1 function from base 88793000; symbols.txt
+Swing_DLL.xex,88794bd8,ts4_script_end_of_point_check_coach_objectives,medium,tu1 function from base 88794098; symbols.txt
+Swing_DLL.xex,88794c08,ts4_script_check_dlc_ok,medium,tu1 function from base 887940c8; symbols.txt
+Swing_DLL.xex,88794c98,ts4_script_apply_profile_options,medium,tu1 function from base 88794158; symbols.txt
+Swing_DLL.xex,88794cc8,ts4_script_change_part,medium,tu1 function from base 88794188; symbols.txt
+Swing_DLL.xex,887953e8,ts4_script_start_practice_ground,medium,tu1 function from base 887948a8; symbols.txt
+Swing_DLL.xex,88795418,ts4_script_init_main_camera,medium,tu1 function from base 887948d8; symbols.txt
+Swing_DLL.xex,887956a0,ts4_script_set_furniture_visibility,medium,tu1 function from base 88794b60; symbols.txt
+Swing_DLL.xex,88795700,ts4_script_set_free_form_replay_visibility,medium,tu1 function from base 88794bc0; symbols.txt
+Swing_DLL.xex,88795758,Script_SetPlayerBodyVisibility,high,tu1 function from base 88794c18; direct_SetPlayerBodyVisibility_registration
+Swing_DLL.xex,887957b0,Script_SetPlayerVisibility,high,tu1 function from base 88794c70; direct_SetPlayerVisibility_registration
+Swing_DLL.xex,88795808,Script_ProChallenge_TitleServer_QueryProPlayerList,high,tu1 function from base 88794cc8; direct_QueryProPlayerList_registration
+Swing_DLL.xex,88795978,Script_ProChallenge_TitleServer_Login,high,tu1 function from base 88794e38; direct_ProChallenge_TitleServer_Login_registration
+Swing_DLL.xex,88795a18,Script_TitleServer_QueryRoundInfo,high,tu1 function from base 88794ed8; direct_TitleServer_QueryRoundInfo_registration
+Swing_DLL.xex,88795b28,Script_TitleServer_GetPatch,high,tu1 function from base 88794fe8; direct_TitleServer_GetPatch_registration
+Swing_DLL.xex,88795b60,Script_TitleServer_Login,high,tu1 function from base 88795020; direct_TitleServer_Login_registration
+Swing_DLL.xex,88796088,Script_Minigame_PrepareInGame,high,tu1 function from base 88795548; direct_Minigame_PrepareInGame_registration
+Swing_DLL.xex,887960b0,Script_Minigame_HideUnusedTracksides,high,tu1 function from base 88795570; direct_Minigame_HideUnusedTracksides_registration
+Swing_DLL.xex,887960e0,Script_KingOfTheCourt_PrepareIngame,high,tu1 function from base 887955a0; direct_KingOfTheCourt_PrepareIngame_registration
+Swing_DLL.xex,88797110,ts4_script_are_there_rewards_for_event_recap,medium,tu1 local from base 887965d0; unique in .text; symbols.txt
+Swing_DLL.xex,88797210,ts4_script_match_start_reset_rewards,medium,tu1 function from base 88796640; symbols.txt
+Swing_DLL.xex,88797238,ts4_script_notify_rich_presence_by_part,medium,tu1 function from base 88796668; symbols.txt
+Swing_DLL.xex,88797340,ts4_script_init_practice_ground,medium,tu1 function from base 88796770; symbols.txt
+Swing_DLL.xex,88797560,ts4_script_reset_all_free_form_sliders,medium,tu1 function from base 88796990; symbols.txt
+Swing_DLL.xex,88797588,ts4_script_restore_all_free_form_sliders_step2,medium,tu1 function from base 887969b8; symbols.txt
+Swing_DLL.xex,88797848,ts4_script_show_hot_spots,medium,tu1 function from base 88796c78; symbols.txt
+Swing_DLL.xex,88797878,ts4_script_hide_hot_spots,medium,tu1 function from base 88796ca8; symbols.txt
+Swing_DLL.xex,88797c58,ts4_script_exit_locker_room,medium,tu1 function from base 88797088; symbols.txt
+Swing_DLL.xex,88797d38,ts4_script_king_of_the_court_wait_for_players_loading,medium,tu1 function from base 88797168; symbols.txt
+Swing_DLL.xex,88797d68,ts4_script_king_of_the_court_prepare_next_match,medium,tu1 function from base 88797198; symbols.txt
+Swing_DLL.xex,88799830,Script_TSU_ForfeitInLobby,high,tu1 function from base 88798c60; direct_TSU_ForfeitInLobby_registration
+Swing_DLL.xex,88799868,ts4_script_minigame_update_camera,medium,tu1 function from base 88798c98; symbols.txt
+Swing_DLL.xex,88799898,ts4_script_king_of_the_court_start_match,medium,tu1 function from base 88798cc8; symbols.txt
+Swing_DLL.xex,8879b098,ts4_script_top_spin_school_save_progress,medium,tu1 function from base 8879a4c8; symbols.txt
+Swing_DLL.xex,8879b7d8,ts4_script_end_of_match_check_coach_objectives,medium,tu1 function from base 8879ac08; symbols.txt
+Swing_DLL.xex,8879b8e8,ts4_script_enter_practice_ground,medium,tu1 function from base 8879ad18; symbols.txt
+Swing_DLL.xex,8879b918,ts4_script_facial_stop_anim,medium,tu1 function from base 8879ad48; symbols.txt
+Swing_DLL.xex,8879c468,ProChallenge_SaveProfile,high,tu1 function from base 8879b898; direct_ProChallenge_SaveProfile_registration
+Swing_DLL.xex,8879c518,ProChallenge_LoadProfile,high,tu1 function from base 8879b948; direct_ProChallenge_LoadProfile_registration
+Swing_DLL.xex,8879c5c8,Script_TSU_UpdateProfile,high,tu1 function from base 8879b9f8; direct_TSU_UpdateProfile_registration
+Swing_DLL.xex,8879c678,Script_TSU_LoadProfile,high,tu1 function from base 8879baa8; direct_TSU_LoadProfile_registration
+Swing_DLL.xex,8879c728,Script_TSU_SaveProfile,high,tu1 function from base 8879bb58; direct_TSU_SaveProfile_registration
+Swing_DLL.xex,8879c7f8,TSU_WriteProfileSummaries,high,tu1 function from base 8879bc28; direct_TSU_WriteProfileSummaries_registration
+Swing_DLL.xex,8879c898,TSU_LoadProfileSummaries,high,tu1 function from base 8879bcc8; direct_TSU_LoadProfileSummaries_registration
+Swing_DLL.xex,8879c938,ProfileInternalLookup,medium,tu1 function from base 8879bd68; exact_callback_behavior_under_review
+Swing_DLL.xex,8879cbc8,ProfileInternalActivate,medium,tu1 function from base 8879bff8; exact_callback_behavior_under_review
+Swing_DLL.xex,887a0680,ts4_script_choose_in_game_camera,medium,tu1 function from base 8879fa30; symbols.txt
+Swing_DLL.xex,887a1668,ts4_script_unload_all_player_portraits,medium,tu1 function from base 887a0a18; symbols.txt
+Swing_DLL.xex,887a1690,ts4_script_unload_all_temporary_player_portraits,medium,tu1 function from base 887a0a40; symbols.txt
+Swing_DLL.xex,887a16b8,ts4_script_unload_all_players_player_creator,medium,tu1 function from base 887a0a68; symbols.txt
+Swing_DLL.xex,887a3cb0,ts4_script_debug_reset_all_unlocks,medium,tu1 function from base 887a3060; symbols.txt
+Swing_DLL.xex,887a3e30,ts4_script_configure_pc_for_player_area,medium,tu1 function from base 887a31e0; symbols.txt
+Swing_DLL.xex,887a3e68,ts4_script_configure_pc_for_locker_room,medium,tu1 function from base 887a3218; symbols.txt
+Swing_DLL.xex,887a3ea0,ts4_script_unload_all_outfits,medium,tu1 function from base 887a3250; symbols.txt
+Swing_DLL.xex,887a5b40,ts4_script_unload_all_players_in_game,medium,tu1 function from base 887a4ef0; symbols.txt
+Swing_DLL.xex,887aee60,ts4_script_dll_init_master_pad,medium,tu1 function from base 887ae210; symbols.txt
+Swing_DLL.xex,887b20b8,RegisterOnlineScriptCommands,medium,"tu1 function* from base 887b1468; matched by slot, code changed; direct_script_registration_table"
+Swing_DLL.xex,887b6ca8,ts4_script_debug_unlock_all,medium,tu1 function from base 887b6030; symbols.txt
+Swing_DLL.xex,887b9718,ts4_script_end_of_match_apply_coach_progress,medium,tu1 function from base 887b8aa0; symbols.txt
+Swing_DLL.xex,887bc950,ts4_script_start_loading,medium,tu1 function from base 887bbcd8; symbols.txt
+Swing_DLL.xex,887c03f8,ts4_script_pop_me,medium,tu1 function from base 887bf780; symbols.txt
+Swing_DLL.xex,887d8268,ts4_tsu_notify_object,medium,tu1 function* from base 887d75a0; 4 operand(s) differ in sub_887D75A0; symbols.txt
+Swing_DLL.xex,887eb7b0,CPatchManager_GetSerializedSize,medium,"tu1 function* from base 887eaa98; matched by slot, code changed; size_calculation_for_patch_archive"
+Swing_DLL.xex,887ec700,RegisterCPatchManagerService,high,tu1 function from base 887eba48; direct_CPatchManager_registration
+Swing_DLL.xex,887ec7b0,CPatchManager_Serialize,medium,"tu1 function* from base 887ebaf8; matched by slot, code changed; writes_patch_state_to_stream"
+Swing_DLL.xex,887ed890,RegisterPatchServices,high,tu1 function from base 887ecbd0; direct_service_registration_table
+Swing_DLL.xex,887ee6b0,CPatchManager_Reset,medium,"tu1 function* from base 887ed9f0; matched by slot, code changed; releases_current_patch_state"
+Swing_DLL.xex,887f0700,CPatchManager_DeserializePayload,medium,tu1 function* from base 887ef7c0; 9 operand(s) differ in sub_887EF7C0; reads_header_and_patch_payload
+Swing_DLL.xex,88887108,ts4_tsu_cleanup_end,medium,tu1 function from base 88886100; symbols.txt
+Swing_DLL.xex,888d50b0,ts4_report_component_event,medium,tu1 function from base 888d3d98; symbols.txt
+Swing_DLL.xex,888db228,ts4_profile_service_reset,medium,tu1 function from base 888d9f10; symbols.txt
+Swing_DLL.xex,888e28e8,SetPlayerBodyVisibility,medium,tu1 function from base 888e15e0; direct_call_from_registered_script_callback
+Swing_DLL.xex,888e2c10,SetPlayerVisibility,medium,tu1 function from base 888e1908; direct_call_from_registered_script_callback
+Swing_DLL.xex,888e4420,Minigame_PrepareInGame,medium,tu1 function from base 888e3118; direct_call_from_registered_script_callback
+Swing_DLL.xex,888e44f0,Minigame_HideUnusedTracksides,medium,tu1 function from base 888e31e8; direct_call_from_registered_script_callback
+Swing_DLL.xex,888e52f8,KingOfTheCourt_PrepareIngame,medium,tu1 function from base 888e3ff0; direct_call_from_registered_script_callback
+Swing_DLL.xex,888f4560,ts4_profile_internal_activate,medium,tu1 function from base 888f3220; symbols.txt
+Swing_DLL.xex,888f6228,ts4_profile_internal_lookup,medium,tu1 function from base 888f4ee8; symbols.txt
+Swing_DLL.xex,88938218,ts4_profile_internal_is_available,medium,tu1 local from base 88936eb8; symbols.txt
+Swing_DLL.xex,88999c68,ts4_runtime_process_record_family_98000,medium,tu1 function from base 88998000; symbols.txt
+Swing_DLL.xex,88999cb0,ts4_runtime_process_record_family_98048,medium,tu1 function from base 88998048; symbols.txt
+Swing_DLL.xex,88999cf8,ts4_runtime_process_record_family_98090,medium,tu1 function from base 88998090; symbols.txt
+Swing_DLL.xex,8899e340,ts4_refresh_tournament_sessions,medium,tu1 function from base 8899c928; symbols.txt
+Swing_DLL.xex,8899e5f0,ts4_online_debug_end_season,medium,tu1 function from base 8899cba8; symbols.txt
+Swing_DLL.xex,8899ed90,COnlineLobby_IsFull,medium,tu1 local from base 8899d348; direct_tail_call_from_IsLobbyFull
+Swing_DLL.xex,8899f8c0,ts4_online_has_time_to_enter_lobby,medium,tu1 function from base 8899de28; symbols.txt
+Swing_DLL.xex,8899f9a8,ts4_online_has_time_before_season_end,medium,tu1 function from base 8899df10; symbols.txt
+Swing_DLL.xex,8899fb80,ts4_online_fill_friends_leaderboard,medium,tu1 function from base 8899e0e8; symbols.txt
+Swing_DLL.xex,8899fe20,ts4_online_get_profile_summaries,medium,"tu1 function* from base 8899e388; matched by slot, code changed; symbols.txt"
+Swing_DLL.xex,889a16c0,ts4_lobby_remove_fake_player,medium,tu1 local from base 8899fc10; symbols.txt
+Swing_DLL.xex,889a1728,ts4_lobby_add_fake_player,medium,tu1 function from base 8899fc78; symbols.txt
+Swing_DLL.xex,889a4d48,ts4_online_send_end_season_to_all,medium,tu1 function from base 889a3268; symbols.txt
+Swing_DLL.xex,889a4e78,ts4_online_declare_match_official,medium,tu1 function from base 889a3398; symbols.txt
+Swing_DLL.xex,889a6bc8,ts4_lobby_ask_for_character,medium,tu1 function from base 889a5118; symbols.txt
+Swing_DLL.xex,889ab008,ts4_online_init_friends_leaderboard,medium,tu1 function from base 889a9558; symbols.txt
+Swing_DLL.xex,889ab828,ts4_online_read_stats_around_user,medium,tu1 function from base 889a9d78; symbols.txt
+Swing_DLL.xex,889abf28,ts4_online_read_stats_by_rank,medium,tu1 function from base 889aa478; symbols.txt
+Swing_DLL.xex,889ad140,ts4_online_update_player_rank,medium,tu1 function from base 889ab690; symbols.txt
+Swing_DLL.xex,889ad448,ts4_online_update_created_player_stats,medium,tu1 function from base 889ab998; symbols.txt
+Swing_DLL.xex,889b2940,ts4_online_unload_profile,medium,tu1 function from base 889b14a8; symbols.txt
+Swing_DLL.xex,889b2ef0,ts4_title_server_logout,medium,tu1 function from base 889b1a58; symbols.txt
+Swing_DLL.xex,889b2f78,CTitleServer_LoginUserOnly,medium,tu1 function from base 889b1ae0; direct_call_from_registered_script_callback
+Swing_DLL.xex,889b3050,CTitleServer_ProcessPatchTransfer,medium,"tu1 function* from base 889b1bb8; matched by slot, code changed; TempPatch_transfer_path"
+Swing_DLL.xex,889b4050,CTitleServer_QueryProPlayerList,medium,tu1 function* from base 889b2bb0; 1 operand(s) differ in sub_889B2BB0; direct_call_from_registered_script_callback
+Swing_DLL.xex,889b4658,CTitleServer_QueryRoundInfo,medium,tu1 function* from base 889b31b8; 1 operand(s) differ in sub_889B31B8; direct_call_from_registered_script_callback
+Swing_DLL.xex,889b4b30,CProChallenge_TitleServer_Login,medium,tu1 function from base 889b3690; direct_call_from_registered_script_callback
+Swing_DLL.xex,889b4e40,CTitleServer_RequestPatch,medium,tu1 function from base 889b39a0; called_by_Script_TitleServer_GetPatch
+Swing_DLL.xex,889b6f38,ts4_online_forfeit_in_lobby,medium,"tu1 function* from base 889b59a0; matched by slot, code changed; symbols.txt"
+Swing_DLL.xex,889b6fe0,CTitleServer_QueueRequest,medium,tu1 function from base 889b5a30; request_queue_behavior
+Swing_DLL.xex,889b7f80,ts4_online_save_profile,medium,tu1 function from base 889b69c8; symbols.txt
+Swing_DLL.xex,889b81d8,ts4_online_load_profile_summaries,medium,tu1 function from base 889b6c20; symbols.txt
+Swing_DLL.xex,889b8338,ts4_online_load_profile,medium,"tu1 function* from base 889b6d80; matched by slot, code changed; symbols.txt"
+Swing_DLL.xex,889b8630,ts4_online_update_profile,medium,tu1 function from base 889b70c0; symbols.txt
+Swing_DLL.xex,889b8858,ts4_online_can_save_profile,medium,tu1 function from base 889b72e8; symbols.txt
+Swing_DLL.xex,889b97c0,ts4_pro_challenge_save_profile,medium,tu1 function from base 889b8058; symbols.txt
+Swing_DLL.xex,889b98d0,ts4_pro_challenge_load_profile,medium,tu1 function from base 889b8168; symbols.txt
+Swing_DLL.xex,889c2068,CTitleServer_BuildProtocolMessage,medium,tu1 function from base 889c0298; protocol_object_switch
+Swing_DLL.xex,88b015d0,XNotifyGetNext,medium,tu1 local from base 88aff800; symbols.txt
+Swing_DLL.xex,88b015e0,XGetVideoMode,medium,tu1 local from base 88aff810; symbols.txt
+Swing_DLL.xex,88b015f0,XNotifyPositionUI,medium,tu1 local from base 88aff820; symbols.txt
+Swing_DLL.xex,88b01600,XamCreateEnumeratorHandle,medium,tu1 local from base 88aff830; symbols.txt
+Swing_DLL.xex,88b01610,XMsgStartIORequestEx,medium,tu1 local from base 88aff840; symbols.txt
+Swing_DLL.xex,88b01620,XMsgStartIORequest,medium,tu1 local from base 88aff850; symbols.txt
+Swing_DLL.xex,88b01630,XamGetSystemVersion,medium,tu1 local from base 88aff860; symbols.txt
+Swing_DLL.xex,88b01640,XMsgInProcessCall,medium,tu1 local from base 88aff870; symbols.txt
+Swing_DLL.xex,88b01650,XamGetPrivateEnumStructureFromHandle,medium,tu1 local from base 88aff880; symbols.txt
+Swing_DLL.xex,88b01660,NetDll_XNetStartup,medium,tu1 local from base 88aff890; symbols.txt
+Swing_DLL.xex,88b01670,NetDll_XNetCleanup,medium,tu1 local from base 88aff8a0; symbols.txt
+Swing_DLL.xex,88b01680,NetDll_XNetUnregisterKey,medium,tu1 local from base 88aff8b0; symbols.txt
+Swing_DLL.xex,88b01690,NetDll_XNetXnAddrToInAddr,medium,tu1 local from base 88aff8c0; symbols.txt
+Swing_DLL.xex,88b016a0,NetDll_XNetServerToInAddr,medium,tu1 local from base 88aff8d0; symbols.txt
+Swing_DLL.xex,88b016b0,NetDll_XNetInAddrToXnAddr,medium,tu1 local from base 88aff8e0; symbols.txt
+Swing_DLL.xex,88b016c0,NetDll_XNetInAddrToString,medium,tu1 local from base 88aff8f0; symbols.txt
+Swing_DLL.xex,88b016d0,NetDll_XNetUnregisterInAddr,medium,tu1 local from base 88aff900; symbols.txt
+Swing_DLL.xex,88b016e0,NetDll_XNetConnect,medium,tu1 local from base 88aff910; symbols.txt
+Swing_DLL.xex,88b016f0,NetDll_XNetGetConnectStatus,medium,tu1 local from base 88aff920; symbols.txt
+Swing_DLL.xex,88b01700,NetDll_XNetDnsLookup,medium,tu1 local from base 88aff930; symbols.txt
+Swing_DLL.xex,88b01710,NetDll_XNetDnsRelease,medium,tu1 local from base 88aff940; symbols.txt
+Swing_DLL.xex,88b01720,NetDll_XNetQosListen,medium,tu1 local from base 88aff950; symbols.txt
+Swing_DLL.xex,88b01730,NetDll_XNetQosLookup,medium,tu1 local from base 88aff960; symbols.txt
+Swing_DLL.xex,88b01740,NetDll_XNetQosRelease,medium,tu1 local from base 88aff970; symbols.txt
+Swing_DLL.xex,88b01750,NetDll_XNetGetTitleXnAddr,medium,tu1 local from base 88aff980; symbols.txt
+Swing_DLL.xex,88b01760,NetDll_XNetGetEthernetLinkStatus,medium,tu1 local from base 88aff990; symbols.txt
+Swing_DLL.xex,88b01770,XamAlloc,medium,tu1 local from base 88aff9a0; symbols.txt
+Swing_DLL.xex,88b01780,NetDll_WSAStartup,medium,tu1 local from base 88aff9b0; symbols.txt
+Swing_DLL.xex,88b01790,NetDll_WSACleanup,medium,tu1 local from base 88aff9c0; symbols.txt
+Swing_DLL.xex,88b017a0,NetDll_socket,medium,tu1 local from base 88aff9d0; symbols.txt
+Swing_DLL.xex,88b017b0,NetDll_closesocket,medium,tu1 local from base 88aff9e0; symbols.txt
+Swing_DLL.xex,88b017c0,NetDll_ioctlsocket,medium,tu1 local from base 88aff9f0; symbols.txt
+Swing_DLL.xex,88b017d0,NetDll_setsockopt,medium,tu1 local from base 88affa00; symbols.txt
+Swing_DLL.xex,88b017e0,NetDll_bind,medium,tu1 local from base 88affa10; symbols.txt
+Swing_DLL.xex,88b017f0,NetDll_connect,medium,tu1 local from base 88affa20; symbols.txt
+Swing_DLL.xex,88b01800,NetDll_listen,medium,tu1 local from base 88affa30; symbols.txt
+Swing_DLL.xex,88b01810,NetDll_accept,medium,tu1 local from base 88affa40; symbols.txt
+Swing_DLL.xex,88b01820,NetDll_select,medium,tu1 local from base 88affa50; symbols.txt
+Swing_DLL.xex,88b01830,NetDll_recv,medium,tu1 local from base 88affa60; symbols.txt
+Swing_DLL.xex,88b01840,NetDll_recvfrom,medium,tu1 local from base 88affa70; symbols.txt
+Swing_DLL.xex,88b01850,NetDll_send,medium,tu1 local from base 88affa80; symbols.txt
+Swing_DLL.xex,88b01860,NetDll_sendto,medium,tu1 local from base 88affa90; symbols.txt
+Swing_DLL.xex,88b01870,NetDll_inet_addr,medium,tu1 local from base 88affaa0; symbols.txt
+Swing_DLL.xex,88b01880,NetDll_WSAGetLastError,medium,tu1 local from base 88affab0; symbols.txt
+Swing_DLL.xex,88b01890,NetDll___WSAFDIsSet,medium,tu1 local from base 88affac0; symbols.txt
+Swing_DLL.xex,88b018a0,XamFree,medium,tu1 local from base 88affad0; symbols.txt
+Swing_DLL.xex,88b018b0,XamUserGetXUID,medium,tu1 local from base 88affae0; symbols.txt
+Swing_DLL.xex,88b018c0,XNetLogonGetTitleID,medium,tu1 local from base 88affaf0; symbols.txt
+Swing_DLL.xex,88b018d0,XamSessionRefObjByHandle,medium,tu1 local from base 88affb00; symbols.txt
+Swing_DLL.xex,88b018e0,XamSessionCreateHandle,medium,tu1 local from base 88affb10; symbols.txt
+Swing_DLL.xex,88b018f0,XamUserReadProfileSettings,medium,tu1 local from base 88affb20; symbols.txt
+Swing_DLL.xex,88b01900,XamUserWriteProfileSettings,medium,tu1 local from base 88affb30; symbols.txt
+Swing_DLL.xex,88b01910,XamUserGetSigninState,medium,tu1 local from base 88affb40; symbols.txt
+Swing_DLL.xex,88b01920,XamUserCheckPrivilege,medium,tu1 local from base 88affb50; symbols.txt
+Swing_DLL.xex,88b01930,XamNotifyCreateListener,medium,tu1 local from base 88affb60; symbols.txt
+Swing_DLL.xex,88b01940,XamUserGetDeviceContext,medium,tu1 local from base 88affb70; symbols.txt
+Swing_DLL.xex,88b01950,XamVoiceHeadsetPresent,medium,tu1 local from base 88affb80; symbols.txt
+Swing_DLL.xex,88b01960,XamVoiceClose,medium,tu1 local from base 88affb90; symbols.txt
+Swing_DLL.xex,88b01970,XMsgCancelIORequest,medium,tu1 local from base 88affba0; symbols.txt
+Swing_DLL.xex,88b01980,XamVoiceSubmitPacket,medium,tu1 local from base 88affbb0; symbols.txt
+Swing_DLL.xex,88b01990,XamVoiceCreate,medium,tu1 local from base 88affbc0; symbols.txt
+Swing_DLL.xex,88b019a0,XamUserAreUsersFriends,medium,tu1 local from base 88affbd0; symbols.txt
+Swing_DLL.xex,88b019b0,XamEnumerate,medium,tu1 local from base 88affbe0; symbols.txt
+Swing_DLL.xex,88b019c0,XamUserGetName,medium,tu1 local from base 88affbf0; symbols.txt
+Swing_DLL.xex,88b019d0,XamUserCreateStatsEnumerator,medium,tu1 local from base 88affc00; symbols.txt
+Swing_DLL.xex,88b019e0,XamShowSigninUI,medium,tu1 local from base 88affc10; symbols.txt
+Swing_DLL.xex,88b019f0,XamShowFriendsUI,medium,tu1 local from base 88affc20; symbols.txt
+Swing_DLL.xex,88b01a00,XamShowKeyboardUI,medium,tu1 local from base 88affc30; symbols.txt
+Swing_DLL.xex,88b01a10,XamShowGamerCardUIForXUID,medium,tu1 local from base 88affc40; symbols.txt
+Swing_DLL.xex,88b01a20,XamShowAchievementsUI,medium,tu1 local from base 88affc50; symbols.txt
+Swing_DLL.xex,88b01a30,XamShowPlayerReviewUI,medium,tu1 local from base 88affc60; symbols.txt
+Swing_DLL.xex,88b01a40,XamShowMarketplaceUI,medium,tu1 local from base 88affc70; symbols.txt
+Swing_DLL.xex,88b01a50,XamShowDeviceSelectorUI,medium,tu1 local from base 88affc80; symbols.txt
+Swing_DLL.xex,88b01a60,XamShowMessageBoxUI,medium,tu1 local from base 88affc90; symbols.txt
+Swing_DLL.xex,88b01a70,XamShowFriendRequestUI,medium,tu1 local from base 88affca0; symbols.txt
+Swing_DLL.xex,88b01a80,XamShowDirtyDiscErrorUI,medium,tu1 local from base 88affcb0; symbols.txt
+Swing_DLL.xex,88b01a90,XamUserGetSigninInfo,medium,tu1 local from base 88affcc0; symbols.txt
+Swing_DLL.xex,88b01aa0,XamInputGetCapabilities,medium,tu1 local from base 88affcd0; symbols.txt
+Swing_DLL.xex,88b01ab0,XamInputGetState,medium,tu1 local from base 88affce0; symbols.txt
+Swing_DLL.xex,88b01ac0,XamInputSetState,medium,tu1 local from base 88affcf0; symbols.txt
+Swing_DLL.xex,88b01ad0,XamContentCreateEx,medium,tu1 local from base 88affd00; symbols.txt
+Swing_DLL.xex,88b01ae0,XamContentDelete,medium,tu1 local from base 88affd10; symbols.txt
+Swing_DLL.xex,88b01af0,XamContentClose,medium,tu1 local from base 88affd20; symbols.txt
+Swing_DLL.xex,88b01b00,XamContentFlush,medium,tu1 local from base 88affd30; symbols.txt
+Swing_DLL.xex,88b01b10,XamContentGetCreator,medium,tu1 local from base 88affd40; symbols.txt
+Swing_DLL.xex,88b01b20,XamContentCreateEnumerator,medium,tu1 local from base 88affd50; symbols.txt
+Swing_DLL.xex,88b01b30,XamContentGetDeviceState,medium,tu1 local from base 88affd60; symbols.txt
+Swing_DLL.xex,88b01b40,XamContentGetDeviceData,medium,tu1 local from base 88affd70; symbols.txt
+Swing_DLL.xex,88b01b50,XGetGameRegion,medium,tu1 local from base 88affd80; symbols.txt
+Swing_DLL.xex,88b01b60,XamGetExecutionId,medium,tu1 local from base 88affd90; symbols.txt
+Swing_DLL.xex,88b01b70,XamLoaderLaunchTitle,medium,tu1 local from base 88affda0; symbols.txt
+Swing_DLL.xex,88b01b80,KeTlsGetValue,medium,tu1 local from base 88affdb0; symbols.txt
+Swing_DLL.xex,88b01b90,RtlInitializeCriticalSection,medium,tu1 local from base 88affdc0; symbols.txt
+Swing_DLL.xex,88b01ba0,RtlLeaveCriticalSection,medium,tu1 local from base 88affdd0; symbols.txt
+Swing_DLL.xex,88b01bb0,RtlEnterCriticalSection,medium,tu1 local from base 88affde0; symbols.txt
+Swing_DLL.xex,88b01bc0,RtlTryEnterCriticalSection,medium,tu1 local from base 88affdf0; symbols.txt
+Swing_DLL.xex,88b01bd0,ObDereferenceObject,medium,tu1 local from base 88affe00; symbols.txt
+Swing_DLL.xex,88b01be0,KeGetCurrentProcessType,medium,tu1 local from base 88affe10; symbols.txt
+Swing_DLL.xex,88b01bf0,MmQueryAddressProtect,medium,tu1 local from base 88affe20; symbols.txt
+Swing_DLL.xex,88b01c00,KfAcquireSpinLock,medium,tu1 local from base 88affe30; symbols.txt
+Swing_DLL.xex,88b01c10,VdSetSystemCommandBufferGpuIdentifierAddress,medium,tu1 local from base 88affe40; symbols.txt
+Swing_DLL.xex,88b01c20,KfReleaseSpinLock,medium,tu1 local from base 88affe50; symbols.txt
+Swing_DLL.xex,88b01c30,KiApcNormalRoutineNop,medium,tu1 local from base 88affe60; symbols.txt
+Swing_DLL.xex,88b01c40,MmGetPhysicalAddress,medium,tu1 local from base 88affe70; symbols.txt
+Swing_DLL.xex,88b01c50,KeReleaseSpinLockFromRaisedIrql,medium,tu1 local from base 88affe80; symbols.txt
+Swing_DLL.xex,88b01c60,VdEnableRingBufferRPtrWriteBack,medium,tu1 local from base 88affe90; symbols.txt
+Swing_DLL.xex,88b01c70,VdInitializeRingBuffer,medium,tu1 local from base 88affea0; symbols.txt
+Swing_DLL.xex,88b01c80,KeAcquireSpinLockAtRaisedIrql,medium,tu1 local from base 88affeb0; symbols.txt
+Swing_DLL.xex,88b01c90,MmFreePhysicalMemory,medium,tu1 local from base 88affec0; symbols.txt
+Swing_DLL.xex,88b01ca0,KeQueryPerformanceFrequency,medium,tu1 local from base 88affed0; symbols.txt
+Swing_DLL.xex,88b01cb0,VdPersistDisplay,medium,tu1 local from base 88affee0; symbols.txt
+Swing_DLL.xex,88b01cc0,VdSwap,medium,tu1 local from base 88affef0; symbols.txt
+Swing_DLL.xex,88b01cd0,VdGetSystemCommandBuffer,medium,tu1 local from base 88afff00; symbols.txt
+Swing_DLL.xex,88b01ce0,MmAllocatePhysicalMemoryEx,medium,tu1 local from base 88afff10; symbols.txt
+Swing_DLL.xex,88b01cf0,VdEnableDisableClockGating,medium,tu1 local from base 88afff20; symbols.txt
+Swing_DLL.xex,88b01d00,KeResetEvent,medium,tu1 local from base 88afff30; symbols.txt
+Swing_DLL.xex,88b01d10,KeSetEvent,medium,tu1 local from base 88afff40; symbols.txt
+Swing_DLL.xex,88b01d20,KeInitializeDpc,medium,tu1 local from base 88afff50; symbols.txt
+Swing_DLL.xex,88b01d30,KeSetBasePriorityThread,medium,tu1 local from base 88afff60; symbols.txt
+Swing_DLL.xex,88b01d40,KeLockL2,medium,tu1 local from base 88afff70; symbols.txt
+Swing_DLL.xex,88b01d50,KeUnlockL2,medium,tu1 local from base 88afff80; symbols.txt
+Swing_DLL.xex,88b01d60,ObReferenceObjectByHandle,medium,tu1 local from base 88afff90; symbols.txt
+Swing_DLL.xex,88b01d70,KeWaitForSingleObject,medium,tu1 local from base 88afffa0; symbols.txt
+Swing_DLL.xex,88b01d80,sprintf,medium,tu1 local from base 88afffb0; symbols.txt
+Swing_DLL.xex,88b01d90,VdGetCurrentDisplayGamma,medium,tu1 local from base 88afffc0; symbols.txt
+Swing_DLL.xex,88b01da0,KeBugCheck,medium,tu1 local from base 88afffd0; symbols.txt
+Swing_DLL.xex,88b01db0,VdQueryVideoMode,medium,tu1 local from base 88afffe0; symbols.txt
+Swing_DLL.xex,88b01dc0,VdInitializeScalerCommandBuffer,medium,tu1 local from base 88affff0; symbols.txt
+Swing_DLL.xex,88b01dd0,VdQueryVideoFlags,medium,tu1 local from base 88b00000; symbols.txt
+Swing_DLL.xex,88b01de0,RtlFillMemoryUlong,medium,tu1 local from base 88b00010; symbols.txt
+Swing_DLL.xex,88b01df0,VdCallGraphicsNotificationRoutines,medium,tu1 local from base 88b00020; symbols.txt
+Swing_DLL.xex,88b01e00,ObDeleteSymbolicLink,medium,tu1 local from base 88b00030; symbols.txt
+Swing_DLL.xex,88b01e10,RtlInitAnsiString,medium,tu1 local from base 88b00040; symbols.txt
+Swing_DLL.xex,88b01e20,VdGetCurrentDisplayInformation,medium,tu1 local from base 88b00050; symbols.txt
+Swing_DLL.xex,88b01e30,ObCreateSymbolicLink,medium,tu1 local from base 88b00060; symbols.txt
+Swing_DLL.xex,88b01e40,VdSetDisplayMode,medium,tu1 local from base 88b00070; symbols.txt
+Swing_DLL.xex,88b01e50,VdSetGraphicsInterruptCallback,medium,tu1 local from base 88b00080; symbols.txt
+Swing_DLL.xex,88b01e60,VdInitializeEngines,medium,tu1 local from base 88b00090; symbols.txt
+Swing_DLL.xex,88b01e70,ExGetXConfigSetting,medium,tu1 local from base 88b000a0; symbols.txt
+Swing_DLL.xex,88b01e80,VdIsHSIOTrainingSucceeded,medium,tu1 local from base 88b000b0; symbols.txt
+Swing_DLL.xex,88b01e90,VdShutdownEngines,medium,tu1 local from base 88b000c0; symbols.txt
+Swing_DLL.xex,88b01ea0,ExRegisterTitleTerminateNotification,medium,tu1 local from base 88b000d0; symbols.txt
+Swing_DLL.xex,88b01eb0,_vsnprintf,medium,tu1 local from base 88b000e0; symbols.txt
+Swing_DLL.xex,88b01ec0,KeLeaveCriticalRegion,medium,tu1 local from base 88b000f0; symbols.txt
+Swing_DLL.xex,88b01ed0,KeEnterCriticalRegion,medium,tu1 local from base 88b00100; symbols.txt
+Swing_DLL.xex,88b01ee0,VdRetrainEDRAM,medium,tu1 local from base 88b00110; symbols.txt
+Swing_DLL.xex,88b01ef0,VdRetrainEDRAMWorker,medium,tu1 local from base 88b00120; symbols.txt
+Swing_DLL.xex,88b01f00,KeSetCurrentProcessType,medium,tu1 local from base 88b00130; symbols.txt
+Swing_DLL.xex,88b01f10,DbgPrint,medium,tu1 local from base 88b00140; symbols.txt
+Swing_DLL.xex,88b01f20,__C_specific_handler,medium,tu1 local from base 88b00150; symbols.txt
+Swing_DLL.xex,88b01f30,KeTlsSetValue,medium,tu1 local from base 88b00160; symbols.txt
+Swing_DLL.xex,88b01f40,KeTlsAlloc,medium,tu1 local from base 88b00170; symbols.txt
+Swing_DLL.xex,88b01f50,KeTlsFree,medium,tu1 local from base 88b00180; symbols.txt
+Swing_DLL.xex,88b01f60,RtlInitializeCriticalSectionAndSpinCount,medium,tu1 local from base 88b00190; symbols.txt
+Swing_DLL.xex,88b01f70,XexGetProcedureAddress,medium,tu1 local from base 88b001a0; symbols.txt
+Swing_DLL.xex,88b01f80,XexGetModuleHandle,medium,tu1 local from base 88b001b0; symbols.txt
+Swing_DLL.xex,88b01f90,XexCheckExecutablePrivilege,medium,tu1 local from base 88b001c0; symbols.txt
+Swing_DLL.xex,88b01fa0,RtlUnwind,medium,tu1 local from base 88b001d0; symbols.txt
+Swing_DLL.xex,88b01fb0,XexUnloadImage,medium,tu1 local from base 88b001e0; symbols.txt
+Swing_DLL.xex,88b01fc0,XexLoadImage,medium,tu1 local from base 88b001f0; symbols.txt
+Swing_DLL.xex,88b01fd0,XexGetModuleSection,medium,tu1 local from base 88b00200; symbols.txt
+Swing_DLL.xex,88b01fe0,MmQueryAllocationSize,medium,tu1 local from base 88b00210; symbols.txt
+Swing_DLL.xex,88b01ff0,MmSetAddressProtect,medium,tu1 local from base 88b00220; symbols.txt
+Swing_DLL.xex,88b02000,NtOpenFile,medium,tu1 local from base 88b00230; symbols.txt
+Swing_DLL.xex,88b02010,NtCreateFile,medium,tu1 local from base 88b00240; symbols.txt
+Swing_DLL.xex,88b02020,KeQueryBasePriorityThread,medium,tu1 local from base 88b00250; symbols.txt
+Swing_DLL.xex,88b02030,NtSuspendThread,medium,tu1 local from base 88b00260; symbols.txt
+Swing_DLL.xex,88b02040,KeSetAffinityThread,medium,tu1 local from base 88b00270; symbols.txt
+Swing_DLL.xex,88b02050,NtCreateEvent,medium,tu1 local from base 88b00280; symbols.txt
+Swing_DLL.xex,88b02060,NtClose,medium,tu1 local from base 88b00290; symbols.txt
+Swing_DLL.xex,88b02070,NtSetInformationFile,medium,tu1 local from base 88b002a0; symbols.txt
+Swing_DLL.xex,88b02080,NtWriteFile,medium,tu1 local from base 88b002b0; symbols.txt
+Swing_DLL.xex,88b02090,ExFreePool,medium,tu1 local from base 88b002c0; symbols.txt
+Swing_DLL.xex,88b020a0,NtWaitForSingleObjectEx,medium,tu1 local from base 88b002d0; symbols.txt
+Swing_DLL.xex,88b020b0,NtFlushBuffersFile,medium,tu1 local from base 88b002e0; symbols.txt
+Swing_DLL.xex,88b020c0,NtQueryInformationFile,medium,tu1 local from base 88b002f0; symbols.txt
+Swing_DLL.xex,88b020d0,NtCreateSemaphore,medium,tu1 local from base 88b00300; symbols.txt
+Swing_DLL.xex,88b020e0,NtReleaseSemaphore,medium,tu1 local from base 88b00310; symbols.txt
+Swing_DLL.xex,88b020f0,NtWaitForMultipleObjectsEx,medium,tu1 local from base 88b00320; symbols.txt
+Swing_DLL.xex,88b02100,NtCreateMutant,medium,tu1 local from base 88b00330; symbols.txt
+Swing_DLL.xex,88b02110,NtReleaseMutant,medium,tu1 local from base 88b00340; symbols.txt
+Swing_DLL.xex,88b02120,NtSetEvent,medium,tu1 local from base 88b00350; symbols.txt
+Swing_DLL.xex,88b02130,NtQueryFullAttributesFile,medium,tu1 local from base 88b00360; symbols.txt
+Swing_DLL.xex,88b02140,NtAllocateVirtualMemory,medium,tu1 local from base 88b00370; symbols.txt
+Swing_DLL.xex,88b02150,NtFreeVirtualMemory,medium,tu1 local from base 88b00380; symbols.txt
+Swing_DLL.xex,88b02160,NtResumeThread,medium,tu1 local from base 88b00390; symbols.txt
+Swing_DLL.xex,88b02170,RtlCompareStringN,medium,tu1 local from base 88b003a0; symbols.txt
+Swing_DLL.xex,88b02180,NtQueryVolumeInformationFile,medium,tu1 local from base 88b003b0; symbols.txt
+Swing_DLL.xex,88b02190,RtlImageXexHeaderField,medium,tu1 local from base 88b003c0; symbols.txt
+Swing_DLL.xex,88b021a0,XexLoadImageHeaders,medium,tu1 local from base 88b003d0; symbols.txt
+Swing_DLL.xex,88b021b0,RtlNtStatusToDosError,medium,tu1 local from base 88b003e0; symbols.txt
+Swing_DLL.xex,88b021c0,_snprintf,medium,tu1 local from base 88b003f0; symbols.txt
+Swing_DLL.xex,88b021d0,KeBugCheckEx,medium,tu1 local from base 88b00400; symbols.txt
+Swing_DLL.xex,88b021e0,RtlCompareMemoryUlong,medium,tu1 local from base 88b00410; symbols.txt
+Swing_DLL.xex,88b021f0,NtQueryVirtualMemory,medium,tu1 local from base 88b00420; symbols.txt
+Swing_DLL.xex,88b02200,RtlRaiseException,medium,tu1 local from base 88b00430; symbols.txt
+Swing_DLL.xex,88b02210,NtProtectVirtualMemory,medium,tu1 local from base 88b00440; symbols.txt
+Swing_DLL.xex,88b02220,MmQueryStatistics,medium,tu1 local from base 88b00450; symbols.txt
+Swing_DLL.xex,88b02230,NtDuplicateObject,medium,tu1 local from base 88b00460; symbols.txt
+Swing_DLL.xex,88b02240,RtlTimeToTimeFields,medium,tu1 local from base 88b00470; symbols.txt
+Swing_DLL.xex,88b02250,KeQuerySystemTime,medium,tu1 local from base 88b00480; symbols.txt
+Swing_DLL.xex,88b02260,RtlUnicodeToMultiByteN,medium,tu1 local from base 88b00490; symbols.txt
+Swing_DLL.xex,88b02270,RtlMultiByteToUnicodeN,medium,tu1 local from base 88b004a0; symbols.txt
+Swing_DLL.xex,88b02280,NtClearEvent,medium,tu1 local from base 88b004b0; symbols.txt
+Swing_DLL.xex,88b02290,NtCancelTimer,medium,tu1 local from base 88b004c0; symbols.txt
+Swing_DLL.xex,88b022a0,NtSetTimerEx,medium,tu1 local from base 88b004d0; symbols.txt
+Swing_DLL.xex,88b022b0,ExTerminateThread,medium,tu1 local from base 88b004e0; symbols.txt
+Swing_DLL.xex,88b022c0,NtCreateTimer,medium,tu1 local from base 88b004f0; symbols.txt
+Swing_DLL.xex,88b022d0,ExCreateThread,medium,tu1 local from base 88b00500; symbols.txt
+Swing_DLL.xex,88b022e0,NtYieldExecution,medium,tu1 local from base 88b00510; symbols.txt
+Swing_DLL.xex,88b022f0,RtlFreeAnsiString,medium,tu1 local from base 88b00520; symbols.txt
+Swing_DLL.xex,88b02300,RtlUnicodeStringToAnsiString,medium,tu1 local from base 88b00530; symbols.txt
+Swing_DLL.xex,88b02310,RtlInitUnicodeString,medium,tu1 local from base 88b00540; symbols.txt
+Swing_DLL.xex,88b02320,NtQueryDirectoryFile,medium,tu1 local from base 88b00550; symbols.txt
+Swing_DLL.xex,88b02330,NtReadFileScatter,medium,tu1 local from base 88b00560; symbols.txt
+Swing_DLL.xex,88b02340,NtReadFile,medium,tu1 local from base 88b00570; symbols.txt
+Swing_DLL.xex,88b02350,KeDelayExecutionThread,medium,tu1 local from base 88b00580; symbols.txt
+Swing_DLL.xex,88b02360,NtWriteFileGather,medium,tu1 local from base 88b00590; symbols.txt
+Swing_DLL.xex,88b02370,IoInvalidDeviceRequest,medium,tu1 local from base 88b005a0; symbols.txt
+Swing_DLL.xex,88b02380,XeCryptSha,medium,tu1 local from base 88b005b0; symbols.txt
+Swing_DLL.xex,88b02390,ObReferenceObject,medium,tu1 local from base 88b005c0; symbols.txt
+Swing_DLL.xex,88b023a0,IoCreateDevice,medium,tu1 local from base 88b005d0; symbols.txt
+Swing_DLL.xex,88b023b0,IoDeleteDevice,medium,tu1 local from base 88b005e0; symbols.txt
+Swing_DLL.xex,88b023c0,ExAllocatePoolTypeWithTag,medium,tu1 local from base 88b005f0; symbols.txt
+Swing_DLL.xex,88b023d0,RtlTimeFieldsToTime,medium,tu1 local from base 88b00600; symbols.txt
+Swing_DLL.xex,88b023e0,IoCompleteRequest,medium,tu1 local from base 88b00610; symbols.txt
+Swing_DLL.xex,88b023f0,RtlUpcaseUnicodeChar,medium,tu1 local from base 88b00620; symbols.txt
+Swing_DLL.xex,88b02400,ObIsTitleObject,medium,tu1 local from base 88b00630; symbols.txt
+Swing_DLL.xex,88b02410,IoCheckShareAccess,medium,tu1 local from base 88b00640; symbols.txt
+Swing_DLL.xex,88b02420,IoSetShareAccess,medium,tu1 local from base 88b00650; symbols.txt
+Swing_DLL.xex,88b02430,IoRemoveShareAccess,medium,tu1 local from base 88b00660; symbols.txt
+Swing_DLL.xex,88b02440,StfsControlDevice,medium,tu1 local from base 88b00670; symbols.txt
+Swing_DLL.xex,88b02450,StfsCreateDevice,medium,tu1 local from base 88b00680; symbols.txt
+Swing_DLL.xex,88b02460,XMACreateContext,medium,tu1 local from base 88b00690; symbols.txt
+Swing_DLL.xex,88b02470,XMAReleaseContext,medium,tu1 local from base 88b006a0; symbols.txt
+Swing_DLL.xex,88b02480,XAudioGetVoiceCategoryVolume,medium,tu1 local from base 88b006b0; symbols.txt
+Swing_DLL.xex,88b02490,MmMapIoSpace,medium,tu1 local from base 88b006c0; symbols.txt
+Swing_DLL.xex,88b024a0,KeWaitForMultipleObjects,medium,tu1 local from base 88b006d0; symbols.txt
+Swing_DLL.xex,88b024b0,XAudioSubmitRenderDriverFrame,medium,tu1 local from base 88b006e0; symbols.txt
+Swing_DLL.xex,88b024c0,XAudioUnregisterRenderDriverClient,medium,tu1 local from base 88b006f0; symbols.txt
+Swing_DLL.xex,88b024d0,XAudioRegisterRenderDriverClient,medium,tu1 local from base 88b00700; symbols.txt
+Swing_DLL.xex,88b024e0,XAudioGetSpeakerConfig,medium,tu1 local from base 88b00710; symbols.txt
+Swing_DLL.xex,88b024f0,RmcDeviceRequest,medium,tu1 local from base 88b00720; symbols.txt
+Swing_DLL.xex,88b02500,MicDeviceRequest,medium,tu1 local from base 88b00730; symbols.txt
+Swing_DLL.xex,88b02510,KeInitializeApc,medium,tu1 local from base 88b00740; symbols.txt
+Swing_DLL.xex,88b02520,ExAllocatePoolWithTag,medium,tu1 local from base 88b00750; symbols.txt
+Swing_DLL.xex,88b02530,KeInsertQueueApc,medium,tu1 local from base 88b00760; symbols.txt
+Swing_DLL.xex,88b02540,KeReleaseSemaphore,medium,tu1 local from base 88b00770; symbols.txt
