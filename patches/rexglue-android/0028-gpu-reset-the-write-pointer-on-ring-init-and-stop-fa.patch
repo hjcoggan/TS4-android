@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Wed, 4 Nov 2026 00:06:21 +1000
-Subject: [PATCH 28/29] gpu: reset the write pointer on ring init and stop
+Subject: [PATCH 28/30] gpu: reset the write pointer on ring init and stop
  faking completion
 
 VdInitializeRingBuffer reset read_ptr_index_ but left write_ptr_index_ at the

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:51:04 +1000
-Subject: [PATCH 24/29] android: accept REX_APP_FOLDER as well as
+Subject: [PATCH 24/30] android: accept REX_APP_FOLDER as well as
  REX_EXECUTABLE_FOLDER
 
 nfsmw's SDK port (codepdbh/nfsmw-android sdk/, BSD-3-Clause) names the app

@@ -24,6 +24,7 @@
         android:theme="@style/AppTheme"
         android:isGame="true"
         android:appCategory="game"
+        android:debuggable="true"
         android:largeHeap="true"
         android:hardwareAccelerated="true"
         android:extractNativeLibs="true"

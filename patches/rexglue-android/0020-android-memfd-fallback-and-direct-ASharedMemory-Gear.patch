@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:46:59 +1000
-Subject: [PATCH 20/29] android: memfd fallback and direct ASharedMemory (Gears
+Subject: [PATCH 20/30] android: memfd fallback and direct ASharedMemory (Gears
  0007)
 
 Port of santiquiroz/gears-of-war-2-pc-port sdk/patches/0007 (BSD-3-Clause),
