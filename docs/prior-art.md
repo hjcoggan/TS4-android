@@ -19,8 +19,8 @@ The full reports are `../_prior-art/report-*.md`.
 Rule (user decision, 2026-11-03): this is a private, offline research project that is never
 distributed, so BSD, MIT **and GPL-3.0** sources may be used. Record every adapted file with its
 repo and license (`patches/rexglue-android/THIRD_PARTY.md`, `android/README.md`). Prefer BSD/MIT
-when two sources are equivalent. The repos with no license (Renut, Skate3-Mobile) are for ideas;
-prefer a licensed source that covers the same ground. The TS4 reference repo itself has no
+when two sources are equivalent. The repos with no license file (Renut, Skate3-Mobile) may be used too,
+with the user's permission, where they suit the project. The TS4 reference repo itself has no
 LICENSE file either. Because of the GPL code, this tree must never be published as-is.
 
 ## Corrections to our earlier docs
