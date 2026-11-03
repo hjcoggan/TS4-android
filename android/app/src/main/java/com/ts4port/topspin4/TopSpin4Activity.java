@@ -14,9 +14,9 @@ import org.libsdl.app.SDLActivity;
 import java.io.File;
 
 /**
- * Entry point. SDL3 is built statically into libtopspin4.so by the ReXGlue SDK
- * (thirdparty/CMakeLists.txt forces SDL_SHARED=OFF), so there is no separate
- * libSDL3.so to load: the SDL JNI_OnLoad lives inside libtopspin4.so.
+ * Entry point. SDL3 is built statically into the SDK runtime (librexruntimed.so;
+ * thirdparty/CMakeLists.txt forces SDL_SHARED=OFF), so there is no separate
+ * libSDL3.so: SDL's JNI_OnLoad is in the runtime, and SDL_main is in libtopspin4.so.
  *
  * <p>Prepares the game-data folder and environment variables before SDL loads
  * the native library, enables immersive fullscreen / keep-screen-on, and
