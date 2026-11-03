@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:20:19 +1000
-Subject: [PATCH 04/30] cmake(ui): no X11/Wayland pkg-config on Android
+Subject: [PATCH 04/31] cmake(ui): no X11/Wayland pkg-config on Android
 
 src/ui required x11-xcb and wayland-client from pkg-config for every
 UNIX-and-not-APPLE target. The NDK has no pkg-config and Android has neither

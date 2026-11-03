@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:50:35 +1000
-Subject: [PATCH 22/30] ui: reconnect the presenter across Android
+Subject: [PATCH 22/31] ui: reconnect the presenter across Android
  background/foreground (nfsmw sdk)
 
 From codepdbh/nfsmw-android sdk/ (BSD-3-Clause), src/ui/window_sdl.cpp,
