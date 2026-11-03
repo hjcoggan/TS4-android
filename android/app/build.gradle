@@ -41,7 +41,11 @@ android {
             externalNativeBuild {
                 cmake {
                     arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
-                              '-DREXGLUE_RECOMP_DEBUG_INFO=none'
+                              '-DREXGLUE_RECOMP_DEBUG_INFO=none',
+                              // The SDK's perf counters wrap hot paths (command processing, memory)
+                              // in clock_gettime scopes. A simpleperf profile of the cinematic put
+                              // 41% of all cycles in __kernel_clock_gettime because of them.
+                              '-DREXGLUE_ENABLE_PERF_COUNTERS=OFF'
                 }
             }
         }
