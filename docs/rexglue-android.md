@@ -437,7 +437,7 @@ Logs: `work/logs/sdk-android-<N>.log` (the successful from-scratch run is `sdk-a
 
 ### What the 25-patch series does
 
-Series: `ts4-port/patches/rexglue-android/` (regenerate with
+Series: `ts4-port/patches/rexglue-android/` (now 26 patches; regenerate with
 `ts4-port/scripts/export-sdk-patches.sh`). Licences and provenance: `THIRD_PARTY.md` there.
 
 Build system
@@ -474,13 +474,15 @@ Missing symbols / bionic
 14. `GetExecutableFolder()`: `REX_EXECUTABLE_FOLDER`/`REX_APP_FOLDER`, else `dladdr` on the
     runtime's own library (= `nativeLibraryDir`); `GetUserFolder()` = app internal storage.
 15. GPU plugin loaded by soname on Android (`librexgpu-xenos.so` via the app's linker namespace).
-16. `chrono`: the `clock_time_conversion` fallback for Android libc++ (it has no `clock_cast`).
-17. Fibers: `src/core/fiber_android.cpp`, an AAPCS64 context switch (x19-x28, x29, x30, sp,
+16. Recompiled guest modules loaded by Android soname candidates (`lib<name>.so`, `<name>.so`,
+    then `<name>`); the Windows path continues loading the registered name directly.
+17. `chrono`: the `clock_time_conversion` fallback for Android libc++ (it has no `clock_cast`).
+18. Fibers: `src/core/fiber_android.cpp`, an AAPCS64 context switch (x19-x28, x29, x30, sp,
     d8-d15) — bionic has no `getcontext`/`makecontext`/`swapcontext` on 64-bit.
-18. No robust mutexes (`PTHREAD_MUTEX_ROBUST` does not exist in bionic).
-19. SEH: SIGBUS treated as an access violation on Android; unclaimed SIGSEGV/SIGBUS/SIGILL
+19. No robust mutexes (`PTHREAD_MUTEX_ROBUST` does not exist in bionic).
+20. SEH: SIGBUS treated as an access violation on Android; unclaimed SIGSEGV/SIGBUS/SIGILL
     forwarded to the previous handler (or `SIG_DFL` + re-raise) instead of faulting forever.
-20. `"a+"` streams rewound after `fopen` (bionic starts reads at EOF; shader storage truncated).
+21. `"a+"` streams rewound after `fopen` (bionic starts reads at EOF; shader storage truncated).
 
 ### Left (deliberately out of scope here)
 

@@ -155,8 +155,19 @@ bool InitializeContext(const rex::ui::vulkan::VulkanDevice* device,
       !properties.descriptorBindingSampledImageUpdateAfterBind ||
       !properties.descriptorBindingUpdateUnusedWhilePending || !properties.shaderInt64 ||
       !properties.dynamicRendering) {
-    REXLOG_ERROR("native renderer: the Vulkan device lacks buffer device address, "
-                 "bindless descriptors, shaderInt64 or dynamic rendering");
+    // Name every required bit: a single message cannot say which one the device lacks, and on
+    // Adreno the answer (shaderInt64) decides whether the native renderer is a shader change or
+    // impossible. See work/logs/native-renderer-strategy.md.
+    REXLOG_ERROR("native renderer: Vulkan features unavailable: bufferDeviceAddress={}, "
+                 "runtimeDescriptorArray={}, descriptorBindingPartiallyBound={}, "
+                 "descriptorBindingSampledImageUpdateAfterBind={}, "
+                 "descriptorBindingUpdateUnusedWhilePending={}, shaderInt64={}, "
+                 "dynamicRendering={}",
+                 properties.bufferDeviceAddress, properties.runtimeDescriptorArray,
+                 properties.descriptorBindingPartiallyBound,
+                 properties.descriptorBindingSampledImageUpdateAfterBind,
+                 properties.descriptorBindingUpdateUnusedWhilePending, properties.shaderInt64,
+                 properties.dynamicRendering);
     return false;
   }
   g_vk.device = device;

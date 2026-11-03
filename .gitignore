@@ -11,3 +11,12 @@ updatedata/
 dump/
 /build*/
 .DS_Store
+
+# Gradle machine-local config
+local.properties
+.gradle/
+
+# Gradle/AGP build output
+android/build/
+android/app/build/
+android/app/.cxx/

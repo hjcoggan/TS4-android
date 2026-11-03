@@ -79,6 +79,14 @@ Expected layout on the device:
 If `gamedata/default.xex` is missing the app shows a native-free error screen with the
 commands above instead of starting the engine.
 
+### adb push ownership
+
+`adb push` creates shell-owned directories with mode `2770`; the app cannot traverse them or
+write saves inside them. From the repository root, run `scripts/push-data.sh` after preparing
+the data. It pushes the game/update files and shader pack, then applies `chmod -R a+rwX` only
+to `gamedata`, `updatedata`, `userdata`, `cache`, and `drivers` under the app's files directory.
+This leaves the app-owned `files/` and `files/logs/` directories untouched.
+
 The base folder is passed to native code through the environment variables
 `REX_APP_FOLDER` and `REX_EXECUTABLE_FOLDER` (set in `TopSpin4Activity.onCreate` before
 `super.onCreate()`), plus `XDG_DATA_HOME`/`HOME`.

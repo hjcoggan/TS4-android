@@ -203,7 +203,7 @@ Aggregated over all 1099 shaders (`spirv-dis` + a word-level scan of the decoded
 | `Shader` | 1099 | |
 | `PhysicalStorageBufferAddresses` + `SPV_KHR_physical_storage_buffer`, memory model `PhysicalStorageBuffer64` | 1099 | Xenos constants, samplers and textures are reached through `vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + n)`: buffer device addresses in the push constant. |
 | `RuntimeDescriptorArray` + `SPV_EXT_descriptor_indexing` | 1099 | Sampler slot selection at runtime, from the shared constants. |
-| `Int64` | 1099 | 64-bit integer ops in the shader bodies (Xenos constant indices and bit fiddling). |
+| `Int64` | 1099 | 64-bit *addressing* only: `g_PushConstants` holds three `uint64_t` constant-buffer base addresses, which the shaders add byte offsets to before `vk::RawBufferLoad`. Plus one `1ull << semanticIndex` mask helper. `spirv-dis` shows no 64-bit arithmetic on shader data (`OpIAdd` on `%ulong` for base+offset, no 64-bit multiply/divide/compare), so guest shader logic does not need it. See `work/logs/native-renderer-strategy.md`. |
 | `ImageQuery` | 700 | Texture size/level queries. |
 | `ImageMipmap` | 1099 | Mipmapped sampling. |
 | `OriginUpperLeft` execution mode | 663 | The fragment shaders. |

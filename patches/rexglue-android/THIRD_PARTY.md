@@ -78,3 +78,21 @@ Cross-checked, no change needed:
 - `_prior-art/nfsmw-android/android/`, `NFS-CARBON-360-ANDROID-RECOMP` — GPL-3.0 app
   layers; only the nfsmw `sdk/` tree was read. If app-layer code is taken later, record
   the repo and GPL-3.0 here.
+
+## 0027 — custom Vulkan driver (libadrenotools)
+
+Taken from `_prior-art/nfsmw-android/sdk/thirdparty/libadrenotools/` (the complete
+vendored library, including `lib/linkernsbypass`) and its
+`sdk/src/ui/vulkan/android_gpu_driver.cpp` wrapper, with the loader hook from its
+`sdk/src/ui/vulkan/vulkan_instance.cpp` and the build wiring from
+`sdk/thirdparty/CMakeLists.txt:806-819`. Upstream is `bylaws/libadrenotools`
+(BSD-2-Clause) and `bylaws/liblinkernsbypass` (BSD-2-Clause); both LICENSE files
+travel with the vendored tree. Local change: driver selection comes from
+environment variables instead of NFSMW's cvars (our activity sets them before
+the native library loads), and the wrapper falls back to `dlopen("libvulkan.so")`.
+
+## 0028 — command processor ring-buffer fix
+
+Original. No third-party code. Shapes checked against Xenia master (BSD-3) and the
+seven Android forks in `_prior-art/`; all are byte-equivalent and none contains a
+fix, so this has no upstream to credit.

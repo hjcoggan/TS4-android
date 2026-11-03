@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:29:52 +1000
-Subject: [PATCH 15/25] cmake(core): do not link libpthread on Android
+Subject: [PATCH 15/28] cmake(core): do not link libpthread on Android
 
 The NDK has no libpthread stub (the symbols are in libc), so the runtime
 failed to link with 'unable to find library -lpthread'. Link dl and android

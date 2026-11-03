@@ -11,7 +11,7 @@ The full reports are `../_prior-art/report-*.md`.
 | `santiquiroz/gears-of-war-2-pc-port` `sdk/patches/0007` | ReXGlue `923c1a5` | Gears 2 gameplay on S25 Ultra | BSD-3 | SEH chaining + SIGBUS, memfd fallback (already ported), 0015 old-kernel mappings, 0016 Turnip no-sparse, vulkan-android-* |
 | `Buku313/rexglue-skate3-android` (`android-arm64` @ `edd4344`) | ReXGlue 0.8.0 | Skate 3 on Retroid Pocket 6 (**Adreno 740**) | BSD-3 | `main_android.*`, content-URI `detachFd`, thread placement for 740, SPIR-V optimizer workaround |
 | `andrewnakas/skate3-android` | app shell only | | **MIT** | Gradle/manifest, keep-alive service, storage fallback, 16 KB LOAD check |
-| `Buku313/Skate3-Mobile` | app on the fork above | Skate 3 | **none** | Ideas only. Its `docs/RP6_INTEGRATION.md` has Adreno 740 settings |
+| `Buku313/Skate3-Mobile` | app on the fork above | Skate 3 | **none** | Ideas only. Its `docs/RP6_INTEGRATION.md` gives quality settings (60 FPS cap, 512-frame audio buffer, MSAA 1, draw/LOD 1.0, SSAO off) but no Adreno-specific tuning and no measured FPS |
 | `vaduur/LibertyRecompAndroid` | forked ReXGlue 0.9.0 in-tree | GTA IV on RP5 at 720p/30 | **GPL-3.0** | Ideas only (surface lifecycle, Turnip proxy) |
 | `codepdbh/NFS-CARBON-360-ANDROID-RECOMP` | nfsmw `sdk/` | | GPL-3.0 | Ideas: `set_property(TARGET rexui PROPERTY SOURCES ...)` override |
 | `Innersargento/Renut-Android` | same `f5337cd`, overlay headers, Plume renderer | | **none** | Ideas only |

@@ -9,6 +9,8 @@ android {
     namespace 'com.ts4port.topspin4'
     compileSdk 36
 
+    buildFeatures { buildConfig true }
+
     ndkVersion '30.0.16248370'
 
     defaultConfig {
@@ -29,12 +31,28 @@ android {
     }
 
     buildTypes {
+        profile {
+            // Debuggable so debuggerd can attach and unwind native threads; the native code is
+            // still RelWithDebInfo/-O2, so it is fast. Debug builds are too slow for testing.
+            debuggable true
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+            buildConfigField 'String', 'REX_RUNTIME_LIBRARY', '\"rexruntimerd\"'
+            externalNativeBuild {
+                cmake {
+                    arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                              '-DREXGLUE_RECOMP_DEBUG_INFO=none'
+                }
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField 'String', 'REX_RUNTIME_LIBRARY', '\"rexruntime\"'
         }
         debug {
             minifyEnabled false
+            buildConfigField 'String', 'REX_RUNTIME_LIBRARY', '\"rexruntimed\"'
         }
     }
 
