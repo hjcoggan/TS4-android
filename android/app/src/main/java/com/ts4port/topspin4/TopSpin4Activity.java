@@ -92,6 +92,95 @@ public class TopSpin4Activity extends SDLActivity {
 
         // Optional custom Vulkan driver: drop an ADPKG into files/drivers/.
         configureGpuDriver(dataRoot);
+
+        // Display options (aspect / refresh), read from files/userdata/display.conf.
+        configureDisplay(dataRoot);
+    }
+
+    /**
+     * Display options, read from {@code files/userdata/display.conf} so they can be changed
+     * without a rebuild. They drive SDK cvars through the environment (REX_VIDEO_MODE_*), which
+     * outrank the Settings file and are never saved into it.
+     *
+     * <pre>
+     *   width=1280      # guest video mode width
+     *   height=960      # guest video mode height (960 = 4:3 on a 1280-wide screen)
+     *   refresh=120     # guest video mode refresh rate in Hz
+     *   aspect=4:3      # convenience: derives height from width
+     * </pre>
+     *
+     * A missing file leaves the SDK defaults (1280x720 at 60 Hz).
+     */
+    private void configureDisplay(File dataRoot) {
+        File config = new File(new File(dataRoot, "userdata"), "display.conf");
+        int width = 0;
+        int height = 0;
+        float refresh = 0f;
+        if (config.isFile()) {
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                         new java.io.FileReader(config))) {
+                String raw;
+                while ((raw = reader.readLine()) != null) {
+                    String line = raw.trim();
+                    if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) {
+                        continue;
+                    }
+                    int eq = line.indexOf('=');
+                    if (eq < 0) {
+                        continue;
+                    }
+                    String key = line.substring(0, eq).trim().toLowerCase(java.util.Locale.ROOT);
+                    String value = line.substring(eq + 1).trim();
+                    try {
+                        switch (key) {
+                            case "width":
+                                width = Integer.parseInt(value);
+                                break;
+                            case "height":
+                                height = Integer.parseInt(value);
+                                break;
+                            case "refresh":
+                                refresh = Float.parseFloat(value);
+                                break;
+                            case "aspect":
+                                // Only 4:3 and 16:9 matter here; the width is the screen's.
+                                if (value.equals("4:3") && width > 0) {
+                                    height = width * 3 / 4;
+                                } else if (value.equals("16:9") && width > 0) {
+                                    height = width * 9 / 16;
+                                }
+                                break;
+                            default:
+                                Log.w(TAG, "display.conf: unknown key " + key);
+                                break;
+                        }
+                    } catch (NumberFormatException e) {
+                        Log.w(TAG, "display.conf: bad value for " + key + ": " + value);
+                    }
+                }
+            } catch (java.io.IOException e) {
+                Log.w(TAG, "display.conf: cannot read " + config, e);
+            }
+        }
+        if (width > 0) {
+            setenv("REX_VIDEO_MODE_WIDTH", Integer.toString(width));
+        }
+        if (height > 0) {
+            setenv("REX_VIDEO_MODE_HEIGHT", Integer.toString(height));
+        }
+        if (refresh > 0) {
+            setenv("REX_VIDEO_MODE_REFRESH_RATE", Float.toString(refresh));
+            // Ask the Android window for the same refresh rate; the surface (and therefore the
+            // Vulkan swapchain) follows it. Requires the panel to advertise the mode.
+            try {
+                android.view.WindowManager.LayoutParams attributes = getWindow().getAttributes();
+                attributes.preferredRefreshRate = refresh;
+                getWindow().setAttributes(attributes);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "display: cannot request " + refresh + " Hz", e);
+            }
+        }
+        Log.i(TAG, "display: width=" + width + " height=" + height + " refresh=" + refresh);
     }
 
     /**

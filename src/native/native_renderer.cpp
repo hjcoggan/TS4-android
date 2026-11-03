@@ -3397,6 +3397,25 @@ void LogHitch() {
   g.hitch.readbacks_queued = 0;
   g.hitch.readback_queue_ns = 0;
   g.hitch.readbacks_delivered = 0;
+  // A five-second summary, so a run can be measured from the log alone (the profiler is not
+  // available on device and SurfaceFlinger's latency histogram is empty for a BLAST SurfaceView).
+  // fps is what the panel receives; ms/frame is the guest's pacing, which is what the game's
+  // simulation actually runs at.
+  static uint64_t window_frames = 0;
+  static std::chrono::steady_clock::time_point window_start = now;
+  static double window_renderer_ms = 0.0;
+  window_renderer_ms += g.hitch.renderer_ns / 1e6;
+  ++window_frames;
+  const double window_s = std::chrono::duration<double>(now - window_start).count();
+  if (window_s >= 5.0) {
+    REXLOG_INFO("native renderer: perf {:.1f} fps, {:.2f} ms/frame, renderer {:.2f} ms/frame",
+                window_frames / window_s, 1000.0 * window_s / window_frames,
+                window_renderer_ms / window_frames);
+    window_frames = 0;
+    window_renderer_ms = 0.0;
+    window_start = now;
+  }
+
   g.hitch.readback_bytes = 0;
   g.hitch.readback_deliver_ns = 0;
   g.hitch.pending = 0;

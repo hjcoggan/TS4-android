@@ -42,6 +42,14 @@ elseif(REXGLUE_RECOMP_DEBUG_INFO STREQUAL "line-tables-only")
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-gline-tables-only>)
 endif()
 
+# The recompiled guest code is the CPU bottleneck on the Nova (measured ~70 ms/frame with the
+# renderer at 0.6 ms), and the NDK default is a plain armv8-a. -O3 plus the Cortex-A510/A710/X3
+# feature set (dot-product) is safe on this SoC and costs nothing but build time. These come after
+# the configuration's -O2, so they win.
+list(APPEND REXGLUE_RECOMP_OPTIONS
+    $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-O3>
+    $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-march=armv8.2-a+dotprod>)
+
 # Include entrypoint generated code if codegen has been run.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/sources.cmake")
     include(generated/boot/sources.cmake)
