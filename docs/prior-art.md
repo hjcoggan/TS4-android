@@ -16,9 +16,12 @@ The full reports are `../_prior-art/report-*.md`.
 | `codepdbh/NFS-CARBON-360-ANDROID-RECOMP` | nfsmw `sdk/` | | GPL-3.0 | Ideas: `set_property(TARGET rexui PROPERTY SOURCES ...)` override |
 | `Innersargento/Renut-Android` | same `f5337cd`, overlay headers, Plume renderer | | **none** | Ideas only |
 
-Rule: SDK-side BSD-3 code can be copied with attribution (`patches/rexglue-android/THIRD_PARTY.md`).
-Do not copy app-layer Java/JNI from the GPL or unlicensed repos. Note that the TS4 reference repo
-itself has no LICENSE file either.
+Rule (user decision, 2026-11-03): this is a private, offline research project that is never
+distributed, so BSD, MIT **and GPL-3.0** sources may be used. Record every adapted file with its
+repo and license (`patches/rexglue-android/THIRD_PARTY.md`, `android/README.md`). Prefer BSD/MIT
+when two sources are equivalent. The repos with no license (Renut, Skate3-Mobile) are for ideas;
+prefer a licensed source that covers the same ground. The TS4 reference repo itself has no
+LICENSE file either. Because of the GPL code, this tree must never be published as-is.
 
 ## Corrections to our earlier docs
 
