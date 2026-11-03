@@ -3,5 +3,11 @@
 *.xex
 *.god
 *.stfs
+*.zip
+out/
+generated/
+gamedata/
+updatedata/
+dump/
 /build*/
 .DS_Store
