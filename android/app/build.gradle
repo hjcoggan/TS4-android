@@ -55,6 +55,15 @@ android {
     lint {
         abortOnError false
     }
+
+    packaging {
+        jniLibs {
+            // Real .so files on disk are required for adrenotools/Turnip
+            // (libvulkan proxy) and for ndk-stack symbolication.
+            useLegacyPackaging = true
+            keepDebugSymbols += "**/*.so"
+        }
+    }
 }
 
 dependencies {

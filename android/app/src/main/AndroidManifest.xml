@@ -24,8 +24,20 @@
         android:theme="@style/AppTheme"
         android:isGame="true"
         android:appCategory="game"
+        android:largeHeap="true"
         android:hardwareAccelerated="true"
+        android:extractNativeLibs="true"
         android:enableOnBackInvokedCallback="false">
+
+        <meta-data
+            android:name="android.game_mode_config"
+            android:resource="@xml/game_mode_config" />
+
+        <!-- SDL3 hints: landscape only, no on-screen keyboard, no HIDAPI grab
+             of the built-in controller. -->
+        <meta-data android:name="SDL_ENV.SDL_ORIENTATIONS" android:value="LandscapeLeft LandscapeRight" />
+        <meta-data android:name="SDL_ENV.SDL_ENABLE_SCREEN_KEYBOARD" android:value="0" />
+        <meta-data android:name="SDL_ENV.SDL_JOYSTICK_HIDAPI" android:value="0" />
 
         <activity
             android:name=".TopSpin4Activity"
