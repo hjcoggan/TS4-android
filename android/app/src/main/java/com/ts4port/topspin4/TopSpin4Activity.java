@@ -95,6 +95,15 @@ public class TopSpin4Activity extends SDLActivity {
 
         // Display options (aspect / refresh), read from files/userdata/display.conf.
         configureDisplay(dataRoot);
+
+        // Scripted pad for automated runs: files/userdata/input_script.txt drives the game through
+        // the port's own ScriptInputDriver (src/script_input.h). Commands can be appended while the
+        // game runs, which is how game modes are exercised without a human at the pad.
+        File inputScript = new File(new File(dataRoot, "userdata"), "input_script.txt");
+        if (inputScript.isFile()) {
+            setenv("REX_TS4_INPUT_SCRIPT", inputScript.getAbsolutePath());
+            Log.i(TAG, "input script: " + inputScript.getAbsolutePath());
+        }
     }
 
     /**
