@@ -94,7 +94,9 @@ public class TopSpin4Activity extends SDLActivity {
         // normal builds. TS4_PGO=generate adds -fprofile-generate to the recompiled code.
         File pgoDir = new File(dataRoot, "pgo");
         pgoDir.mkdirs();
-        setenv("LLVM_PROFILE_FILE", new File(pgoDir, "default_%p.profraw").getAbsolutePath());
+        // %c enables continuous mode: the runtime flushes periodically, so a profile survives even
+        // if the app is stopped rather than exited through its own menu.
+        setenv("LLVM_PROFILE_FILE", new File(pgoDir, "default_%p%c.profraw").getAbsolutePath());
 
         // Optional custom Vulkan driver: drop an ADPKG into files/drivers/.
         configureGpuDriver(dataRoot);
