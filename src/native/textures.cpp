@@ -43,6 +43,10 @@ REXCVAR_DEFINE_BOOL(ts4_native_async_textures, true, "TopSpin4",
                     "draws show the previous content (or nothing) for a frame or two instead of "
                     "stalling while new textures load (a new 1280x720 screen image is waited "
                     "for)");
+REXCVAR_DEFINE_BOOL(ts4_native_skip_pending_textures, true, "TopSpin4",
+                    "Native renderer: skip a draw whose texture has no content yet instead of "
+                    "drawing the default 1x1 (the black square seen with async uploads). Off: the "
+                    "old behaviour, drawing the default for a frame or two");
 REXCVAR_DEFINE_DOUBLE(ts4_native_lod_bias, 0.0, "TopSpin4",
                       "Native renderer debugging: added to the mip level of mipmapped textures; "
                       "negative values keep distant surfaces sharper at the cost of some shimmer "
@@ -876,9 +880,20 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
     if (!texture.job) {
       g.textures.erase(key);  // the image could not be created; try again later
     }
+    // No image yet: drawing now samples the default 1x1, which is exactly the black square seen
+    // in game when a texture's first upload has not finished. Skip the draw for a frame instead,
+    // the same policy as a draw whose pipeline is still compiling. A texture that was uploaded
+    // before keeps its previous content and is not affected.
+    if (REXCVAR_GET(ts4_native_skip_pending_textures)) {
+      binding.supported = false;
+    }
     return binding;
   }
   if (!texture.uploaded) {
+    // Queued on a worker and never uploaded: same reasoning as above.
+    if (REXCVAR_GET(ts4_native_skip_pending_textures)) {
+      binding.supported = false;
+    }
     return binding;
   }
   binding.texture_index =
