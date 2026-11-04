@@ -104,6 +104,39 @@ public class TopSpin4Activity extends SDLActivity {
             setenv("REX_TS4_INPUT_SCRIPT", inputScript.getAbsolutePath());
             Log.i(TAG, "input script: " + inputScript.getAbsolutePath());
         }
+
+        // Generic cvar overrides: files/userdata/cvars.conf, one `name=value` per line, exported as
+        // REX_<NAME> so any SDK or port cvar can be changed without a rebuild (for example
+        // ts4_native_pipeline_libraries=false to test the fast-link path).
+        configureCvars(dataRoot);
+    }
+
+    private void configureCvars(File dataRoot) {
+        File config = new File(new File(dataRoot, "userdata"), "cvars.conf");
+        if (!config.isFile()) {
+            return;
+        }
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                     new java.io.FileReader(config))) {
+            String raw;
+            while ((raw = reader.readLine()) != null) {
+                String line = raw.trim();
+                if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) {
+                    continue;
+                }
+                int eq = line.indexOf('=');
+                if (eq <= 0) {
+                    continue;
+                }
+                String name = line.substring(0, eq).trim();
+                String value = line.substring(eq + 1).trim();
+                String env = "REX_" + name.toUpperCase(java.util.Locale.ROOT);
+                setenv(env, value);
+                Log.i(TAG, "cvar override: " + env + "=" + value);
+            }
+        } catch (java.io.IOException e) {
+            Log.w(TAG, "cvars.conf: cannot read " + config, e);
+        }
     }
 
     /**

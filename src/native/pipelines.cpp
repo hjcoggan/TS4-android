@@ -49,6 +49,11 @@ REXCVAR_DEFINE_STRING(ts4_native_pipeline_dir, "", "TopSpin4",
 REXCVAR_DEFINE_BOOL(ts4_native_async_pipelines, true, "TopSpin4",
                     "Native renderer: compile new pipelines on worker threads; main-scene "
                     "draws wait (are skipped) a frame or two instead of stalling the game");
+REXCVAR_DEFINE_INT32(ts4_native_pipeline_workers, 0, "TopSpin4",
+                     "Native renderer: pipeline-compile workers; 0 uses the thread budget "
+                     "(one on an 8-core machine, which makes the first load slow because it "
+                     "compiles ~100 pipelines). 2-4 uses the idle cores during loading.")
+    .range(0, 8);
 REXCVAR_DEFINE_BOOL(ts4_native_pipeline_libraries, true, "TopSpin4",
                     "Native renderer: on GPUs with graphics pipeline libraries and fast "
                     "linking, fast-link a pipeline not built yet instead of skipping or "
@@ -909,10 +914,16 @@ void Initialize(uint64_t converter_id, const std::filesystem::path& cache_root,
                           ? pipeline_store::kFeatureGraphicsPipelineLibrary
                           : 0;
   lib.enabled = ChooseLibraryPath();
-  // A few workers during play, every core in a prepare (thread_budget.h).
+  // A few workers during play, every core in a prepare (thread_budget.h). The cvar overrides
+  // the budget: on this 8-core device the default is one pipeline worker, and the first load
+  // compiles ~100 pipelines on it, which is why a cold start takes ~100 s.
   const uint32_t cores = std::thread::hardware_concurrency();
-  const uint32_t workers = (PrepareMode() ? thread_budget::ForPrepare(cores)
-                                          : thread_budget::ForPlay(cores)).pipelines;
+  uint32_t workers = (PrepareMode() ? thread_budget::ForPrepare(cores)
+                                    : thread_budget::ForPlay(cores)).pipelines;
+  const int32_t workers_override = REXCVAR_GET(ts4_native_pipeline_workers);
+  if (workers_override > 0) {
+    workers = uint32_t(workers_override);
+  }
   REXLOG_INFO("native renderer: {} pipeline workers ({} logical CPUs)", workers, cores);
 
   // The shipped list first, then the player's own keys; the plan drops keys
