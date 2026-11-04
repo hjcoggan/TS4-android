@@ -50,6 +50,24 @@ list(APPEND REXGLUE_RECOMP_OPTIONS
     $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-O3>
     $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-march=armv8.2-a+dotprod>)
 
+# Profile-guided optimisation for the recompiled guest code (TS4_PGO=generate then =use).
+# The XUI/Flash menu load is ~86 s of guest CPU and the doubles hitches are guest CPU too, so
+# this is the lever that helps both. Generate writes %p.profraw files to LLVM_PROFILE_FILE (set by
+# the activity to the app's files/pgo); merge them with llvm-profdata and rebuild with =use.
+set(TS4_PGO "" CACHE STRING "PGO for recompiled code: empty, generate or use")
+if(TS4_PGO STREQUAL "generate")
+    list(APPEND REXGLUE_RECOMP_OPTIONS
+        $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-fprofile-generate>)
+elseif(TS4_PGO STREQUAL "use")
+    if(NOT TS4_PGO_PROFILE)
+        message(FATAL_ERROR "TS4_PGO=use needs -DTS4_PGO_PROFILE=<dir of merged .profdata>")
+    endif()
+    list(APPEND REXGLUE_RECOMP_OPTIONS
+        $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-fprofile-use=${TS4_PGO_PROFILE}>
+        $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-fprofile-correction>
+        $<$<AND:$<PLATFORM_ID:Android>,$<CXX_COMPILER_ID:Clang>>:-Wno-profile-instr-unprofiled>)
+endif()
+
 # Include entrypoint generated code if codegen has been run.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/sources.cmake")
     include(generated/boot/sources.cmake)

@@ -4,6 +4,8 @@ plugins {
 
 def rexsdkDir = (project.findProperty('rexsdkDir') ?: new File(rootDir, '../../work/rexglue-sdk').canonicalPath).toString()
 def ts4WithRexglue = (project.findProperty('ts4WithRexglue') ?: 'OFF').toString()
+def ts4Pgo = (project.findProperty('ts4Pgo') ?: '').toString()
+def ts4PgoProfile = (project.findProperty('ts4PgoProfile') ?: '').toString()
 
 android {
     namespace 'com.ts4port.topspin4'
@@ -25,7 +27,9 @@ android {
                 abiFilters 'arm64-v8a'
                 arguments '-DANDROID_STL=c++_shared',
                           "-DTS4_WITH_REXGLUE=${ts4WithRexglue}",
-                          "-DREXSDK_DIR=${rexsdkDir}"
+                          "-DREXSDK_DIR=${rexsdkDir}",
+                          "-DTS4_PGO=${ts4Pgo}",
+                          "-DTS4_PGO_PROFILE=${ts4PgoProfile}"
             }
         }
     }

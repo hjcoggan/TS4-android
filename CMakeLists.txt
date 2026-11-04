@@ -271,3 +271,13 @@ if(WIN32 AND TS4_WITH_REXGLUE)
     set_source_files_properties(src/topspin4.rc PROPERTIES COMPILE_DEFINITIONS
         "TOPSPIN4_VERSION_MAJOR=${PROJECT_VERSION_MAJOR};TOPSPIN4_VERSION_MINOR=${PROJECT_VERSION_MINOR};TOPSPIN4_VERSION_PATCH=${PROJECT_VERSION_PATCH};TOPSPIN4_VERSION_TEXT=\"${PROJECT_VERSION}\";TOPSPIN4_DESCRIPTION=\"Top Spin 4 v${PROJECT_VERSION}\"")
 endif()
+
+# PGO: the recompiled objects need the profiling runtime at link time too (TS4_PGO=generate in
+# cmake/rexglue.cmake adds the compile flags).
+if(TS4_PGO STREQUAL "generate" AND ANDROID)
+    foreach(pgo_target topspin4 topspin4_Loader_DLL topspin4_Swing_DLL)
+        if(TARGET ${pgo_target})
+            target_link_options(${pgo_target} PRIVATE -fprofile-generate)
+        endif()
+    endforeach()
+endif()

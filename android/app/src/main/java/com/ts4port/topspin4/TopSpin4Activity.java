@@ -90,6 +90,12 @@ public class TopSpin4Activity extends SDLActivity {
         setenv("REX_APP_FOLDER", dataRoot.getAbsolutePath());
         setenv("REX_EXECUTABLE_FOLDER", dataRoot.getAbsolutePath());
 
+        // PGO instrumented builds write their raw profiles here (LLVM_PROFILE_FILE); harmless for
+        // normal builds. TS4_PGO=generate adds -fprofile-generate to the recompiled code.
+        File pgoDir = new File(dataRoot, "pgo");
+        pgoDir.mkdirs();
+        setenv("LLVM_PROFILE_FILE", new File(pgoDir, "default_%p.profraw").getAbsolutePath());
+
         // Optional custom Vulkan driver: drop an ADPKG into files/drivers/.
         configureGpuDriver(dataRoot);
 
