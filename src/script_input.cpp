@@ -5,6 +5,7 @@
 #include "script_input.h"
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <cctype>
 #include <cstring>
@@ -269,6 +270,7 @@ void ScriptInputDriver::PollFile(std::chrono::milliseconds now) {
     return;
   }
   consumed_ += end + 1;
+  REXLOG_DEBUG("script input: read {} new byte(s)", end + 1);
   std::istringstream lines(text.substr(0, end));
   std::string line;
   while (std::getline(lines, line)) {
@@ -330,6 +332,11 @@ uint16_t ScriptInputDriver::GameButtons(uint16_t buttons) {
 X_RESULT ScriptInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) {
   if (id != id_) {
     return X_ERROR_DEVICE_NOT_CONNECTED;
+  }
+  static std::atomic<uint64_t> calls{0};
+  const uint64_t call = calls.fetch_add(1, std::memory_order_relaxed);
+  if (call < 3) {
+    REXLOG_INFO("script input: first GetDeviceState call");
   }
   uint32_t packet = 0;
   const Step s = CurrentStep(&packet);
