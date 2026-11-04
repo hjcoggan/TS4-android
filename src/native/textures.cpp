@@ -47,6 +47,14 @@ REXCVAR_DEFINE_BOOL(ts4_native_skip_pending_textures, true, "TopSpin4",
                     "Native renderer: skip a draw whose texture has no content yet instead of "
                     "drawing the default 1x1 (the black square seen with async uploads). Off: the "
                     "old behaviour, drawing the default for a frame or two");
+REXCVAR_DEFINE_UINT32(ts4_native_pending_skip_frames, 3, "TopSpin4",
+                      "Native renderer: how many frames a draw may be held for a texture that has "
+                      "no content yet; afterwards it draws with whatever it has, so a texture that "
+                      "never uploads cannot hide its geometry for good");
+REXCVAR_DEFINE_BOOL(ts4_native_log_pending_textures, false, "TopSpin4",
+                    "Native renderer debugging: log each texture whose draw is held for having no "
+                    "content yet (address, size, format), to correlate a visible artifact with the "
+                    "texture that caused it");
 REXCVAR_DEFINE_DOUBLE(ts4_native_lod_bias, 0.0, "TopSpin4",
                       "Native renderer debugging: added to the mip level of mipmapped textures; "
                       "negative values keep distant surfaces sharper at the cost of some shimmer "
@@ -136,6 +144,8 @@ struct Texture {
   uint64_t dirty_frame = UINT64_MAX;
   uint32_t dirty_streak = 0;
   uint64_t dynamic_until = 0;
+  // The first frame this texture was bound without content (for the bounded skip below).
+  uint64_t pending_since = UINT64_MAX;
   // A read of guest memory in progress on a worker (or done, to apply).
   std::shared_ptr<struct TextureJob> job;
   bool uploaded = false;
@@ -156,6 +166,8 @@ struct State {
   Texture defaults[3];  // 2D, 3D, cube; bindless index 0 of each heap
   bool defaults_ready = false;
   uint32_t unsupported_logged = 0;
+  uint32_t pending_logged = 0;  // of the held-draw log, which is capped
+  uint32_t unwritten_logged = 0;  // of the unwritten-first-upload log, also capped
   uint32_t scale = 1;
   ColourMode colour = ColourMode::kNatural;  // fixed for the session
   // The plan's texture sharpness bias as of this frame's start (BeginFrame), unless
@@ -496,6 +508,25 @@ void ReadTexture(TextureJob& job) {
   g.hash_ns += NsSince(hash_start);
   job.hash = hash;
   job.changed = !job.had_upload || hash != job.previous_hash;
+  // A first upload whose guest bytes are all one value is suspicious: the render thread reads
+  // guest memory while the guest keeps running, so a read can land before the guest's stores.
+  // Logged (not acted on) so a visible artifact can be tied to it on the device.
+  if (!job.had_upload && base && layout.base.level_data_extent_bytes >= 4096 &&
+      REXCVAR_GET(ts4_native_log_pending_textures) && g.unwritten_logged++ < 64) {
+    const uint8_t first = base[0];
+    bool uniform = true;
+    for (size_t i = 0; i < 4096; i += 64) {
+      if (base[i] != first) {
+        uniform = false;
+        break;
+      }
+    }
+    if (uniform) {
+      REXLOG_INFO("native renderer: first upload of {:08X} ({}x{} format {}) reads unwritten "
+                  "memory (byte {:02X})", job.base_range[0], t.width, t.height,
+                  uint32_t(fetch.format), first);
+    }
+  }
   if (!job.changed) {
     g.read_ns += NsSince(start);
     return;
@@ -879,23 +910,41 @@ Binding Bind(const FetchConstant& raw, VkCommandBuffer upload_cb, uint64_t frame
   if (!texture.image) {
     if (!texture.job) {
       g.textures.erase(key);  // the image could not be created; try again later
+      return binding;
     }
     // No image yet: drawing now samples the default 1x1, which is exactly the black square seen
-    // in game when a texture's first upload has not finished. Skip the draw for a frame instead,
-    // the same policy as a draw whose pipeline is still compiling. A texture that was uploaded
-    // before keeps its previous content and is not affected.
-    if (REXCVAR_GET(ts4_native_skip_pending_textures)) {
+    // in game when a texture's first upload has not finished. Hold the draw for a few frames
+    // instead, the same policy as a draw whose pipeline is still compiling, but only for a bounded
+    // window: a texture that never uploads must not hide its geometry for good.
+    if (texture.pending_since == UINT64_MAX) {
+      texture.pending_since = frame;
+    }
+    if (REXCVAR_GET(ts4_native_skip_pending_textures) &&
+        frame - texture.pending_since < REXCVAR_GET(ts4_native_pending_skip_frames)) {
       binding.supported = false;
+      if (REXCVAR_GET(ts4_native_log_pending_textures) && g.pending_logged++ < 64) {
+        REXLOG_INFO("native renderer: holding a draw, no image yet: {:08X} {}x{} format {} frame "
+                    "{}", base_address, t.width, t.height, uint32_t(fetch.format), frame);
+      }
     }
     return binding;
   }
   if (!texture.uploaded) {
     // Queued on a worker and never uploaded: same reasoning as above.
-    if (REXCVAR_GET(ts4_native_skip_pending_textures)) {
+    if (texture.pending_since == UINT64_MAX) {
+      texture.pending_since = frame;
+    }
+    if (REXCVAR_GET(ts4_native_skip_pending_textures) &&
+        frame - texture.pending_since < REXCVAR_GET(ts4_native_pending_skip_frames)) {
       binding.supported = false;
+      if (REXCVAR_GET(ts4_native_log_pending_textures) && g.pending_logged++ < 64) {
+        REXLOG_INFO("native renderer: holding a draw, upload queued: {:08X} {}x{} format {} frame "
+                    "{}", base_address, t.width, t.height, uint32_t(fetch.format), frame);
+      }
     }
     return binding;
   }
+  texture.pending_since = UINT64_MAX;
   binding.texture_index =
       cube ? FetchViewIndex(texture, swizzle, kHeapTextureCube, VK_IMAGE_VIEW_TYPE_CUBE, raw)
            : FetchViewIndex(texture, swizzle, kHeapTexture2D, VK_IMAGE_VIEW_TYPE_2D, raw);
