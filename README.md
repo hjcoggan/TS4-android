@@ -91,6 +91,11 @@ If you want a permissive build, the path is to rewrite `android/` from scratch; 
   different dump will not be accepted.
 - Expect ~5.4 GiB of extracted data.
 
+Nothing game-derived is in the repository. That includes the achievement chime: the toast plays
+`sounds/achievement.wav` from your own game data at runtime, or one you drop into
+`files/userdata/achievement.wav`. If you want it embedded in a desktop build, put a copy at
+`ts4-port/data/sounds/achievement.wav` before configuring; the build picks it up if present.
+
 ---
 
 ## Build

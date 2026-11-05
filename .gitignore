@@ -9,6 +9,9 @@ generated/
 gamedata/
 updatedata/
 dump/
+
+# The achievement chime is taken from your own game data at runtime; never commit it.
+data/sounds/
 /build*/
 .DS_Store
 

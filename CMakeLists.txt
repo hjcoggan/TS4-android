@@ -209,6 +209,8 @@ if(NOT ANDROID AND TS4_WITH_REXGLUE AND EXISTS "${TOPSPIN4_PIPELINE_KEYS}")
 endif()
 
 # The achievement toast's sound: sounds/ beside the exe on Windows, userdata/sounds on Android.
+# It is a game file, so it is not in the repository -- drop your own copy here to embed it (the
+# runtime falls back to the game folder's sounds/achievement.wav either way).
 set(TOPSPIN4_ACHIEVEMENT_SOUND "${CMAKE_CURRENT_SOURCE_DIR}/data/sounds/achievement.wav")
 if(NOT ANDROID AND TS4_WITH_REXGLUE AND EXISTS "${TOPSPIN4_ACHIEVEMENT_SOUND}")
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sounds/achievement.wav"
