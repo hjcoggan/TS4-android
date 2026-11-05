@@ -22,13 +22,29 @@ SDK="$WORK/rexglue-sdk"
 BRANCH="ts4-android"
 BASE="f5337cd"
 ANDROID_PATCHES="$ROOT/ts4-port/patches/rexglue-android"
+SDL_PATCHES="$ROOT/ts4-port/patches/sdl3"
 REF_PATCHES="$REF_PORT/patches/rexglue"
+
+# Where the two reference trees come from when they are not already present. Neither is vendored:
+# the SDK is BSD-3-Clause and the reference port ships only its patch series here.
+SDK_URL="${TS4_SDK_URL:-https://github.com/rexglue/rexglue-sdk.git}"
+PORT_URL="${TS4_PORT_URL:-https://github.com/shaneomac1337/Top-Spin-4-Recomp.git}"
 
 say() { printf '\n== %s\n' "$*"; }
 
-[[ -d "$REF_SDK/.git" ]] || { echo "missing pristine clone: $REF_SDK" >&2; exit 1; }
+mkdir -p "$WORK" "$WORK/logs" "$ROOT/_ref"
+
+# The pristine SDK at the pinned commit, and the reference port (only its patches are read).
+if [[ ! -d "$REF_SDK/.git" ]]; then
+    say "clone $SDK_URL -> $REF_SDK"
+    git clone --filter=blob:none "$SDK_URL" "$REF_SDK"
+    git -C "$REF_SDK" checkout -q "$BASE"
+fi
+if [[ ! -d "$REF_PORT/.git" ]]; then
+    say "clone $PORT_URL -> $REF_PORT (patch series only)"
+    git clone --depth 1 "$PORT_URL" "$REF_PORT"
+fi
 [[ -d "$REF_PATCHES" ]] || { echo "missing reference patches: $REF_PATCHES" >&2; exit 1; }
-mkdir -p "$WORK" "$WORK/logs"
 
 # ---------------------------------------------------------------- working copy
 if [[ ! -d "$SDK/.git" ]]; then
@@ -63,6 +79,20 @@ while read -r key _; do
     fi
 done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.url$')
 git -c protocol.file.allow=always submodule update --init --recursive
+
+# ------------------------------------------------------------ SDL submodule series
+# Applied inside the submodule: the patch touches thirdparty/sdl3, not the SDK.
+shopt -s nullglob
+sdl_patches=("$SDL_PATCHES"/*.patch)
+if (( ${#sdl_patches[@]} )); then
+    say "apply sdl3 series (${#sdl_patches[@]} patches)"
+    for patch in "${sdl_patches[@]}"; do
+        if ! git -C thirdparty/sdl3 apply --whitespace=nowarn "$patch"; then
+            echo "sdl3 patch failed: $patch" >&2
+            exit 1
+        fi
+    done
+fi
 
 # ------------------------------------------------------- reference patch series
 say "apply reference series ($(ls "$REF_PATCHES"/*.patch | wc -l | tr -d ' ') patches)"

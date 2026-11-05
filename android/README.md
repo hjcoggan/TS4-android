@@ -1,4 +1,6 @@
-Private research build. Contains GPL-3.0 derived code; do not distribute.
+Part of the Top Spin 4 Android port. GPL-3.0: this layer is derived from nfsmw-android's
+GPL-3.0 app layer, which is why the repository as a whole is GPL-3.0. See ../README.md and
+../THIRD_PARTY.md.
 
 # Android build (Gradle)
 

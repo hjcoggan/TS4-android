@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: hjcoggan <hjcoggan2@gmail.com>
+From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
 Date: Tue, 3 Nov 2026 18:21:53 +1000
-Subject: [PATCH 09/31] cmake: do not install the host recompiler when it was
+Subject: [PATCH 09/33] cmake: do not install the host recompiler when it was
  not built
 
 The install rules named the rexglue executable unconditionally, so an Android

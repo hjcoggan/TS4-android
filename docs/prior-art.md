@@ -21,7 +21,10 @@ distributed, so BSD, MIT **and GPL-3.0** sources may be used. Record every adapt
 repo and license (`patches/rexglue-android/THIRD_PARTY.md`, `android/README.md`). Prefer BSD/MIT
 when two sources are equivalent. The repos with no license file (Renut, Skate3-Mobile) may be used too,
 with the user's permission, where they suit the project. The TS4 reference repo itself has no
-LICENSE file either. Because of the GPL code, this tree must never be published as-is.
+LICENSE file either. The tree is now published, so that rule is superseded: the GPL-3.0 parts (the `android/` app
+layer, from nfsmw) make the distributed work GPL-3.0 as a whole -- see `LICENSE` and
+`THIRD_PARTY.md`. Only BSD-3-Clause and MIT sources were adapted; GPL-3.0 repositories were
+used for ideas, apart from that app layer.
 
 ## Corrections to our earlier docs
 

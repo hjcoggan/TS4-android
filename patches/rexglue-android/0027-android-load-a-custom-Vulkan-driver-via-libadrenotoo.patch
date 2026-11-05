@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: ts4-port <ts4-port@localhost>
+From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
 Date: Wed, 4 Nov 2026 00:06:15 +1000
-Subject: [PATCH 27/31] android: load a custom Vulkan driver via libadrenotools
+Subject: [PATCH 27/33] android: load a custom Vulkan driver via libadrenotools
  (nfsmw sdk)
 
 Vendors libadrenotools + linkernsbypass (BSD-2) from codepdbh/nfsmw-android's
