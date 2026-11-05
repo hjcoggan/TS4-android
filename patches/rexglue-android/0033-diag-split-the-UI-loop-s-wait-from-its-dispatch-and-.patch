@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
+From: ts4-port <ts4-port@localhost>
 Date: Thu, 5 Nov 2026 18:28:25 +1000
-Subject: [PATCH 33/33] diag: split the UI loop's wait from its dispatch, and a
+Subject: [PATCH 33/34] diag: split the UI loop's wait from its dispatch, and a
  joystick-update switch
 
 Measured on the Nova: the UI thread runs ~110 events/s, zero paints, and is in

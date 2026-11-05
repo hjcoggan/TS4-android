@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
+From: ts4-port <ts4-port@localhost>
 Date: Wed, 4 Nov 2026 03:05:16 +1000
-Subject: [PATCH 31/33] core: read the arm64 virtual counter instead of
+Subject: [PATCH 31/34] core: read the arm64 virtual counter instead of
  clock_gettime; throttle the CP heartbeat
 
 - Clock::host_tick_count_platform() called clock_gettime(CLOCK_MONOTONIC_RAW) on

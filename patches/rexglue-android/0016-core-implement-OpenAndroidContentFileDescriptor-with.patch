@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
+From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:34:06 +1000
-Subject: [PATCH 16/33] core: implement OpenAndroidContentFileDescriptor with
+Subject: [PATCH 16/34] core: implement OpenAndroidContentFileDescriptor with
  JNI
 
 include/rex/filesystem.h declared OpenAndroidContentFileDescriptor (and
