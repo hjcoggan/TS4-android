@@ -67,6 +67,15 @@ including which file each change came from and under which licence — is in
 adapted; repositories with no licence file, and the GPL-3.0 app layers other than nfsmw's, were
 used for ideas only.
 
+## Host unit tests
+
+`tests/native/` is ported from
+[shaneomac1337/Top-Spin-4-Recomp](https://github.com/shaneomac1337/Top-Spin-4-Recomp)
+(`tests/native/`, no licence file in that repository). It is test code for this project's own
+renderer, included here with the same attribution as the rest of the port and distributed under
+this repository's GPL-3.0 licence. The tests exercise `src/native/` and use Catch2 (BSL-1.0) from
+the ReXGlue SDK tree.
+
 ## The original PC port — no licence file
 
 The reference project this repository is forked from,
