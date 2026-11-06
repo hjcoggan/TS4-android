@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 00:11:19 +1000
-Subject: [PATCH 34/34] gpu: wake the command processor when a callback is
+Subject: [PATCH 34/35] gpu: wake the command processor when a callback is
  queued
 
 CallInThread queued a callback without signalling the worker, so the wait had to

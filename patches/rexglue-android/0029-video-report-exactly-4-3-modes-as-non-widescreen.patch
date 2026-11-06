@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Wed, 4 Nov 2026 01:17:02 +1000
-Subject: [PATCH 29/34] video: report exactly-4:3 modes as non-widescreen
+Subject: [PATCH 29/35] video: report exactly-4:3 modes as non-widescreen
 
 VdQueryVideoMode used 'width * 3 >= height * 4', so a 4:3 mode (1280x960,
 960x720) was reported as widescreen. Top Spin 4 then kept rendering 16:9 and

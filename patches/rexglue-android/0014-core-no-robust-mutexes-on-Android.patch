@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:28:26 +1000
-Subject: [PATCH 14/34] core: no robust mutexes on Android
+Subject: [PATCH 14/35] core: no robust mutexes on Android
 
 PosixConditionBase and its multi-wait path switched std::mutex to a
 PTHREAD_MUTEX_ROBUST mutex on every Linux target. Bionic has neither

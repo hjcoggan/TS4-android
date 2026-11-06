@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Wed, 4 Nov 2026 02:18:36 +1000
-Subject: [PATCH 30/34] core: cache page protections instead of parsing
+Subject: [PATCH 30/35] core: cache page protections instead of parsing
  /proc/self/maps
 
 QueryProtect opened and parsed /proc/self/maps on every call, allocating a

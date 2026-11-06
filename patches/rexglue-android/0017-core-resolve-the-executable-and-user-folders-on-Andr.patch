@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:34:10 +1000
-Subject: [PATCH 17/34] core: resolve the executable and user folders on
+Subject: [PATCH 17/35] core: resolve the executable and user folders on
  Android
 
 GetExecutableFolder() came from readlink(/proc/self/exe), which on Android is

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <hjcoggan2@gmail.com>
 Date: Tue, 3 Nov 2026 18:19:21 +1000
-Subject: [PATCH 03/34] cmake: do not cross-compile the host recompiler on
+Subject: [PATCH 03/35] cmake: do not cross-compile the host recompiler on
  Android
 
 src/rexglue is the codegen CLI that produces the guest C++; it belongs on the
