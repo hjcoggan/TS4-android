@@ -189,6 +189,35 @@ endif()
 
 # The Native renderer un-tiles textures with the SDK's Xenos texture layout code (BSD-3), which
 # lives in the GPU plugin rather than the host runtime.
+# Host unit tests of the renderer's pure code, run on the build machine (no device, no game data).
+# Catch2 and the SDK come from the SDK tree; opt-in and outside the default build.
+option(TOPSPIN4_BUILD_TESTS "Build the host unit tests" OFF)
+if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
+    enable_testing()
+    file(GLOB TOPSPIN4_HOST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/native/*.cpp")
+    add_executable(topspin4_host_tests EXCLUDE_FROM_ALL
+        ${TOPSPIN4_HOST_TEST_SOURCES}
+        # The pure parts of the renderer the tests cover.
+        src/native/live_topup.cpp
+        src/native/pipeline_parts.cpp
+        src/native/pipeline_store.cpp
+        src/native/prebuild_plan.cpp
+        src/native/prepare_output.cpp
+        src/native/shader_pack.cpp
+        src/native/shader_topup.cpp
+        src/native/texture_layout.cpp
+        src/native/write_watch.cpp
+        # Platform bits the renderer's pure code calls (file access for the shader top-up).
+        src/platform/paths_posix.cpp
+        ${REXSDK_DIR}/src/graphics/pipeline/texture/util.cpp
+        ${REXSDK_DIR}/thirdparty/catch2/extras/catch_amalgamated.cpp)
+    target_include_directories(topspin4_host_tests PRIVATE
+        src ${REXSDK_DIR}/thirdparty/catch2/extras ${REXSDK_DIR}/thirdparty/xxHash
+        ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
+    target_link_libraries(topspin4_host_tests PRIVATE rex::runtime topspin4_native_deps)
+    add_test(NAME topspin4_host_tests COMMAND topspin4_host_tests)
+endif()
+
 if(TS4_WITH_REXGLUE AND REXSDK_DIR)
     target_sources(topspin4 PRIVATE ${REXSDK_DIR}/src/graphics/pipeline/texture/util.cpp)
     target_include_directories(topspin4 PRIVATE ${REXSDK_DIR}/thirdparty/xxHash)
@@ -253,6 +282,14 @@ target_compile_definitions(topspin4 PRIVATE
     TOPSPIN4_COMMIT="${TOPSPIN4_COMMIT}"
     TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull
 )
+# The tests check the pipeline keys and converter id the build would ship, so they need the same
+# facts (defined here, after the ids above are computed).
+if(TARGET topspin4_host_tests)
+    target_compile_definitions(topspin4_host_tests PRIVATE
+        TOPSPIN4_EXPECTED_SHADER_CONVERTER_ID=0x${TOPSPIN4_EXPECTED_CONVERTER_ID}ull
+        TOPSPIN4_PIPELINE_KEYS="${TOPSPIN4_PIPELINE_KEYS}"
+    )
+endif()
 
 # The v0.10.0 source-tree runtime does not propagate ImGui's include directory to the host,
 # although its public UI headers include imgui.h. The crash report and settings code also reach

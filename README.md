@@ -207,6 +207,25 @@ Files pushed with `adb` under `Android/data` keep the host uid; if the app canno
 
 ---
 
+## Tests
+
+The renderer's pure logic — clear plans, draw skipping, pipeline keys and stores, texture layout
+and decoding, image quality, write watch, rect lists, guest fetch decoding, and the rest — has host
+unit tests that need no device and no game data:
+
+```sh
+cd ts4-port
+./scripts/test-host.sh              # build and run everything
+./scripts/test-host.sh "[clear]"    # one pattern
+./scripts/test-host.sh --list-tests # what is covered
+```
+
+They use Catch2 from the SDK tree and run against the same `src/native/` code the device build
+compiles, so a regression in that logic fails here instead of on the handheld. Current state:
+**260 test cases, 23 422 assertions, all passing**.
+
+---
+
 ## Running
 
 Configuration is read from files in `files/userdata/`:
