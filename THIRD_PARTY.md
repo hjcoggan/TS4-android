@@ -26,7 +26,7 @@ products. Full text: the SDK's `LICENSE`, fetched by `scripts/prepare-sdk.sh`.
 
 The SDK is **not vendored** here. `scripts/prepare-sdk.sh` clones it and applies:
 
-- the reference port's patch series (46 patches, from
+- the reference port's patch series (49 patches, from
   [shaneomac1337/Top-Spin-4-Recomp](https://github.com/shaneomac1337/Top-Spin-4-Recomp)), and
 - this port's Android series (`patches/rexglue-android/`), and
 - this port's SDL series (`patches/sdl3/`).
@@ -69,12 +69,12 @@ used for ideas only.
 
 ## Host unit tests
 
-`tests/native/` is ported from
+`tests/native/` and `tests/host/` are ported from
 [shaneomac1337/Top-Spin-4-Recomp](https://github.com/shaneomac1337/Top-Spin-4-Recomp)
-(`tests/native/`, no licence file in that repository). It is test code for this project's own
-renderer, included here with the same attribution as the rest of the port and distributed under
-this repository's GPL-3.0 licence. The tests exercise `src/native/` and use Catch2 (BSL-1.0) from
-the ReXGlue SDK tree.
+(`tests/native/` and `tests/host/`, no licence file in that repository). It is test code for this
+project's own renderer and host layer, included here with the same attribution as the rest of the
+port and distributed under this repository's GPL-3.0 licence. The tests exercise `src/` and use
+Catch2 (BSL-1.0) from the ReXGlue SDK tree.
 
 ## The original PC port — no licence file
 
@@ -82,7 +82,7 @@ The reference project this repository is forked from,
 [shaneomac1337/Top-Spin-4-Recomp](https://github.com/shaneomac1337/Top-Spin-4-Recomp), has no
 `LICENSE` file. Its code is **not** redistributed here: the build fetches its patch series at
 setup time. Credit for the original static-recompilation approach, the recompiler toolchain
-wiring and the 46-patch series belongs to that project and its author.
+wiring and the 49-patch series belongs to that project and its author.
 
 ## Tools
 

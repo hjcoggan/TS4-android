@@ -194,9 +194,15 @@ endif()
 option(TOPSPIN4_BUILD_TESTS "Build the host unit tests" OFF)
 if(TOPSPIN4_BUILD_TESTS AND REXSDK_DIR)
     enable_testing()
-    file(GLOB TOPSPIN4_HOST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/native/*.cpp")
+    file(GLOB TOPSPIN4_HOST_TEST_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/native/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/host/*.cpp")
     add_executable(topspin4_host_tests EXCLUDE_FROM_ALL
         ${TOPSPIN4_HOST_TEST_SOURCES}
+        src/settings/settings_cvars.cpp
+        src/settings/settings_file.cpp
+        src/script_input.cpp
+        src/user_paths.cpp
         # The pure parts of the renderer the tests cover.
         src/native/live_topup.cpp
         src/native/pipeline_parts.cpp
