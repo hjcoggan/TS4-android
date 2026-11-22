@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Thu, 5 Nov 2026 18:28:25 +1000
-Subject: [PATCH 33/35] diag: split the UI loop's wait from its dispatch, and a
+Subject: [PATCH 33/39] diag: split the UI loop's wait from its dispatch, and a
  joystick-update switch
 
 Measured on the Nova: the UI thread runs ~110 events/s, zero paints, and is in
@@ -12,9 +12,9 @@ call for pad polling (0.002-0.022 ms mean), and joystick updates in the pump
 (262% with them disabled, unchanged). The spin is inside SDL's Android
 event/lifecycle wait.
 ---
- src/input/sdl/sdl_input_driver.cpp  |  7 +++++++
- src/ui/windowed_app_context_sdl.cpp | 30 +++++++++++++++++++++--------
- 2 files changed, 29 insertions(+), 8 deletions(-)
+ src/input/sdl/sdl_input_driver.cpp  |  7 ++++++
+ src/ui/windowed_app_context_sdl.cpp | 34 ++++++++++++++++++++---------
+ 2 files changed, 31 insertions(+), 10 deletions(-)
 
 diff --git a/src/input/sdl/sdl_input_driver.cpp b/src/input/sdl/sdl_input_driver.cpp
 index 97e36bb..3774e64 100644
@@ -75,30 +75,32 @@ index 514fda5..2bd8673 100644
        }
 -      const auto now = std::chrono::steady_clock::now();
 -      const double seconds = std::chrono::duration<double>(now - window_start).count();
+-      if (seconds >= 2.0) {
+-        REXLOG_INFO("event loop: {:.0f} events/s ({} paint, {} wakeup, {} other)", iterations / seconds,
+-                    paints, wakeups, others);
+-        iterations = paints = wakeups = others = 0;
+-        window_start = now;
+-      }
 +      wait_ns +=
 +          std::chrono::duration_cast<std::chrono::nanoseconds>(dispatch_start - wait_start).count();
-+    }
-+    ProcessEvent(event);
+     }
+     ProcessEvent(event);
 +    if (log_loop) {
 +      const auto dispatch_end = std::chrono::steady_clock::now();
 +      dispatch_ns +=
 +          std::chrono::duration_cast<std::chrono::nanoseconds>(dispatch_end - dispatch_start)
 +              .count();
 +      const double seconds = std::chrono::duration<double>(dispatch_end - window_start).count();
-       if (seconds >= 2.0) {
--        REXLOG_INFO("event loop: {:.0f} events/s ({} paint, {} wakeup, {} other)", iterations / seconds,
--                    paints, wakeups, others);
++      if (seconds >= 2.0) {
 +        REXLOG_INFO("event loop: {:.0f} events/s ({} paint, {} wakeup, {} other); wait {:.2f} ms "
 +                    "mean, dispatch {:.2f} ms mean",
 +                    iterations / seconds, paints, wakeups, others,
 +                    wait_ns / double(iterations) / 1e6, dispatch_ns / double(iterations) / 1e6);
-         iterations = paints = wakeups = others = 0;
--        window_start = now;
++        iterations = paints = wakeups = others = 0;
 +        wait_ns = dispatch_ns = 0;
 +        window_start = dispatch_end;
-       }
-     }
--    ProcessEvent(event);
++      }
++    }
    }
    return EXIT_SUCCESS;
  }

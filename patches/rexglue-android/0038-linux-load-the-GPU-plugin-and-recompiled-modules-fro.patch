@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Heath Coggan <hjcoggan@gmail.com>
+Date: Sun, 22 Nov 2026 19:02:57 +1000
+Subject: [PATCH 38/39] linux: load the GPU plugin and recompiled modules from
+ beside the binary
+
+REX_EXECUTABLE_FOLDER (0037) points GetExecutableFolder() at the writable
+game folder, but the GPU plugin and the recompiled module libraries are
+installed beside the binary (a read-only /nix/store path on the Nova).
+Look there first, then in GetExecutableFolder(), then by soname. Codegen
+names modules without the lib prefix and .so suffix, so add them.
+---
+ src/system/gpu_plugin_loader.cpp |  8 +++++++-
+ src/system/kernel_state.cpp      | 23 ++++++++++++++++++++++-
+ 2 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/src/system/gpu_plugin_loader.cpp b/src/system/gpu_plugin_loader.cpp
+index 49d10cd..f9f2eb0 100644
+--- a/src/system/gpu_plugin_loader.cpp
++++ b/src/system/gpu_plugin_loader.cpp
+@@ -61,7 +61,13 @@ std::unique_ptr<IGraphicsSystem> LoadGpuPlugin(std::string_view name, std::strin
+   // bionic searches the app's nativeLibraryDir for the packaged plugin.
+   auto path = std::filesystem::path(PluginFileName(name));
+ #else
+-  auto path = rex::filesystem::GetExecutableFolder() / PluginFileName(name);
++  // The plugin is installed beside the binary. GetExecutableFolder() may name a
++  // writable data folder instead (REX_EXECUTABLE_FOLDER on a read-only install),
++  // so look beside the binary first and fall back to that folder.
++  auto path = rex::filesystem::GetExecutablePath().parent_path() / PluginFileName(name);
++  if (!std::filesystem::exists(path)) {
++    path = rex::filesystem::GetExecutableFolder() / PluginFileName(name);
++  }
+ #endif
+ #if !REX_PLATFORM_ANDROID
+   if (!std::filesystem::exists(path)) {
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 2ca8eca..ce75f84 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -16,6 +16,7 @@
+ #include <string>
+ 
+ #include <fmt/format.h>
++#include <rex/filesystem.h>
+ #include <rex/assert.h>
+ #include <rex/image_info.h>
+ #include <rex/logging.h>
+@@ -805,7 +806,27 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+       }
+     }
+ #else
+-    bool loaded = library_local.Load(loaded_path, rex::platform::SymbolResolution::kImmediate);
++    // Codegen names modules without the lib prefix or .so suffix. Look beside
++    // the binary (GetExecutableFolder() may be a data folder set through
++    // REX_EXECUTABLE_FOLDER), then in that folder, then by name.
++    bool loaded = false;
++    {
++      const std::string file = "lib" + recomp->shared_lib_name + ".so";
++      const std::array<std::filesystem::path, 4> candidates = {
++          rex::filesystem::GetExecutablePath().parent_path() / file,
++          rex::filesystem::GetExecutableFolder() / file, std::filesystem::path(file),
++          std::filesystem::path(recomp->shared_lib_name)};
++      for (const auto& candidate : candidates) {
++        if (candidate.has_parent_path() && !std::filesystem::exists(candidate)) continue;
++        rex::platform::DynamicLibrary attempt;
++        if (attempt.Load(candidate, rex::platform::SymbolResolution::kImmediate)) {
++          library_local = std::move(attempt);
++          loaded_path = candidate;
++          loaded = true;
++          break;
++        }
++      }
++    }
+ #endif
+     if (!loaded) {
+       REXSYS_ERROR("Failed to load shared library for module '{}'", recomp->pe_name);

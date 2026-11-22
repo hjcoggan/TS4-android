@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Thu, 5 Nov 2026 17:45:41 +1000
-Subject: [PATCH 32/35] gpu: stop spinning 500 times before the command
+Subject: [PATCH 32/39] gpu: stop spinning 500 times before the command
  processor blocks
 
 The idle loop yielded 500 times before its first wait, and again after every
@@ -22,7 +22,7 @@ thread). Measured: the loop runs ~137 events/s, all wakeups, zero paints.
  3 files changed, 75 insertions(+), 3 deletions(-)
 
 diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
-index 8f7db94..153835c 100644
+index 1ec9551..7436dbe 100644
 --- a/src/graphics/command_processor.cpp
 +++ b/src/graphics/command_processor.cpp
 @@ -238,6 +238,10 @@ void CommandProcessor::SetDesiredSwapPostEffect(SwapPostEffect swap_post_effect)
@@ -36,7 +36,7 @@ index 8f7db94..153835c 100644
  void CommandProcessor::WorkerThreadMain() {
    if (!SetupContext()) {
      rex::FatalError("Unable to setup command processor internal state");
-@@ -279,9 +283,13 @@ void CommandProcessor::WorkerThreadMain() {
+@@ -281,9 +285,13 @@ void CommandProcessor::WorkerThreadMain() {
        PrepareForWait();
        uint32_t loop_count = 0;
        do {

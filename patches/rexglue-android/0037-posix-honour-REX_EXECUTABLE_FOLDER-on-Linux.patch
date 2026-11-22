@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Heath Coggan <hjcoggan@gmail.com>
+Date: Sun, 22 Nov 2026 17:15:26 +1000
+Subject: [PATCH 37/39] posix: honour REX_EXECUTABLE_FOLDER on Linux
+
+Packaged Linux builds (such as NixOS /nix/store) place the binary on a read-only filesystem where logging relative to GetExecutablePath() fails; honour REX_EXECUTABLE_FOLDER and REX_APP_FOLDER outside Android as well.
+---
+ src/core/filesystem_posix.cpp | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/src/core/filesystem_posix.cpp b/src/core/filesystem_posix.cpp
+index 9529714..4897f6e 100644
+--- a/src/core/filesystem_posix.cpp
++++ b/src/core/filesystem_posix.cpp
+@@ -117,17 +117,15 @@ std::filesystem::path GetExecutablePath() {
+ }
+ 
+ std::filesystem::path GetExecutableFolder() {
+-#if REX_PLATFORM_ANDROID
+-  // An app's process image is /system/bin/app_process64; the activity may name
+-  // the folder that holds its config and logs, and otherwise the runtime's own
+-  // library path (dladdr in GetExecutablePath) gives the nativeLibraryDir.
+-  // REX_APP_FOLDER is the name the nfsmw SDK port uses for the same thing.
++  // Android's process image is /system/bin/app_process64, and packaged Linux
++  // installs (such as NixOS /nix/store) live on a read-only filesystem; allow
++  // the launcher wrapper to point config, shader cache, and logs at a writable
++  // game folder via REX_EXECUTABLE_FOLDER or REX_APP_FOLDER.
+   for (const char* variable : {"REX_EXECUTABLE_FOLDER", "REX_APP_FOLDER"}) {
+     if (auto dir = rex::platform::env::get(variable); dir && !dir->empty()) {
+       return std::filesystem::path(*dir);
+     }
+   }
+-#endif
+   return GetExecutablePath().parent_path();
+ }
+ 

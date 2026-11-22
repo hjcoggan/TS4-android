@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
 Date: Fri, 6 Nov 2026 12:21:01 +1000
-Subject: [PATCH 35/35] build: stop rewriting the version header on every
+Subject: [PATCH 35/39] build: stop rewriting the version header on every
  configure
 
 include/rex/version.h embedded a configure-time timestamp with minute
@@ -16,10 +16,10 @@ touching one source rebuilds 5 steps instead of 567.
  1 file changed, 13 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index a9b70b2..f0f9c72 100644
+index de92548..c161e3d 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -234,8 +234,19 @@ set(REXGLUE_FLOOR_VERSION
+@@ -235,8 +235,19 @@ set(REXGLUE_FLOOR_VERSION
  rex_version_channel(REXGLUE_VERSION_CHANNEL VERSION "${REXGLUE_FULL_VERSION}")
  
  # Generate version header -- must run after REX_PLATFORM is set

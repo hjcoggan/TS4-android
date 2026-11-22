@@ -1,8 +1,8 @@
-From 017be79aa3fc9f2c64c15c258b263737f43e55a3 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 05:59:16 +1000
-Subject: [PATCH] gpu: reset the write pointer on ring init and stop faking
- completion
+Subject: [PATCH 28/39] gpu: reset the write pointer on ring init and stop
+ faking completion
 
 Reconciled with the reference ring fix (0048-ring-reset-on-worker):
 InitializeRingBuffer now hands the new ring to the worker, which
@@ -126,6 +126,3 @@ index e2cc65c..0b64609 100644
      return false;
    }
  
--- 
-2.56.0
-

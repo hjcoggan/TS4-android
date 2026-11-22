@@ -1,0 +1,109 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Heath Coggan <hjcoggan@gmail.com>
+Date: Sun, 22 Nov 2026 19:02:57 +1000
+Subject: [PATCH 39/39] net: translate Winsock FIONBIO/FIONREAD on POSIX;
+ WSAEWOULDBLOCK from accept
+
+Guest ioctlsocket passes Winsock command codes (FIONBIO 0x8004667E) with a
+big-endian argument. POSIX ioctl() rejected them, so the socket stayed
+blocking and Top Spin 4's main thread sat in accept() for good after the
+Swing module loaded (the endless loading screen). Map FIONBIO to
+O_NONBLOCK and FIONREAD to a big-endian count, and report WSAEWOULDBLOCK
+when a non-blocking accept has no connection.
+---
+ src/core/socket_posix.cpp  | 45 +++++++++++++++++++++++++++++++++++++-
+ src/kernel/xam/xam_net.cpp |  8 +++++++
+ 2 files changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/src/core/socket_posix.cpp b/src/core/socket_posix.cpp
+index b4b885a..399f601 100644
+--- a/src/core/socket_posix.cpp
++++ b/src/core/socket_posix.cpp
+@@ -3,17 +3,60 @@
+ 
+ static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC, "This file is POSIX-only");
+ 
++#include <cstring>
++
++#include <fcntl.h>
+ #include <sys/ioctl.h>
+ #include <unistd.h>
+ 
+ namespace rex::net {
+ 
++namespace {
++
++// Guest commands are Winsock's ioctlsocket codes, which differ from the host's,
++// and their argument is a big-endian u32 in guest memory.
++constexpr uint32_t kWinsockFionbio = 0x8004667E;
++constexpr uint32_t kWinsockFionread = 0x4004667F;
++
++uint32_t load_be32(const uint8_t* p) {
++  return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | uint32_t(p[3]);
++}
++
++void store_be32(uint8_t* p, uint32_t v) {
++  p[0] = uint8_t(v >> 24);
++  p[1] = uint8_t(v >> 16);
++  p[2] = uint8_t(v >> 8);
++  p[3] = uint8_t(v);
++}
++
++}  // namespace
++
+ int socket_close(SocketHandle handle) {
+   return close(static_cast<int>(handle));
+ }
+ 
+ int socket_ioctl(SocketHandle handle, uint32_t cmd, uint8_t* arg) {
+-  return ioctl(static_cast<int>(handle), cmd, arg);
++  const int fd = static_cast<int>(handle);
++  switch (cmd) {
++    case kWinsockFionbio: {
++      // Without this a guest that makes a listening socket non-blocking and
++      // polls accept() blocks in the host's accept() for good.
++      if (!arg) return -1;
++      const int flags = fcntl(fd, F_GETFL, 0);
++      if (flags < 0) return -1;
++      const int wanted = load_be32(arg) ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
++      return wanted == flags ? 0 : fcntl(fd, F_SETFL, wanted);
++    }
++    case kWinsockFionread: {
++      if (!arg) return -1;
++      int available = 0;
++      if (ioctl(fd, FIONREAD, &available) < 0) return -1;
++      store_be32(arg, uint32_t(available));
++      return 0;
++    }
++    default:
++      return ioctl(fd, cmd, arg);
++  }
+ }
+ 
+ }  // namespace rex::net
+diff --git a/src/kernel/xam/xam_net.cpp b/src/kernel/xam/xam_net.cpp
+index 58e36a4..d41cdcb 100644
+--- a/src/kernel/xam/xam_net.cpp
++++ b/src/kernel/xam/xam_net.cpp
+@@ -12,6 +12,7 @@
+ // Disable warnings about unused parameters for kernel functions
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
++#include <cerrno>
+ #include <cstring>
+ 
+ #if REX_PLATFORM_MAC
+@@ -739,6 +740,13 @@ u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> addr
+ 
+     return new_socket->handle();
+   } else {
++#if !REX_PLATFORM_WIN32
++    // A non-blocking listener with no pending connection: the guest polls for
++    // WSAEWOULDBLOCK.
++    if (errno == EAGAIN || errno == EWOULDBLOCK) {
++      XThread::SetLastError(0x2733);
++    }
++#endif
+     return -1;
+   }
+ }

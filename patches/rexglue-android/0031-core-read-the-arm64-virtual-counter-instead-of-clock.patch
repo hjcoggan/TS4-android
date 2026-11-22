@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ts4-port <ts4-port@localhost>
 Date: Wed, 4 Nov 2026 03:05:16 +1000
-Subject: [PATCH 31/35] core: read the arm64 virtual counter instead of
+Subject: [PATCH 31/39] core: read the arm64 virtual counter instead of
  clock_gettime; throttle the CP heartbeat
 
 - Clock::host_tick_count_platform() called clock_gettime(CLOCK_MONOTONIC_RAW) on
@@ -47,10 +47,10 @@ index 00f2382..4454226 100644
    timespec tp;
    int error = clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
 diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
-index b621383..8f7db94 100644
+index 0b64609..1ec9551 100644
 --- a/src/graphics/command_processor.cpp
 +++ b/src/graphics/command_processor.cpp
-@@ -255,17 +255,23 @@ void CommandProcessor::WorkerThreadMain() {
+@@ -257,17 +257,23 @@ void CommandProcessor::WorkerThreadMain() {
      if (write_ptr_index == 0xBAADF00D || read_ptr_index_ == write_ptr_index) {
        SCOPE_profile_cpu_i("gpu", "rex::graphics::CommandProcessor::Stall");
        // Bring-up heartbeat: if the guest spins on a loading screen, this says whether it is even
