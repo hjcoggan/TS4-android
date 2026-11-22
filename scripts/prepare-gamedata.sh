@@ -149,7 +149,11 @@ python3 -I "$extractor" check "$work/updatedata" "$tu1_manifest"
 
 for folder in gamedata updatedata; do
     files=$(find "$work/$folder" -type f ! -name "$marker" | wc -l | tr -d ' ')
-    bytes=$(find "$work/$folder" -type f ! -name "$marker" -exec stat -f %z {} + | awk '{ total += $1 } END { print total + 0 }')
+    if stat -c %s "$0" >/dev/null 2>&1; then
+        bytes=$(find "$work/$folder" -type f ! -name "$marker" -exec stat -c %s {} + | awk '{ total += $1 } END { print total + 0 }')
+    else
+        bytes=$(find "$work/$folder" -type f ! -name "$marker" -exec stat -f %z {} + | awk '{ total += $1 } END { print total + 0 }')
+    fi
     say "  $folder: $files files, $bytes bytes"
 done
 say "prepare-gamedata: OK; log: $log"

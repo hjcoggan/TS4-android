@@ -54,7 +54,21 @@ module_files=(
 say() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-sha256() { shasum -a 256 "$1" | awk '{ print toupper($1) }'; }
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print toupper($1) }'
+    else
+        shasum -a 256 "$1" | awk '{ print toupper($1) }'
+    fi
+}
+
+file_bytes() {
+    if stat -c %s "$0" >/dev/null 2>&1; then
+        find "$1" -type f -exec stat -c %s {} + | awk '{ total += $1 } END { print total + 0 }'
+    else
+        find "$1" -type f -exec stat -f %z {} + | awk '{ total += $1 } END { print total + 0 }'
+    fi
+}
 
 mkdir -p "$work/logs" "$stage" "$assets" "$out"
 exec > >(tee -a "$log") 2>&1
@@ -66,17 +80,26 @@ say "codegen: $(date '+%Y-%m-%d %H:%M:%S')"
 [ -d "$updatedata" ] || die "missing $updatedata; run scripts/prepare-gamedata.sh first"
 
 # The recompiler, built from work/rexglue-sdk by the commands at the top of this file.
+rexglue=""
 if [ -n "${REXGLUE_BIN:-}" ]; then
     rexglue=$REXGLUE_BIN
 elif [ -x "$host_bin" ]; then
     rexglue=$host_bin
-elif [ -x "$work/rexglue-sdk/out/mac-arm64/rexglue" ]; then
-    rexglue=$work/rexglue-sdk/out/mac-arm64/rexglue
-elif [ -x "$work/rexglue-sdk/out/mac-arm64/rexgluerd" ]; then
-    rexglue=$work/rexglue-sdk/out/mac-arm64/rexgluerd
 else
-    die "no host recompiler; build it first (commands at the top of this script, docs/codegen.md)"
+    for candidate in \
+        "$work/rexglue-sdk/out/mac-arm64/rexglue" \
+        "$work/rexglue-sdk/out/mac-arm64/rexgluerd" \
+        "$work/rexglue-sdk/out/linux-arm64/rexglue" \
+        "$work/rexglue-sdk/out/linux-arm64/rexgluerd" \
+        "$work/rexglue-sdk/out/linux-amd64/rexglue" \
+        "$work/rexglue-sdk/out/linux-amd64/rexgluerd"; do
+        if [ -x "$candidate" ]; then
+            rexglue=$candidate
+            break
+        fi
+    done
 fi
+[ -n "$rexglue" ] || die "no host recompiler; build it first (commands at the top of this script, docs/codegen.md)"
 say "  recompiler: $rexglue ($("$rexglue" --version 2>&1 | head -1))"
 
 # Stage and gate the Modules, exactly as the reference does: copy only if the
@@ -130,10 +153,10 @@ fi
 say "codegen: finished in ${elapsed}s"
 for module in boot loader swing; do
     files=$(find "$out/$module" -type f | wc -l | tr -d ' ')
-    bytes=$(find "$out/$module" -type f -exec stat -f %z {} + | awk '{ total += $1 } END { print total + 0 }')
+    bytes=$(file_bytes "$out/$module")
     say "  generated/$module: $files files, $bytes bytes"
 done
 total_files=$(find "$out" -type f | wc -l | tr -d ' ')
-total_bytes=$(find "$out" -type f -exec stat -f %z {} + | awk '{ total += $1 } END { print total + 0 }')
+total_bytes=$(file_bytes "$out")
 say "  generated/: $total_files files, $total_bytes bytes"
 say "codegen: OK; log: $log"

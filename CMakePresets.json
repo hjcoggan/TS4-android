@@ -71,6 +71,30 @@
                 "TS4_WITH_REXGLUE": "ON",
                 "REXSDK_DIR": "${sourceDir}/../work/rexglue-sdk"
             }
+        },
+        {
+            "name": "linux-arm64-rex-debug",
+            "displayName": "Linux arm64 Debug + ReXGlue SDK",
+            "description": "Native Linux arm64 build (Retroid Pocket Nova) linked against work/rexglue-sdk.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/../work/build/ts4-linux-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "TS4_WITH_REXGLUE": "ON",
+                "REXSDK_DIR": "${sourceDir}/../work/rexglue-sdk"
+            }
+        },
+        {
+            "name": "linux-arm64-rex-release",
+            "displayName": "Linux arm64 Release + ReXGlue SDK",
+            "description": "Native Linux arm64 release build (Retroid Pocket Nova) linked against work/rexglue-sdk.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/../work/build/ts4-linux",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "TS4_WITH_REXGLUE": "ON",
+                "REXSDK_DIR": "${sourceDir}/../work/rexglue-sdk"
+            }
         }
     ],
     "buildPresets": [
@@ -93,6 +117,14 @@
         {
             "name": "android-arm64-rex-release",
             "configurePreset": "android-arm64-rex-release"
+        },
+        {
+            "name": "linux-arm64-rex-debug",
+            "configurePreset": "linux-arm64-rex-debug"
+        },
+        {
+            "name": "linux-arm64-rex-release",
+            "configurePreset": "linux-arm64-rex-release"
         }
     ]
 }

@@ -35,9 +35,11 @@ xr_build=${TS4_XENOSRECOMP_BUILD:-$root/work/build/xenosrecomp}
 sdk=${TS4_REXGLUE_SDK:-$root/work/rexglue-sdk}
 patches=${TS4_PATCHES:-$root/ts4-port/data/xenosrecomp}
 logs=$root/work/logs
-cmake=${CMAKE:-/opt/homebrew/bin/cmake}
-clang=${CLANG:-/usr/bin/clang}
+cmake=${CMAKE:-$(command -v cmake || echo /opt/homebrew/bin/cmake)}
+clang=${CLANG:-$(command -v clang || echo /usr/bin/clang)}
+clangxx=${CXX:-$(command -v clang++ || echo /usr/bin/clang++)}
 python=${PYTHON:-python3}
+ncpu() { getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4; }
 
 clean=0
 convert=1
@@ -891,18 +893,23 @@ if [ "$convert" = 1 ]; then
     binary=$xr_build/XenosRecomp/XenosRecomp
     if [ ! -x "$binary" ]; then
         echo "no XenosRecomp binary at $binary: building it"
+        osx_arch_arg=()
+        if [ "$(uname -s)" = "Darwin" ]; then
+            osx_arch_arg=(-DCMAKE_OSX_ARCHITECTURES=arm64)
+        fi
         "$cmake" -S "$xr_src" -B "$xr_build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_C_COMPILER="$clang" \
-            -DCMAKE_CXX_COMPILER="${CXX:-/usr/bin/clang++}" -DCMAKE_CXX_FLAGS=-DSVR2011_RECOMP \
+            "${osx_arch_arg[@]}" -DCMAKE_C_COMPILER="$clang" \
+            -DCMAKE_CXX_COMPILER="$clangxx" -DCMAKE_CXX_FLAGS=-DSVR2011_RECOMP \
             -DXENOS_RECOMP_DXIL=OFF > "$logs/xenosrecomp-configure.log" 2>&1 \
             || die "XenosRecomp configure failed; see $logs/xenosrecomp-configure.log"
-        "$cmake" --build "$xr_build" --parallel "$(sysctl -n hw.ncpu)" \
+        "$cmake" --build "$xr_build" --parallel "$(ncpu)" \
             > "$logs/xenosrecomp-build.log" 2>&1 \
             || die "XenosRecomp build failed; see $logs/xenosrecomp-build.log"
     fi
     include=$xr_src/XenosRecomp/shader_common.h
-    # libdxcompiler.dylib sits in the submodule; the binary finds it through DYLD_LIBRARY_PATH.
+    # libdxcompiler.dylib / libdxcompiler.so sits in the submodule; the binary finds it through DYLD_LIBRARY_PATH / LD_LIBRARY_PATH.
     export DYLD_LIBRARY_PATH=$xr_src/thirdparty/dxc-bin/lib/arm64${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=$xr_src/thirdparty/dxc-bin/lib/arm64:$xr_src/thirdparty/dxc-bin/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
     rm -rf "$converted"
     mkdir -p "$converted"
     convert_all() {
@@ -915,7 +922,7 @@ if [ "$convert" = 1 ]; then
         # rest together.
         echo "the whole set failed: screening each container"
         mkdir -p "$out/skipped"
-        find "$containers" -name '*.bin' -print0 | xargs -0 -n 1 -P "$(sysctl -n hw.ncpu)" \
+        find "$containers" -name '*.bin' -print0 | xargs -0 -n 1 -P "$(ncpu)" \
             "$out/build/screen_one.sh" "$binary" "$include" > "$out/skipped.txt" || true
         if [ -s "$out/skipped.txt" ]; then
             while IFS= read -r bad; do mv "$bad" "$out/skipped/"; done < "$out/skipped.txt"

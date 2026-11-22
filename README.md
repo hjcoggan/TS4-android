@@ -1,11 +1,11 @@
-# Top Spin 4 — Android (static recompilation)
+# Top Spin 4 — Android & Linux arm64 (static recompilation)
 
-Run **Top Spin 4** (Xbox 360, 2K Czech, 2011) natively on Android arm64 by statically recompiling
+Run **Top Spin 4** (Xbox 360, 2K Czech, 2011) natively on Android arm64 and Linux arm64 by statically recompiling
 the game's PowerPC code to C++ and drawing through Vulkan. No emulator: the recompiled code runs as
 ordinary native code, with a runtime that implements the Xbox 360 kernel calls it needs.
 
-Tested on a **Retroid Pocket Nova** (Snapdragon 8 Gen 2, Adreno 740, Android 16): 1280×960 4:3
-output at a locked 60 fps in matches.
+Tested on a **Retroid Pocket Nova** (Snapdragon 8 Gen 2, Adreno 740, Android 16 and NixOS aarch64):
+1280×960 4:3 output at a locked 60 fps in matches.
 
 **Bring your own game.** This repository contains no game code, assets, executables or Title Update.
 You dump your own disc (see [`docs/dumping.md`](docs/dumping.md)).
@@ -127,8 +127,8 @@ cd ts4-port
 This clones `rexglue-sdk` at the pinned commit (into `_ref/rexglue-sdk` if absent, otherwise
 reusing it), checks out the `ts4-android` branch in `work/rexglue-sdk`, and applies, in order:
 
-1. the reference port's 46 SDK patches (fetched from `shaneomac1337/Top-Spin-4-Recomp`),
-2. this port's Android patches (`patches/rexglue-android/`),
+1. the reference port's 49 SDK patches (fetched from `shaneomac1337/Top-Spin-4-Recomp`),
+2. this port's Android & Linux arm64 patches (`patches/rexglue-android/`),
 3. this port's SDL patch (`patches/sdl3/`, applied inside the SDL submodule).
 
 Re-running is safe and idempotent.
@@ -205,13 +205,33 @@ adb push ../work/shaderpack/topspin4.shaderpack \
 Files pushed with `adb` under `Android/data` keep the host uid; if the app cannot read them, run
 `adb shell chmod -R 644` on them.
 
+### 8. Build and run on Linux arm64 (Retroid Pocket Nova / NixOS)
+
+To build natively on aarch64 Linux against the same `nixpkgs` revision `nova-nix` runs:
+
+```sh
+cd ts4-port
+nix-shell linux-shell.nix
+
+cmake --preset linux-arm64-rex-release
+cmake --build --preset linux-arm64-rex-release
+```
+
+Place `gamedata/`, `updatedata/` and `cache/topspin4.shaderpack` under `TS4_GAME_DIR` (defaults to
+`~/Games/ts4`), and launch with `scripts/run-linux.sh`:
+
+```sh
+TS4_GAME_DIR=~/Games/ts4 TS4_BIN=../work/build/ts4-linux/topspin4 ./scripts/run-linux.sh
+```
+
 ---
 
 ## Tests
 
-The renderer's pure logic — clear plans, draw skipping, pipeline keys and stores, texture layout
-and decoding, image quality, write watch, rect lists, guest fetch decoding, and the rest — has host
-unit tests that need no device and no game data:
+The renderer's and host layer's pure logic — clear plans, draw skipping, pipeline keys and stores,
+texture layout and decoding, image quality, write watch, rect lists, guest fetch decoding, device
+ordering, frame pacing, settings, and input scripts — has host unit tests that need no device and
+no game data:
 
 ```sh
 cd ts4-port
@@ -220,9 +240,9 @@ cd ts4-port
 ./scripts/test-host.sh --list-tests # what is covered
 ```
 
-They use Catch2 from the SDK tree and run against the same `src/native/` code the device build
-compiles, so a regression in that logic fails here instead of on the handheld. Current state:
-**260 test cases, 23 422 assertions, all passing**.
+They use Catch2 from the SDK tree and run against the same `src/` code the device build compiles,
+so a regression in that logic fails here instead of on the handheld. Current state:
+**415 test cases, 55 022 assertions, all passing**.
 
 ---
 
