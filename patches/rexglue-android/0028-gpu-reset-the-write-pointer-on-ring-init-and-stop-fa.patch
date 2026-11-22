@@ -1,38 +1,28 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: ts4-port <ts4-port@localhost>
-Date: Wed, 4 Nov 2026 00:06:21 +1000
-Subject: [PATCH 28/35] gpu: reset the write pointer on ring init and stop
- faking completion
+From 017be79aa3fc9f2c64c15c258b263737f43e55a3 Mon Sep 17 00:00:00 2001
+From: hjcoggan <191880570+hjcoggan@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 05:59:16 +1000
+Subject: [PATCH] gpu: reset the write pointer on ring init and stop faking
+ completion
 
-VdInitializeRingBuffer reset read_ptr_index_ but left write_ptr_index_ at the
-previous device's value. On the Loader -> Swing handoff the worker therefore
-saw read = 0 with the old write pointer and replayed a dead command buffer; a
-vertex constant (~0.1996f) was decoded as a Type-0 header claiming ~15949
-registers, ExecutePacketType0 failed, and ExecutePrimaryBuffer returned
-write_index, telling the guest every command ran. Debug aborts on the assert;
-NDEBUG strips it and the guest waits forever (the loading-screen hang).
-
-- InitializeRingBuffer: drop the write pointer before the read pointer.
-- ExecutePrimaryBuffer: return read_index on a bad packet, not write_index.
-- Release fence before the RPTR writeback: arm64 has no TSO, so without it the
-  guest can see RPTR advance before the CP's memory writes are visible.
-
-Also adds bring-up diagnostics (ring dump on overflow, first write-pointer
-updates, one-per-second CP heartbeat) -- gate these behind a cvar before this
-leaves bring-up.
-
-Verified on device: 0 overflows, read == write, wraparound exercised, the
-Loader -> Swing transition survives, gameplay reached with working input.
+Reconciled with the reference ring fix (0048-ring-reset-on-worker):
+InitializeRingBuffer now hands the new ring to the worker, which
+applies it between packets, instead of dropping the write pointer
+synchronously. Kept from the Android series: the arm64 release fence
+before the RPTR write-back (inside the ring lock), the write-pointer
+diagnostics (wptr_update_count_, the CP-idle heartbeat, the first
+UpdateWritePointer logs), stopping at a bad packet instead of
+advancing RPTR past commands that never ran, and the Type-0 overflow
+ring dump.
 ---
  include/rex/graphics/command_processor.h |  3 ++
- src/graphics/command_processor.cpp       | 56 +++++++++++++++++++++++-
- 2 files changed, 57 insertions(+), 2 deletions(-)
+ src/graphics/command_processor.cpp       | 47 +++++++++++++++++++++++-
+ 2 files changed, 49 insertions(+), 1 deletion(-)
 
 diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
-index 7fb4524..bbb2e66 100644
+index dd1477c..5d04d76 100644
 --- a/include/rex/graphics/command_processor.h
 +++ b/include/rex/graphics/command_processor.h
-@@ -257,6 +257,9 @@ class CommandProcessor {
+@@ -265,6 +265,9 @@ class CommandProcessor {
  
    std::unique_ptr<rex::thread::Event> write_ptr_index_event_;
    std::atomic<uint32_t> write_ptr_index_;
@@ -43,7 +33,7 @@ index 7fb4524..bbb2e66 100644
    // Some titles submit writes beyond the emulated register file range in PM4
    // packets. Preserve these values so dependent packet logic can still observe
 diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
-index 1dbf8a2..b621383 100644
+index e2cc65c..0b64609 100644
 --- a/src/graphics/command_processor.cpp
 +++ b/src/graphics/command_processor.cpp
 @@ -10,6 +10,8 @@
@@ -55,7 +45,7 @@ index 1dbf8a2..b621383 100644
  #include <unordered_map>
  #include <cinttypes>
  #include <cmath>
-@@ -252,6 +254,19 @@ void CommandProcessor::WorkerThreadMain() {
+@@ -254,6 +256,19 @@ void CommandProcessor::WorkerThreadMain() {
      uint32_t write_ptr_index = write_ptr_index_.load();
      if (write_ptr_index == 0xBAADF00D || read_ptr_index_ == write_ptr_index) {
        SCOPE_profile_cpu_i("gpu", "rex::graphics::CommandProcessor::Stall");
@@ -75,35 +65,17 @@ index 1dbf8a2..b621383 100644
        // We've run out of commands to execute.
        // We spin here waiting for new ones, as the overhead of waiting on our
        // event is too high.
-@@ -283,6 +298,9 @@ void CommandProcessor::WorkerThreadMain() {
-     // TODO(benvanik): use reader->Read_update_freq_ and only issue after moving
-     //     that many indices.
-     if (read_ptr_writeback_ptr_) {
-+      // arm64 has no TSO: without a release fence the guest can observe RPTR advance before the
-+      // command processor's memory writes (MEM_WRITE / EVENT_WRITE / resolve output) are visible.
-+      std::atomic_thread_fence(std::memory_order_release);
-       memory::store_and_swap<uint32_t>(memory_->TranslatePhysical(read_ptr_writeback_ptr_),
-                                        read_ptr_index_);
-     }
-@@ -351,9 +369,16 @@ bool CommandProcessor::SetupContext() {
- void CommandProcessor::ShutdownContext() {}
- 
- void CommandProcessor::InitializeRingBuffer(uint32_t ptr, uint32_t size_log2) {
--  read_ptr_index_ = 0;
-+  // A new ring belongs to a new device: the previous device's write pointer must be dropped
-+  // before the read pointer, or the worker sees read = 0 with the old write index and executes
-+  // the old buffer (Top Spin 4 crashes on a Type-0 header inside stale data at the Loader -> Swing
-+  // device handoff). Windows never hit this because it did not reset the CP between devices.
-+  write_ptr_index_ = 0;
-   primary_buffer_ptr_ = ptr;
-   primary_buffer_size_ = uint32_t(1) << (size_log2 + 3);
-+  read_ptr_index_ = 0;
-+  REXGPU_INFO("InitializeRingBuffer(ptr={:08X}, size_log2={}, size={:08X}, words={})", ptr,
-+              size_log2, primary_buffer_size_, primary_buffer_size_ / 4);
- }
- 
- void CommandProcessor::EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_size_log2) {
-@@ -367,6 +392,10 @@ void CommandProcessor::EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_s
+@@ -293,6 +308,9 @@ void CommandProcessor::WorkerThreadMain() {
+       // Under the lock so an index from the old ring never lands in the new ring's write-back.
+       std::lock_guard<std::mutex> lock(ring_mutex_);
+       if (read_ptr_writeback_ptr_ && !ring_reset_pending_) {
++        // arm64 has no TSO: without a release fence the guest can observe RPTR advance before the
++        // command processor's memory writes (MEM_WRITE / EVENT_WRITE / resolve output) are visible.
++        std::atomic_thread_fence(std::memory_order_release);
+         memory::store_and_swap<uint32_t>(memory_->TranslatePhysical(read_ptr_writeback_ptr_),
+                                          read_ptr_index_);
+       }
+@@ -405,6 +423,10 @@ void CommandProcessor::EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_s
  }
  
  void CommandProcessor::UpdateWritePointer(uint32_t value) {
@@ -114,7 +86,7 @@ index 1dbf8a2..b621383 100644
    write_ptr_index_ = value;
    write_ptr_index_event_->Set();
  }
-@@ -662,8 +691,13 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
+@@ -700,8 +722,13 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
      if (!ExecutePacket(&reader)) {
        // This probably should be fatal - but we're going to continue anyways.
        REXGPU_ERROR("**** PRIMARY RINGBUFFER: Failed to execute packet.");
@@ -127,9 +99,9 @@ index 1dbf8a2..b621383 100644
 +      // stalls on an invalid packet, so this is the honest failure.
 +      return read_index;
      }
-   } while (reader.read_count());
+   } while (reader.read_count() && !ring_reset_pending_);
  
-@@ -743,6 +777,24 @@ bool CommandProcessor::ExecutePacketType0(memory::RingBuffer* reader, uint32_t p
+@@ -781,6 +808,24 @@ bool CommandProcessor::ExecutePacketType0(memory::RingBuffer* reader, uint32_t p
    if (reader->read_count() < count * sizeof(uint32_t)) {
      REXGPU_ERROR("ExecutePacketType0 overflow (read count {:08X}, packet count {:08X})",
                   reader->read_count(), count * sizeof(uint32_t));
@@ -154,3 +126,6 @@ index 1dbf8a2..b621383 100644
      return false;
    }
  
+-- 
+2.56.0
+
