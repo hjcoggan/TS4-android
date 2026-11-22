@@ -135,9 +135,12 @@ macro(rexglue_setup_target target_name)
 endmacro()
 
 # Codegen runs as part of the build only where the host recompiler exists (the SDK does not
-# cross-compile src/rexglue for Android). On Android the generated sources are those the Mac's
-# host build already wrote into generated/boot; they are compiled, not regenerated.
-if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES AND TARGET rex::rexglue AND NOT ANDROID)
+# cross-compile src/rexglue for Android) and a manifest sits at the repository root. This
+# repository generates with scripts/codegen.sh (codegen/topspin4_manifest.toml, staged with the
+# game's Modules outside the tree), so on Android and on a Linux host alike the generated
+# sources in generated/ are compiled, not regenerated.
+if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES AND TARGET rex::rexglue AND NOT ANDROID
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/topspin4_manifest.toml")
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/boot/codegen.build.stamp"
                ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
